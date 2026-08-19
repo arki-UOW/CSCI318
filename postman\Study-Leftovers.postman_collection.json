@@ -1,0 +1,19 @@
+{
+  "info":{"name":"Study Leftovers","schema":"https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+  "variable":[{"key":"subjectId","value":""},{"key":"assessmentId","value":""},{"key":"planId","value":""}],
+  "item":[
+    {"name":"Subjects","item":[
+      {"name":"List subjects","request":{"method":"GET","url":"http://localhost:8081/api/subjects"}},
+      {"name":"Upload outline","request":{"method":"POST","body":{"mode":"formdata","formdata":[{"key":"file","type":"file","src":[]}]},"url":"http://localhost:8081/api/subject-outlines"}}
+    ]},
+    {"name":"Assessments","item":[
+      {"name":"List assessments","request":{"method":"GET","url":"http://localhost:8082/api/assessments"}},
+      {"name":"Complete assessment","request":{"method":"POST","url":"http://localhost:8082/api/assessments/{{assessmentId}}/complete"}}
+    ]},
+    {"name":"Activity","item":[{"name":"Record session","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"subjectId\":\"{{subjectId}}\",\"durationMinutes\":45,\"studyDate\":\"2026-08-19\",\"description\":\"Reviewed architecture\"}"},"url":"http://localhost:8083/api/study-sessions"}}]},
+    {"name":"Planning","item":[
+      {"name":"This week","request":{"method":"GET","url":"http://localhost:8084/api/planning/this-week"}},
+      {"name":"Workload","request":{"method":"GET","url":"http://localhost:8084/api/planning/workload"}}
+    ]}
+  ]
+}
