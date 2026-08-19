@@ -1,0 +1,2 @@
+package au.edu.uow.csci318.activity;import org.springframework.boot.SpringApplication;import org.springframework.boot.autoconfigure.SpringBootApplication;import org.springframework.context.annotation.Bean;import org.springframework.web.client.RestClient;
+@SpringBootApplication public class StudyActivityServiceApplication{public static void main(String[]a){SpringApplication.run(StudyActivityServiceApplication.class,a);}@Bean RestClient.Builder restClientBuilder(){return RestClient.builder();}}

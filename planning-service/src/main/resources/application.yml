@@ -1,0 +1,16 @@
+server: {port: 8084}
+spring:
+  application: {name: planning-service}
+  datasource: {url: "jdbc:h2:file:./data/planning-db;AUTO_SERVER=TRUE", username: sa, password: ""}
+  jpa: {hibernate: {ddl-auto: update}, open-in-view: false}
+  cloud:
+    function: {definition: "workloadStream;studyProgressStream"}
+    stream:
+      bindings:
+        workloadStream-in-0: {destination: assessment-events, content-type: text/plain}
+        studyProgressStream-in-0: {destination: study-activity-events, content-type: text/plain}
+      kafka:
+        streams:
+          binder: {brokers: "${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}", configuration: {application.id: study-leftovers-planning}}
+services: {assessment-url: "${ASSESSMENT_SERVICE_URL:http://localhost:8082}", subject-url: "${SUBJECT_SERVICE_URL:http://localhost:8081}"}
+study: {ai: {api-key: "${OPENAI_API_KEY:}", model: "${OPENAI_MODEL:gpt-4.1-mini}"}}

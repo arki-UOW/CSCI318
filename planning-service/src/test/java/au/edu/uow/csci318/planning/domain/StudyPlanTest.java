@@ -1,0 +1,2 @@
+package au.edu.uow.csci318.planning.domain;import org.junit.jupiter.api.Test;import java.time.*;import static org.junit.jupiter.api.Assertions.*;
+class StudyPlanTest{@Test void requiresSevenDays(){assertThrows(IllegalArgumentException.class,()->new StudyPlan(LocalDate.now(),LocalDate.now().plusDays(5),1,"[]",""));}@Test void acceptsSevenDayPeriod(){var p=new StudyPlan(LocalDate.now(),LocalDate.now().plusDays(6),1,"[]","");assertEquals(1,p.getVersion());}}

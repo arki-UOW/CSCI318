@@ -1,0 +1,2 @@
+package au.edu.uow.csci318.activity.domain;import org.junit.jupiter.api.Test;import java.time.*;import java.util.*;import static org.junit.jupiter.api.Assertions.*;
+class StudySessionTest{@Test void rejectsZeroDuration(){assertThrows(IllegalArgumentException.class,()->new StudySession(UUID.randomUUID(),0,LocalDate.now(),"Read"));}@Test void storesValidSession(){var s=new StudySession(UUID.randomUUID(),45,LocalDate.now(),"Read chapter");assertEquals(45,s.getDurationMinutes());}}

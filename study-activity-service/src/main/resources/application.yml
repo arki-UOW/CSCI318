@@ -1,0 +1,10 @@
+server: {port: 8083}
+spring:
+  application: {name: study-activity-service}
+  datasource: {url: "jdbc:h2:file:./data/activity-db;AUTO_SERVER=TRUE", username: sa, password: ""}
+  jpa: {hibernate: {ddl-auto: update}, open-in-view: false}
+  cloud:
+    stream:
+      bindings: {studyActivityEvents-out-0: {destination: study-activity-events, content-type: application/json}}
+      kafka: {binder: {brokers: "${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}"}}
+services: {subject-url: "${SUBJECT_SERVICE_URL:http://localhost:8081}"}
