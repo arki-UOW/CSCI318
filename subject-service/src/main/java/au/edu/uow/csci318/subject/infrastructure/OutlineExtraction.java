@@ -1,47 +1,416 @@
 package au.edu.uow.csci318.subject.infrastructure;
 
-import au.edu.uow.csci318.subject.dto.SubjectDtos.*;
+import au.edu.uow.csci318.subject.dto.SubjectDtos.AssessmentCandidate;
+import au.edu.uow.csci318.subject.dto.SubjectDtos.ExtractionResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.data.message.PdfFileContent;
+import dev.langchain4j.data.message.TextContent;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.request.ResponseFormat;
+import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
+import dev.langchain4j.model.openai.OpenAiChatModel;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import java.io.*;
-import java.lang.reflect.Method;
-import java.time.LocalDate;
-import java.util.*;
-import java.util.regex.*;
 
-public interface OutlineExtraction { ExtractionResult extract(String text); }
+import java.io.IOException;
+import java.text.Normalizer;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public interface OutlineExtraction {
+    ExtractionResult extract(byte[] pdfBytes, String locallyExtractedText);
+}
 
 @Component
 class PdfTextExtractor {
- String extract(byte[] bytes){try(var document=Loader.loadPDF(bytes)){return new PDFTextStripper().getText(document);}catch(IOException e){throw new IllegalArgumentException("The PDF could not be read",e);}}
+    String extract(byte[] bytes) {
+        try (var document = Loader.loadPDF(bytes)) {
+            PDFTextStripper stripper = new PDFTextStripper();
+            stripper.setSortByPosition(true);
+            stripper.setLineSeparator("\n");
+            return normalise(stripper.getText(document));
+        } catch (IOException e) {
+            throw new IllegalArgumentException("The PDF could not be read", e);
+        }
+    }
+
+    private String normalise(String text) {
+        return Normalizer.normalize(text == null ? "" : text, Normalizer.Form.NFKC)
+                .replace('\u00a0', ' ')
+                .replace("\u00ad", "")
+                .replaceAll("[\\t\\x0B\\f\\r ]+", " ")
+                .replaceAll("(?m)^ +| +$", "")
+                .replaceAll("\n{3,}", "\n\n")
+                .trim();
+    }
+}
+
+@Component
+class ConfiguredChatModel {
+    record Selection(String provider, ChatModel model, boolean acceptsPdf) {
+    }
+
+    private final String provider;
+    private final String geminiKey;
+    private final String geminiModel;
+    private final String openAiKey;
+    private final String openAiModel;
+
+    ConfiguredChatModel(
+            @Value("${study.ai.provider:auto}") String provider,
+            @Value("${study.ai.gemini.api-key:}") String geminiKey,
+            @Value("${study.ai.gemini.model:gemini-2.5-flash}") String geminiModel,
+            @Value("${study.ai.openai.api-key:}") String openAiKey,
+            @Value("${study.ai.openai.model:gpt-4.1-mini}") String openAiModel) {
+        this.provider = provider == null ? "auto" : provider.trim().toLowerCase(Locale.ROOT);
+        this.geminiKey = geminiKey == null ? "" : geminiKey.trim();
+        this.geminiModel = geminiModel;
+        this.openAiKey = openAiKey == null ? "" : openAiKey.trim();
+        this.openAiModel = openAiModel;
+    }
+
+    Optional<Selection> selection() {
+        if (!Set.of("auto", "gemini", "openai").contains(provider)) {
+            throw new IllegalArgumentException("AI_PROVIDER must be auto, gemini, or openai");
+        }
+        if ((provider.equals("auto") || provider.equals("gemini")) && !geminiKey.isBlank()) {
+            ChatModel model = GoogleAiGeminiChatModel.builder()
+                    .apiKey(geminiKey)
+                    .modelName(geminiModel)
+                    .temperature(0.0)
+                    .responseFormat(ResponseFormat.JSON)
+                    .build();
+            return Optional.of(new Selection("Gemini", model, true));
+        }
+        if ((provider.equals("auto") || provider.equals("openai")) && !openAiKey.isBlank()) {
+            ChatModel model = OpenAiChatModel.builder()
+                    .apiKey(openAiKey)
+                    .modelName(openAiModel)
+                    .temperature(0.0)
+                    .build();
+            return Optional.of(new Selection("OpenAI", model, false));
+        }
+        return Optional.empty();
+    }
+
+    String missingConfigurationMessage() {
+        return switch (provider) {
+            case "gemini" -> "Gemini is selected but GEMINI_API_KEY is not configured";
+            case "openai" -> "OpenAI is selected but OPENAI_API_KEY is not configured";
+            default -> "No AI API key is configured";
+        };
+    }
 }
 
 @Component
 class SafeOutlineExtractor implements OutlineExtraction {
- private final ObjectMapper json; private final String apiKey; private final String model;
- SafeOutlineExtractor(ObjectMapper json,@Value("${study.ai.api-key:}") String apiKey,@Value("${study.ai.model:gpt-4.1-mini}") String model){this.json=json;this.apiKey=apiKey;this.model=model;}
- public ExtractionResult extract(String text){
-   if(!apiKey.isBlank()) try{return ai(text);}catch(Exception ignored){}
-   return deterministic(text);
- }
- private ExtractionResult ai(String text)throws Exception{
-   Class<?> c=Class.forName("dev.langchain4j.model.openai.OpenAiChatModel"); Object builder=c.getMethod("builder").invoke(null);
-   builder.getClass().getMethod("apiKey",String.class).invoke(builder,apiKey); builder.getClass().getMethod("modelName",String.class).invoke(builder,model); Object chat=builder.getClass().getMethod("build").invoke(builder);
-   String prompt="Extract only facts from this subject outline. Return JSON with subjectCode, subjectName, creditPoints, assessments [{title,type,weighting,dueDate,dueWeek,description,estimatedHours,confidence,warning}], warnings. Use null for missing values; never invent dates. OUTLINE:\n"+text.substring(0,Math.min(text.length(),50000));
-   Method method=Arrays.stream(chat.getClass().getMethods()).filter(m->m.getName().equals("chat")&&m.getParameterCount()==1&&m.getParameterTypes()[0]==String.class).findFirst().orElseThrow();
-   String raw=(String)method.invoke(chat,prompt); raw=raw.replaceFirst("(?s)^```(?:json)?\\s*","").replaceFirst("(?s)\\s*```$","");
-   return validate(json.readValue(raw,ExtractionResult.class));
- }
- private ExtractionResult deterministic(String text){
-   Matcher code=Pattern.compile("\\b([A-Z]{2,8}\\s?[0-9]{3,4})\\b").matcher(text.toUpperCase()); String subjectCode=code.find()?code.group(1).replace(" ",""):null;
-   String subjectName=null; for(String line:text.lines().map(String::trim).toList()) if(subjectCode!=null&&line.toUpperCase().contains(subjectCode)&&line.length()>subjectCode.length()){subjectName=line.replaceAll("(?i).*"+subjectCode+"\\s*[-:–]?\\s*","").trim();break;}
-   List<AssessmentCandidate> items=new ArrayList<>(); Pattern p=Pattern.compile("(?im)^(?:assessment\\s*(?:task)?\\s*\\d*[:.-]?\\s*)?(.{3,80}?)\\s+(\\d{1,3}(?:\\.\\d+)?)%.*?(?:due\\s*)?(\\d{1,2}/\\d{1,2}/\\d{4}|\\d{4}-\\d{2}-\\d{2}|week\\s*\\d{1,2})?$");
-   Matcher m=p.matcher(text); Set<String> seen=new HashSet<>(); while(m.find()&&items.size()<20){String title=m.group(1).trim();if(!seen.add(title.toLowerCase()))continue;Double weight=Double.valueOf(m.group(2));String due=m.group(3);LocalDate date=null;Integer week=null;if(due!=null&&due.toLowerCase().startsWith("week"))week=Integer.valueOf(due.replaceAll("\\D",""));else if(due!=null)try{date=due.contains("/")?LocalDate.parse(due,java.time.format.DateTimeFormatter.ofPattern("d/M/yyyy")):LocalDate.parse(due);}catch(Exception ignored){}items.add(new AssessmentCandidate(title,"Assessment",weight,date,week,null,null,.65,date==null&&week==null?"Due date not confidently detected":null));}
-   List<String> warnings=new ArrayList<>();if(subjectCode==null)warnings.add("Subject code was not confidently detected");if(subjectName==null)warnings.add("Subject name was not confidently detected");if(items.isEmpty())warnings.add("No assessment rows were confidently detected; add them during review");
-   return new ExtractionResult(subjectCode,subjectName,null,items,warnings);
- }
- private ExtractionResult validate(ExtractionResult r){if(r==null||r.subjectCode()==null||r.subjectName()==null)throw new IllegalArgumentException("AI extraction omitted required subject data");Set<String>s=new HashSet<>();for(var a:r.assessments()){if(a.title()==null||a.title().isBlank())throw new IllegalArgumentException("Assessment title is required");if(a.weighting()!=null&&(a.weighting()<0||a.weighting()>100))throw new IllegalArgumentException("Assessment weighting is invalid");if(!s.add(a.title().trim().toLowerCase()))throw new IllegalArgumentException("Duplicate assessment: "+a.title());}return r;}
+    private static final int MAX_TEXT_LENGTH = 50_000;
+    private static final Pattern SUBJECT_CODE = Pattern.compile("\\b([A-Z]{2,8}\\s?[0-9]{3,4})\\b");
+    private static final Pattern LABELLED_NAME = Pattern.compile(
+            "(?im)^(?:subject|course)\\s*(?:name|title)\\s*[:\\-]\\s*(.{3,160})$");
+    private static final Pattern CREDIT_POINTS = Pattern.compile(
+            "(?i)credit\\s*points?\\s*[:\\-]?\\s*(\\d{1,2})");
+    private static final Pattern WEIGHT = Pattern.compile("(?<!\\d)(\\d{1,3}(?:\\.\\d+)?)\\s*%");
+    private static final Pattern DUE_WEEK = Pattern.compile("(?i)\\bweek\\s*(\\d{1,2})\\b");
+    private static final Pattern ISO_DATE = Pattern.compile("\\b(20\\d{2}-\\d{1,2}-\\d{1,2})\\b");
+    private static final Pattern SLASH_DATE = Pattern.compile("\\b(\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4})\\b");
+    private static final Pattern NAMED_DATE = Pattern.compile(
+            "(?i)\\b(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)?\\s*"
+                    + "(\\d{1,2}(?:st|nd|rd|th)?\\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+20\\d{2})\\b");
+    private static final List<DateTimeFormatter> DATE_FORMATS = List.of(
+            DateTimeFormatter.ISO_LOCAL_DATE,
+            new DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern("d/M/uuuu").toFormatter(Locale.ENGLISH),
+            new DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern("d-M-uuuu").toFormatter(Locale.ENGLISH),
+            new DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern("d/M/uu").toFormatter(Locale.ENGLISH),
+            new DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern("d-M-uu").toFormatter(Locale.ENGLISH),
+            new DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern("d MMMM uuuu").toFormatter(Locale.ENGLISH));
+
+    private static final String EXTRACTION_PROMPT = """
+            You extract factual academic-planning data from a university subject-outline PDF.
+            Read the whole PDF, including tables and text embedded as images. Return ONLY one JSON object with:
+            subjectCode, subjectName, creditPoints, assessments, warnings.
+            assessments is an array of objects with title, type, weighting, dueDate, dueWeek, description,
+            estimatedHours, confidence, warning.
+
+            Rules:
+            - Use ISO yyyy-MM-dd for an exact dueDate.
+            - Preserve a stated teaching week in dueWeek. Never invent a calendar date from a week number.
+            - Use null when a value is absent or uncertain; do not guess.
+            - Associate wrapped table cells with the correct assessment row.
+            - Weighting is a number from 0 to 100, without the percent sign.
+            - confidence is a number from 0 to 1.
+            - Do not treat learning outcomes, weekly topics, policies, or contact details as assessments.
+            - Add a concise warning for every ambiguous or missing planning field.
+            """;
+
+    private final ObjectMapper json;
+    private final ConfiguredChatModel configuredModel;
+
+    SafeOutlineExtractor(ObjectMapper json, ConfiguredChatModel configuredModel) {
+        this.json = json;
+        this.configuredModel = configuredModel;
+    }
+
+    @Override
+    public ExtractionResult extract(byte[] pdfBytes, String locallyExtractedText) {
+        String text = locallyExtractedText == null ? "" : locallyExtractedText.trim();
+        Optional<ConfiguredChatModel.Selection> selection = configuredModel.selection();
+        if (selection.isPresent()) {
+            try {
+                return validate(ai(selection.get(), pdfBytes, text));
+            } catch (Exception e) {
+                if (text.isBlank()) {
+                    throw new IllegalArgumentException(
+                            selection.get().provider() + " could not analyse this image-based PDF. "
+                                    + "Check the API key/model and try again.", e);
+                }
+                return withWarning(deterministic(text),
+                        selection.get().provider() + " extraction was unavailable; deterministic extraction was used. "
+                                + "Review every field carefully.");
+            }
+        }
+        if (text.isBlank()) {
+            throw new IllegalArgumentException(
+                    "No text could be extracted from this PDF. Configure GEMINI_API_KEY for image-based PDFs "
+                            + "or upload a text-based PDF.");
+        }
+        return withWarning(deterministic(text),
+                configuredModel.missingConfigurationMessage() + "; deterministic extraction was used.");
+    }
+
+    private ExtractionResult ai(ConfiguredChatModel.Selection selection, byte[] pdfBytes, String text) throws Exception {
+        String raw;
+        if (selection.acceptsPdf()) {
+            UserMessage message = UserMessage.from(
+                    PdfFileContent.from(Base64.getEncoder().encodeToString(pdfBytes), "application/pdf"),
+                    TextContent.from(EXTRACTION_PROMPT));
+            raw = selection.model().chat(message).aiMessage().text();
+        } else {
+            if (text.isBlank()) {
+                throw new IllegalArgumentException("The configured provider requires extractable PDF text");
+            }
+            raw = selection.model().chat(EXTRACTION_PROMPT + "\n\nEXTRACTED PDF TEXT:\n"
+                    + text.substring(0, Math.min(text.length(), MAX_TEXT_LENGTH)));
+        }
+        raw = raw.replaceFirst("(?s)^```(?:json)?\\s*", "").replaceFirst("(?s)\\s*```$", "");
+        return json.readValue(raw, ExtractionResult.class);
+    }
+
+    private ExtractionResult deterministic(String text) {
+        String upper = text.toUpperCase(Locale.ROOT);
+        Matcher codeMatcher = SUBJECT_CODE.matcher(upper);
+        String subjectCode = codeMatcher.find() ? codeMatcher.group(1).replace(" ", "") : null;
+        String subjectName = findSubjectName(text, subjectCode);
+        Integer creditPoints = findInteger(CREDIT_POINTS, text);
+        List<AssessmentCandidate> items = findAssessments(text);
+        List<String> warnings = new ArrayList<>();
+        if (subjectCode == null) {
+            warnings.add("Subject code was not confidently detected");
+        }
+        if (subjectName == null) {
+            warnings.add("Subject name was not confidently detected");
+        }
+        if (creditPoints == null) {
+            warnings.add("Credit points were not confidently detected");
+        }
+        if (items.isEmpty()) {
+            warnings.add("No assessment rows were confidently detected; add them during review");
+        }
+        return new ExtractionResult(subjectCode, subjectName, creditPoints, items, warnings);
+    }
+
+    private String findSubjectName(String text, String subjectCode) {
+        Matcher labelled = LABELLED_NAME.matcher(text);
+        if (labelled.find()) {
+            return cleanTitle(labelled.group(1));
+        }
+        if (subjectCode == null) {
+            return null;
+        }
+        List<String> lines = text.lines().map(String::trim).filter(line -> !line.isBlank()).toList();
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            int codeAt = line.toUpperCase(Locale.ROOT).indexOf(subjectCode);
+            if (codeAt < 0) {
+                continue;
+            }
+            String afterCode = line.substring(codeAt + subjectCode.length())
+                    .replaceFirst("^[\\s:|\\-–—]+", "").trim();
+            if (looksLikeName(afterCode)) {
+                return cleanTitle(afterCode);
+            }
+            if (i + 1 < lines.size() && looksLikeName(lines.get(i + 1))) {
+                return cleanTitle(lines.get(i + 1));
+            }
+        }
+        return null;
+    }
+
+    private boolean looksLikeName(String value) {
+        return value != null && value.length() >= 4 && value.length() <= 160
+                && value.matches(".*[A-Za-z]{3}.*")
+                && !value.matches("(?i).*(spring|autumn|session|outline|handbook)\\s*20\\d{2}.*");
+    }
+
+    private List<AssessmentCandidate> findAssessments(String text) {
+        List<String> lines = text.lines().map(String::trim).filter(line -> !line.isBlank()).toList();
+        List<AssessmentCandidate> items = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (int i = 0; i < lines.size() && items.size() < 20; i++) {
+            String line = lines.get(i);
+            Matcher weightMatcher = WEIGHT.matcher(line);
+            if (!weightMatcher.find()) {
+                continue;
+            }
+            double weighting = Double.parseDouble(weightMatcher.group(1));
+            if (weighting > 100 || line.matches("(?i).*total\\s+100\\s*%.*")) {
+                continue;
+            }
+            String title = cleanAssessmentTitle(line.substring(0, weightMatcher.start()));
+            boolean titleCameFromPreviousLine = false;
+            if (!isUsefulAssessmentTitle(title) && i > 0) {
+                title = cleanAssessmentTitle(lines.get(i - 1));
+                titleCameFromPreviousLine = true;
+            }
+            if (!isUsefulAssessmentTitle(title)) {
+                continue;
+            }
+            String key = title.toLowerCase(Locale.ROOT);
+            if (!seen.add(key)) {
+                continue;
+            }
+            List<String> contextLines = new ArrayList<>();
+            if (titleCameFromPreviousLine) {
+                contextLines.add(lines.get(i - 1));
+            }
+            contextLines.add(line);
+            for (int nextIndex = i + 1; nextIndex < Math.min(lines.size(), i + 3); nextIndex++) {
+                String nextLine = lines.get(nextIndex);
+                if (WEIGHT.matcher(nextLine).find()) {
+                    break;
+                }
+                contextLines.add(nextLine);
+            }
+            String context = String.join(" ", contextLines);
+            LocalDate dueDate = findDate(context);
+            Integer dueWeek = findInteger(DUE_WEEK, context);
+            String warning = dueDate == null && dueWeek == null ? "Due date or week was not confidently detected" : null;
+            items.add(new AssessmentCandidate(
+                    title,
+                    inferType(title),
+                    weighting,
+                    dueDate,
+                    dueWeek,
+                    null,
+                    null,
+                    dueDate == null && dueWeek == null ? 0.55 : 0.7,
+                    warning));
+        }
+        return items;
+    }
+
+    private LocalDate findDate(String context) {
+        for (Pattern pattern : List.of(ISO_DATE, SLASH_DATE, NAMED_DATE)) {
+            Matcher matcher = pattern.matcher(context);
+            while (matcher.find()) {
+                String candidate = matcher.group(1).replaceAll("(?i)(\\d)(st|nd|rd|th)", "$1");
+                for (DateTimeFormatter formatter : DATE_FORMATS) {
+                    try {
+                        return LocalDate.parse(candidate, formatter);
+                    } catch (DateTimeParseException ignored) {
+                        // Try the next supported subject-outline date format.
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private Integer findInteger(Pattern pattern, String text) {
+        Matcher matcher = pattern.matcher(text);
+        return matcher.find() ? Integer.valueOf(matcher.group(1)) : null;
+    }
+
+    private String cleanAssessmentTitle(String value) {
+        if (value == null) {
+            return null;
+        }
+        return cleanTitle(value
+                .replaceFirst("^[•*\\-–—|\\s]+", "")
+                .replaceFirst("(?i)^assessment\\s*(?:task)?\\s*\\d*\\s*[:.\\-–—]?\\s*", "")
+                .replaceFirst("(?i)^(?:task|item)\\s*\\d+\\s*[:.\\-–—]?\\s*", ""));
+    }
+
+    private String cleanTitle(String value) {
+        if (value == null) {
+            return null;
+        }
+        String cleaned = value.replaceAll("\\s+", " ").replaceAll("[|:;\\-–—\\s]+$", "").trim();
+        return cleaned.isBlank() ? null : cleaned;
+    }
+
+    private boolean isUsefulAssessmentTitle(String title) {
+        return title != null && title.length() >= 3 && title.length() <= 120
+                && !title.matches("(?i).*(weighting|total|assessment summary|marking criteria|learning outcome).*?");
+    }
+
+    private String inferType(String title) {
+        String lower = title.toLowerCase(Locale.ROOT);
+        for (String type : List.of("Exam", "Quiz", "Assignment", "Report", "Presentation", "Project", "Test", "Portfolio", "Laboratory")) {
+            if (lower.contains(type.toLowerCase(Locale.ROOT))) {
+                return type;
+            }
+        }
+        return "Assessment";
+    }
+
+    private ExtractionResult validate(ExtractionResult result) {
+        if (result == null) {
+            throw new IllegalArgumentException("AI extraction returned no result");
+        }
+        List<AssessmentCandidate> assessments = result.assessments() == null ? List.of() : result.assessments();
+        Set<String> seen = new HashSet<>();
+        for (AssessmentCandidate assessment : assessments) {
+            if (assessment.title() == null || assessment.title().isBlank()) {
+                throw new IllegalArgumentException("Assessment title is required");
+            }
+            if (assessment.weighting() != null && (assessment.weighting() < 0 || assessment.weighting() > 100)) {
+                throw new IllegalArgumentException("Assessment weighting is invalid");
+            }
+            if (!seen.add(assessment.title().trim().toLowerCase(Locale.ROOT))) {
+                throw new IllegalArgumentException("Duplicate assessment: " + assessment.title());
+            }
+        }
+        return new ExtractionResult(
+                blankToNull(result.subjectCode()),
+                blankToNull(result.subjectName()),
+                result.creditPoints(),
+                assessments,
+                result.warnings() == null ? List.of() : result.warnings());
+    }
+
+    private ExtractionResult withWarning(ExtractionResult result, String warning) {
+        List<String> warnings = new ArrayList<>(result.warnings() == null ? List.of() : result.warnings());
+        warnings.add(warning);
+        return new ExtractionResult(
+                result.subjectCode(), result.subjectName(), result.creditPoints(), result.assessments(), warnings);
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
 }

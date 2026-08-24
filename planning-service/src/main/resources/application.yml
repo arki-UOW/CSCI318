@@ -13,4 +13,12 @@ spring:
         streams:
           binder: {brokers: "${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}", configuration: {application.id: study-leftovers-planning}}
 services: {assessment-url: "${ASSESSMENT_SERVICE_URL:http://localhost:8082}", subject-url: "${SUBJECT_SERVICE_URL:http://localhost:8081}"}
-study: {ai: {api-key: "${OPENAI_API_KEY:}", model: "${OPENAI_MODEL:gpt-4.1-mini}"}}
+study:
+  ai:
+    provider: "${AI_PROVIDER:auto}"
+    gemini:
+      api-key: "${GEMINI_API_KEY:}"
+      model: "${GEMINI_MODEL:gemini-2.5-flash}"
+    openai:
+      api-key: "${OPENAI_API_KEY:}"
+      model: "${OPENAI_MODEL:gpt-4.1-mini}"
