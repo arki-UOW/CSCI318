@@ -21,6 +21,8 @@
 
 Errors contain `timestamp`, `status`, `error`, `message`, `path`, and optional `validationErrors`.
 
+Subject confirmation uses a committed `CONFIRMING` import state before calling Assessment Service. Assessment Service can therefore verify the subject through REST, and repeated imports return existing same-title assessments instead of duplicating them. Subject Service marks the import `CONFIRMED` only after that call succeeds.
+
 ## Events
 
 All envelopes contain UUID `eventId`, `eventType`, integer `eventVersion`, UTC `eventTimestamp`, `sourceService`, and structured `payload`.

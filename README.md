@@ -5,7 +5,7 @@ Study Leftovers is a CSCI318 prototype that turns subject-outline PDFs into revi
 ## What works
 
 - PDF upload, local text extraction, candidate extraction, explicit review and confirmation
-- optional LangChain4j/OpenAI extraction and planning; deterministic no-key mode for tests and demos
+- LangChain4j/Gemini PDF extraction and planning, optional OpenAI compatibility, and deterministic no-key mode for tests and demos
 - four independently persisted Spring Boot services with clear data ownership
 - assessment and study-session domain events through Spring Cloud Stream and Kafka
 - Kafka Streams materialised assessment and weekly-study state
@@ -27,7 +27,7 @@ Each service has its own file-backed H2 database. REST handles commands and imme
 
 ## Quick start
 
-Requirements: Docker Desktop with Compose. An OpenAI key is optional.
+Requirements: Docker Desktop with Compose. A Gemini key is recommended but optional.
 
 ```powershell
 Copy-Item .env.example .env
@@ -36,7 +36,41 @@ docker compose up --build
 
 Open <http://localhost:3000>. Kafka and all four services start together. On a first start, allow roughly two minutes for images, Maven dependencies and Kafka initialisation.
 
-To enable AI-backed extraction/planning, set `OPENAI_API_KEY` in `.env`. Without a key, the bounded deterministic adapters remain usable and no paid service is required.
+To enable Gemini-backed extraction/planning, set `GEMINI_API_KEY` in `.env`. Gemini receives the original PDF, so it can understand tables and image-based pages that local text extraction may miss. Without a key, the bounded deterministic adapters remain usable for text-based PDFs and no paid service is required.
+
+## Gemini API key setup
+
+1. Create or copy an API key in [Google AI Studio](https://aistudio.google.com/app/apikey).
+2. From the repository root, create your private environment file:
+
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+
+3. Open `.env` and set these values:
+
+   ```dotenv
+   AI_PROVIDER=gemini
+   GEMINI_API_KEY=your_key_here
+   GEMINI_MODEL=gemini-2.5-flash
+   ```
+
+4. Restart the containers after changing the key:
+
+   ```powershell
+   docker compose down
+   docker compose up --build
+   ```
+
+For local `mvn spring-boot:run` processes, set the same variables in each terminal before starting Subject Service or Planning Service:
+
+```powershell
+$env:AI_PROVIDER = "gemini"
+$env:GEMINI_API_KEY = "your_key_here"
+$env:GEMINI_MODEL = "gemini-2.5-flash"
+```
+
+`AI_PROVIDER=auto` prefers Gemini when both provider keys are present. `AI_PROVIDER=openai` preserves the existing OpenAI path. Never put a real key in `application.yml`, frontend JavaScript, `.env.example`, screenshots, commits, or chat messages.
 
 ## Local development
 
@@ -67,7 +101,7 @@ Run `mvn clean verify`. Domain tests cover core invariants. API/application boun
 
 ## Configuration and secrets
 
-Only `.env.example` is committed. `.env`, databases, Maven output, logs and frontend dependencies are ignored. Never place keys in YAML, JavaScript, source code, Postman examples, or commits.
+Only `.env.example` is committed. `.env`, databases, Maven output, logs and frontend dependencies are ignored. The example contains variable names only. Never place real keys in YAML, JavaScript, source code, Postman examples, screenshots, commits, or messages.
 
 ## Documentation
 
