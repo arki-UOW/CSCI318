@@ -12,6 +12,12 @@ const state = {
   plan: null,
   review: null,
   selectedFile: null,
+  subjectAi: null,
+  planningAi: null,
+  serviceFailures: [],
+  availability: {},
+  availabilityMinutes: {},
+  manualAssessments: [],
   currentView: 'dashboard'
 };
 
@@ -113,7 +119,10 @@ function assessmentRow(assessment) {
     ${dateCard(assessment.dueDate, assessment.dueWeek)}
     <div class="body"><strong>${esc(assessment.title)}</strong><br><small>${esc(subjectName(assessment.subjectId))} · ${assessment.weighting ?? '—'}% · ${assessment.estimatedMinutes ?? '—'} min</small></div>
     <span class="pill">${esc(assessment.status)}</span>
-    ${assessment.status === 'INCOMPLETE' ? `<button class="link complete" data-id="${esc(assessment.id)}">Complete</button>` : ''}
+    <div class="row-actions">
+      ${assessment.status === 'INCOMPLETE' ? `<button class="link complete" data-id="${esc(assessment.id)}">Complete</button>` : ''}
+      <button class="link danger remove-saved-assessment" data-id="${esc(assessment.id)}" aria-label="Remove ${esc(assessment.title)}">Remove</button>
+    </div>
   </div>`;
 }
 
@@ -122,17 +131,21 @@ async function load() {
     ['subjects', request(`${API.subjects}/subjects`)],
     ['assessments', request(`${API.assessments}/assessments`)],
     ['week', request(`${API.planning}/planning/this-week`)],
-    ['plan', request(`${API.planning}/planning/plans/latest`)]
+    ['plan', request(`${API.planning}/planning/plans/latest`)],
+    ['subjectAi', request(`${API.subjects}/ai/status`)],
+    ['planningAi', request(`${API.planning}/planning/ai/status`)]
   ];
   const results = await Promise.allSettled(calls.map(([, promise]) => promise));
   results.forEach((result, index) => {
     if (result.status === 'fulfilled') state[calls[index][0]] = result.value;
   });
-  const unavailable = results.filter(result => result.status === 'rejected').length;
+  state.serviceFailures = results.map((result, index) => result.status === 'rejected' ? calls[index][0] : null).filter(Boolean);
+  const unavailable = state.serviceFailures.length;
   if (unavailable) {
-    feedback('dashboard-feedback',
-      `${unavailable} service view${unavailable === 1 ? '' : 's'} could not be refreshed. Start all services, then reload.`,
-      'error');
+    const planningOffline = state.serviceFailures.some(name => ['week', 'plan', 'planningAi'].includes(name));
+    feedback('dashboard-feedback', planningOffline
+      ? 'Planning is offline. Rebuild the services, then use Retry; your other data is still available.'
+      : 'Some data could not be refreshed. Check the running services and try again.', 'error');
   } else {
     feedback('dashboard-feedback', '');
   }
@@ -140,6 +153,7 @@ async function load() {
 }
 
 function render() {
+  renderSystemStatus();
   const week = state.week;
   $('#due-count').textContent = week?.dueThisWeek?.length ?? 0;
   $('#upcoming-count').textContent = week?.upcoming?.length ?? 0;
@@ -170,6 +184,25 @@ function render() {
   renderPlan('#dashboard-plan');
   renderPlan('#plan-list');
   bindComplete();
+  bindDeleteAssessments();
+}
+
+function renderSystemStatus() {
+  const status = $('#system-status');
+  const subjectReady = state.subjectAi?.configured;
+  const planningReady = state.planningAi?.configured;
+  const subjectStatusUnavailable = state.serviceFailures.includes('subjectAi');
+  const planningOffline = state.serviceFailures.some(name => ['week', 'plan', 'planningAi'].includes(name));
+  const subjectLabel = subjectReady ? '● Gemini ready'
+    : subjectStatusUnavailable ? '○ Gemini status unavailable' : '○ Gemini not loaded';
+  status.innerHTML = `
+    <span class="status-chip ${subjectReady ? 'ready' : subjectStatusUnavailable ? 'offline' : 'warning'}" title="${esc(state.subjectAi?.message || 'Subject AI status unavailable')}">${subjectLabel}</span>
+    <span class="status-chip ${planningOffline ? 'offline' : 'ready'}">${planningOffline ? '○ Planner offline' : '● Planner online'}</span>`;
+  const plannerBadge = $('#planner-ai-badge');
+  if (plannerBadge) {
+    plannerBadge.textContent = planningReady ? `${state.planningAi.provider} ready` : planningOffline ? 'Planner offline' : 'AI key not loaded';
+    plannerBadge.className = `status-chip ${planningReady ? 'ready' : planningOffline ? 'offline' : 'warning'}`;
+  }
 }
 
 function renderAssessments() {
@@ -179,6 +212,7 @@ function renderAssessments() {
     ? assessments.map(assessmentRow).join('')
     : 'No assessments match this view.';
   bindComplete();
+  bindDeleteAssessments();
 }
 
 function renderPlan(target) {
@@ -207,29 +241,138 @@ function bindComplete() {
   });
 }
 
+function bindDeleteAssessments() {
+  $$('.remove-saved-assessment:not([data-bound])').forEach(button => {
+    button.dataset.bound = 'true';
+    button.addEventListener('click', async () => {
+      if (!window.confirm('Remove this incorrect assessment? This cannot be undone.')) return;
+      const target = state.currentView === 'dashboard' ? 'dashboard-feedback' : 'assessment-feedback';
+      setBusy(button, true, 'Removing');
+      try {
+        await request(`${API.assessments}/assessments/${button.dataset.id}`, { method: 'DELETE' });
+        feedback(target, 'Assessment removed.', 'success');
+        await load();
+      } catch (error) {
+        feedback(target, error.message, 'error');
+        setBusy(button, false);
+      }
+    });
+  });
+}
+
 $('#assessment-filter').addEventListener('change', renderAssessments);
+
+function setSubjectMethod(method) {
+  const uploading = method === 'upload';
+  $('#upload-panel').hidden = !uploading;
+  $('#manual-panel').hidden = uploading;
+  $('#upload-tab').classList.toggle('active', uploading);
+  $('#manual-tab').classList.toggle('active', !uploading);
+  $('#upload-tab').setAttribute('aria-selected', String(uploading));
+  $('#manual-tab').setAttribute('aria-selected', String(!uploading));
+}
+
+$('#upload-tab').addEventListener('click', () => setSubjectMethod('upload'));
+$('#manual-tab').addEventListener('click', () => setSubjectMethod('manual'));
+
+function manualAssessmentEditor(assessment, index) {
+  return `<div class="assessment-edit manual-assessment-edit" data-index="${index}">
+    <label>Title<input class="title" value="${esc(assessment.title)}" required placeholder="Assessment title"></label>
+    <label>Type<input class="type" value="${esc(assessment.type || 'Assessment')}" placeholder="Type"></label>
+    <label>Weight %<input class="weight" type="number" min="0" max="100" step="0.1" value="${esc(assessment.weighting)}"></label>
+    <label>Due date<input class="due-date" type="date" value="${esc(assessment.dueDate)}"></label>
+    <label>Due week<input class="due-week" type="number" min="1" max="20" value="${esc(assessment.dueWeek)}"></label>
+    <label>Est. hours<input class="hours" type="number" min="0.1" step="0.1" value="${esc(assessment.estimatedHours)}"></label>
+    <button class="icon-button remove-manual-assessment" type="button" data-index="${index}" aria-label="Remove assessment">×</button>
+  </div>`;
+}
+
+function syncManualAssessments() {
+  state.manualAssessments = $$('.manual-assessment-edit').map(row => ({
+    title: row.querySelector('.title').value.trim(),
+    type: row.querySelector('.type').value.trim() || null,
+    weighting: num(row.querySelector('.weight').value),
+    dueDate: row.querySelector('.due-date').value || null,
+    dueWeek: num(row.querySelector('.due-week').value),
+    estimatedHours: num(row.querySelector('.hours').value),
+    description: null,
+    confidence: null,
+    warning: null
+  }));
+}
+
+function renderManualAssessments() {
+  $('#manual-assessments').innerHTML = state.manualAssessments.map(manualAssessmentEditor).join('');
+  $$('.remove-manual-assessment').forEach(button => button.addEventListener('click', () => {
+    syncManualAssessments();
+    state.manualAssessments.splice(Number(button.dataset.index), 1);
+    renderManualAssessments();
+  }));
+}
+
+$('#manual-add-assessment').addEventListener('click', () => {
+  syncManualAssessments();
+  state.manualAssessments.push({ title: '', type: 'Assessment' });
+  renderManualAssessments();
+  $$('.manual-assessment-edit .title').at(-1)?.focus();
+});
+
+$('#manual-subject-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  syncManualAssessments();
+  const button = event.submitter;
+  setBusy(button, true, 'Saving');
+  feedback('manual-feedback', 'Saving the subject and any assessments…', 'info');
+  try {
+    await request(`${API.subjects}/subjects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: $('#m-code').value.trim(),
+        name: $('#m-name').value.trim(),
+        creditPoints: Number($('#m-cp').value),
+        weeklyStudyTargetMinutes: Number($('#m-target').value),
+        assessments: state.manualAssessments
+      })
+    });
+    event.currentTarget.reset();
+    $('#m-cp').value = 6;
+    $('#m-target').value = 240;
+    state.manualAssessments = [];
+    renderManualAssessments();
+    await load();
+    show('subjects');
+    feedback('subject-feedback', 'Subject added successfully.', 'success');
+  } catch (error) {
+    feedback('manual-feedback', error.message, 'error');
+  } finally {
+    setBusy(button, false);
+  }
+});
 
 const dropZone = $('#outline-drop');
 const fileInput = $('#outline-file');
 const extractButton = $('#extract-btn');
 let dragDepth = 0;
 
-function validatePdf(file) {
-  if (!file) return 'Choose or drop a PDF first.';
-  if (!file.name.toLowerCase().endsWith('.pdf')) return 'Only PDF subject outlines are supported.';
-  if (file.size > 10_000_000) return 'The PDF must be 10 MB or smaller.';
-  if (file.size === 0) return 'The selected PDF is empty.';
+function validateDocument(file) {
+  if (!file) return 'Choose or drop a document first.';
+  const extension = file.name.toLowerCase().split('.').pop();
+  if (!['pdf', 'docx', 'jpg', 'jpeg'].includes(extension)) return 'Choose a PDF, DOCX, JPG or JPEG subject outline.';
+  if (file.size > 15_000_000) return 'The document must be 15 MB or smaller.';
+  if (file.size === 0) return 'The selected document is empty.';
   return null;
 }
 
 function selectFile(file, source) {
-  const error = validatePdf(file);
+  const error = validateDocument(file);
   if (error) {
     feedback('upload-feedback', error, 'error');
     return;
   }
   state.selectedFile = file;
   $('#file-name').textContent = file.name;
+  $('#file-symbol').textContent = file.name.split('.').pop().toUpperCase();
   $('#file-size').textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB · ${source}`;
   $('#file-summary').hidden = false;
   $('#clear-file-btn').hidden = false;
@@ -245,7 +388,7 @@ function clearSelectedFile() {
   $('#clear-file-btn').hidden = true;
   extractButton.disabled = true;
   dropZone.classList.remove('has-file', 'dragging');
-  feedback('upload-feedback', 'Choose or drop a PDF when you are ready.', 'info');
+  feedback('upload-feedback', 'Choose or drop a PDF, DOCX, JPG or JPEG when you are ready.', 'info');
 }
 
 fileInput.addEventListener('change', () => selectFile(fileInput.files[0], 'selected from this device'));
@@ -260,7 +403,7 @@ dropZone.addEventListener('dragenter', event => {
   event.preventDefault();
   dragDepth += 1;
   dropZone.classList.add('dragging');
-  feedback('upload-feedback', 'Release the PDF to add it.', 'info');
+  feedback('upload-feedback', 'Release the document to add it.', 'info');
 });
 dropZone.addEventListener('dragover', event => {
   event.preventDefault();
@@ -286,13 +429,13 @@ document.addEventListener('drop', event => {
 
 extractButton.addEventListener('click', async () => {
   const file = state.selectedFile || fileInput.files[0];
-  const error = validatePdf(file);
+  const error = validateDocument(file);
   if (error) return feedback('upload-feedback', error, 'error');
   const data = new FormData();
   data.append('file', file);
   setBusy(extractButton, true, 'Analysing');
   $('#upload-progress').hidden = false;
-  feedback('upload-feedback', 'Upload received. Extracting subject and assessment details…', 'info');
+  feedback('upload-feedback', 'Document received. Extracting clean text before Gemini analyses it…', 'info');
   try {
     state.review = await request(`${API.subjects}/subject-outlines`, { method: 'POST', body: data });
     renderReview();
@@ -427,7 +570,7 @@ $('#activity-form').addEventListener('submit', async event => {
         description: $('#activity-description').value
       })
     });
-    feedback('activity-feedback', 'Study session recorded. Kafka will update your progress view.', 'success');
+    feedback('activity-feedback', 'Study session recorded. Your progress has been refreshed.', 'success');
     form.reset();
     $('#activity-date').value = localDate(new Date());
     await load();
@@ -437,6 +580,25 @@ $('#activity-form').addEventListener('submit', async event => {
     setBusy(button, false);
   }
 });
+
+async function generatePlan(availability, button) {
+  const start = $('#plan-start').value;
+  setBusy(button, true, 'Generating');
+  feedback('plan-feedback', 'Gemini is balancing approved assessments against your available time…', 'info');
+  try {
+    state.plan = await request(`${API.planning}/planning/plans`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ startDate: start, dailyAvailabilityMinutes: availability })
+    });
+    feedback('plan-feedback', 'Your validated seven-day plan is ready.', 'success');
+    render();
+  } catch (error) {
+    feedback('plan-feedback', error.message, 'error');
+  } finally {
+    setBusy(button, false);
+  }
+}
 
 $('#plan-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -449,21 +611,78 @@ $('#plan-form').addEventListener('submit', async event => {
     date.setDate(date.getDate() + day);
     availability[localDate(date)] = minutes;
   }
-  setBusy(button, true, 'Generating');
-  feedback('plan-feedback', 'Reading current assessments, progress, and availability…', 'info');
+  await generatePlan(availability, button);
+});
+
+function appendChatMessage(role, message) {
+  const bubble = document.createElement('div');
+  bubble.className = `chat-bubble ${role}`;
+  bubble.textContent = message;
+  $('#chat-messages').append(bubble);
+  bubble.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderAvailability() {
+  const rows = Object.entries(state.availability || {}).filter(([, slots]) => slots?.length);
+  $('#availability-summary').classList.toggle('empty', rows.length === 0);
+  $('#availability-summary').innerHTML = rows.length ? rows.map(([date, slots]) => {
+    const label = new Date(`${date}T00:00:00`).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short' });
+    const times = slots.map(slot => `${slot.start.slice(0, 5)}–${slot.end.slice(0, 5)}`).join(', ');
+    return `<div class="availability-day"><div><strong>${esc(label)}</strong><small>${esc(times)}</small></div><span>${state.availabilityMinutes[date] || 0} min</span></div>`;
+  }).join('') : 'No times added yet.';
+  $('#generate-chat-plan').disabled = !Object.values(state.availabilityMinutes || {}).some(minutes => minutes > 0);
+}
+
+async function sendAvailability(message, button) {
+  appendChatMessage('user', message);
+  setBusy(button, true, 'Thinking');
+  feedback('chat-feedback', 'Gemini is interpreting those time slots…', 'info');
   try {
-    state.plan = await request(`${API.planning}/planning/plans`, {
+    const result = await request(`${API.planning}/planning/availability/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ startDate: start, dailyAvailabilityMinutes: availability })
+      body: JSON.stringify({
+        message,
+        weekStart: $('#plan-start').value,
+        availability: state.availability
+      })
     });
-    feedback('plan-feedback', 'A validated seven-day plan was saved.', 'success');
-    render();
+    state.availability = result.availability || {};
+    state.availabilityMinutes = result.dailyAvailabilityMinutes || {};
+    appendChatMessage('assistant', result.reply);
+    renderAvailability();
+    feedback('chat-feedback', result.readyToPlan ? 'Availability understood. You can generate the plan.' : 'Add the detail requested above.', result.readyToPlan ? 'success' : 'info');
   } catch (error) {
-    feedback('plan-feedback', error.message, 'error');
+    appendChatMessage('assistant', error.message);
+    feedback('chat-feedback', error.message, 'error');
   } finally {
     setBusy(button, false);
   }
+}
+
+$('#availability-chat-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const input = $('#availability-message');
+  const message = input.value.trim();
+  if (!message) return;
+  input.value = '';
+  await sendAvailability(message, event.submitter);
+});
+
+$$('[data-prompt]').forEach(button => button.addEventListener('click', () => {
+  $('#availability-message').value = button.dataset.prompt;
+  $('#availability-message').focus();
+}));
+
+$('#plan-start').addEventListener('change', () => {
+  state.availability = {};
+  state.availabilityMinutes = {};
+  renderAvailability();
+  appendChatMessage('assistant', 'The planning week changed, so I cleared the previous time slots. Tell me your availability for this week.');
+});
+
+$('#generate-chat-plan').addEventListener('click', async event => {
+  await generatePlan(state.availabilityMinutes, event.currentTarget);
 });
 
 function localDate(date) {

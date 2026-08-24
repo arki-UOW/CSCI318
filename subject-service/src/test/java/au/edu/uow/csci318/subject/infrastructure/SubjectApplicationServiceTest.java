@@ -25,17 +25,19 @@ import static org.mockito.Mockito.when;
 class SubjectApplicationServiceTest {
     @Mock private InternalSubjectRepository subjects;
     @Mock private InternalImportRepository imports;
-    @Mock private PdfTextExtractor pdf;
+    @Mock private DocumentTextExtractor documents;
     @Mock private OutlineExtraction extractor;
     @Mock private AssessmentImportClient assessments;
     @Mock private SubjectConfirmationTransactions confirmations;
+    @Mock private ConfiguredChatModel configuredModel;
 
     private SubjectApplicationService service;
 
     @BeforeEach
     void setUp() {
         service = new SubjectApplicationService(
-                subjects, imports, pdf, extractor, new ObjectMapper(), assessments, confirmations);
+                subjects, imports, documents, extractor, new ObjectMapper(), assessments,
+                confirmations, configuredModel);
     }
 
     @Test

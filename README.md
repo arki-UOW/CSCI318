@@ -1,15 +1,16 @@
 # Study Leftovers
 
-Study Leftovers is a CSCI318 prototype that turns subject-outline PDFs into reviewable subject and assessment data, then combines deadlines and study activity into a practical seven-day plan.
+Study Leftovers is a CSCI318 prototype that turns subject-outline documents into reviewable subject and assessment data, then combines deadlines and availability into a practical seven-day plan.
 
 ## What works
 
-- PDF upload, local text extraction, candidate extraction, explicit review and confirmation
-- LangChain4j/Gemini PDF extraction and planning, optional OpenAI compatibility, and deterministic no-key mode for tests and demos
+- PDF, DOCX, JPG and JPEG upload, local text/OCR extraction, explicit review and confirmation
+- LangChain4j/Gemini analysis of cleaned extracted text and AI-assisted planning, with optional OpenAI compatibility
+- manual subject and assessment entry when no document is available
 - four independently persisted Spring Boot services with clear data ownership
 - assessment and study-session domain events through Spring Cloud Stream and Kafka
-- Kafka Streams materialised assessment and weekly-study state
-- workload, study progress, “This Week,” assessment overview, plan generation and regeneration
+- live REST-backed workload, study progress, “This Week,” assessment overview, plan generation and regeneration
+- conversational availability capture for time slots such as “Monday 6–8pm”
 - deterministic validation before any AI-produced plan is stored
 - responsive, dependency-free frontend covering the end-to-end workflow
 
@@ -20,7 +21,7 @@ Study Leftovers is a CSCI318 prototype that turns subject-outline PDFs into revi
 | Subject Service | 8081 | subjects, outline imports, extraction state, weekly targets |
 | Assessment Service | 8082 | confirmed assessments and their lifecycle |
 | Study Activity Service | 8083 | study sessions |
-| Planning Service | 8084 | workload/progress projections and versioned plans |
+| Planning Service | 8084 | workload/progress views, availability chat and versioned plans |
 | Frontend | 3000 | browser UI; no domain persistence |
 
 Each service has its own file-backed H2 database. REST handles commands and immediate verification. Kafka carries completed business facts. No service reads another service’s database.
@@ -31,12 +32,12 @@ Requirements: Docker Desktop with Compose. A Gemini key is recommended but optio
 
 ```powershell
 Copy-Item .env.example .env
-docker compose up --build
+docker compose up -d --build --force-recreate
 ```
 
 Open <http://localhost:3000>. Kafka and all four services start together. On a first start, allow roughly two minutes for images, Maven dependencies and Kafka initialisation.
 
-To enable Gemini-backed extraction/planning, set `GEMINI_API_KEY` in `.env`. Gemini receives the original PDF, so it can understand tables and image-based pages that local text extraction may miss. Without a key, the bounded deterministic adapters remain usable for text-based PDFs and no paid service is required.
+To enable Gemini-backed extraction and planning, set `GEMINI_API_KEY` in the private `.env` file—not in `.env.example`. The backend first extracts and normalises PDF/DOCX text or runs OCR for JPG/JPEG, then Gemini receives that cleaned text. This keeps provider input bounded and makes incorrect policy/SLO rows easier to reject.
 
 ## Gemini API key setup
 
@@ -55,11 +56,11 @@ To enable Gemini-backed extraction/planning, set `GEMINI_API_KEY` in `.env`. Gem
    GEMINI_MODEL=gemini-3.6-flash
    ```
 
-4. Restart the containers after changing the key:
+4. Rebuild and recreate the containers after changing the key. A browser refresh alone does not reload environment variables:
 
    ```powershell
    docker compose down
-   docker compose up --build
+   docker compose up -d --build --force-recreate
    ```
 
 For local `mvn spring-boot:run` processes, set the same variables in each terminal before starting Subject Service or Planning Service:
@@ -74,7 +75,7 @@ $env:GEMINI_MODEL = "gemini-3.6-flash"
 
 ## Local development
 
-Requirements: JDK 21, Maven 3.9+, Kafka on port 9092.
+Requirements: JDK 21, Maven 3.9+, Kafka on port 9092 for domain-event services.
 
 ```powershell
 mvn test
@@ -88,10 +89,11 @@ Serve `frontend/` with any static server. The UI expects the documented localhos
 
 ## Demo path
 
-1. Upload a text-based PDF and review every extracted field.
+1. Upload a PDF, DOCX, JPG or JPEG, or choose **Enter manually**.
 2. Confirm it; the subject is stored by Subject Service and assessments by Assessment Service.
-3. Record a study session and observe the Kafka-backed progress projection.
-4. Generate a seven-day plan, complete or reschedule an assessment, then regenerate.
+3. Record a study session and refresh the live progress view.
+4. Tell the planning assistant your time slots and generate a seven-day plan.
+5. Complete or remove incorrect assessments, then regenerate.
 
 The Postman collection in `postman/` includes query and command examples. IDs returned by earlier calls should be placed into the collection variables.
 

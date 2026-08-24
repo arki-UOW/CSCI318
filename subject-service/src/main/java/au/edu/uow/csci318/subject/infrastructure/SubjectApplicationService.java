@@ -10,12 +10,18 @@ import java.util.*;
 
 @Service
 public class SubjectApplicationService {
- private final InternalSubjectRepository subjects; private final InternalImportRepository imports; private final PdfTextExtractor pdf; private final OutlineExtraction extractor; private final ObjectMapper json; private final AssessmentImportClient assessments; private final SubjectConfirmationTransactions confirmations;
- SubjectApplicationService(InternalSubjectRepository subjects,InternalImportRepository imports,PdfTextExtractor pdf,OutlineExtraction extractor,ObjectMapper json,AssessmentImportClient assessments,SubjectConfirmationTransactions confirmations){this.subjects=subjects;this.imports=imports;this.pdf=pdf;this.extractor=extractor;this.json=json;this.assessments=assessments;this.confirmations=confirmations;}
- @Transactional public ImportReview upload(MultipartFile file){
-   if(file==null||file.isEmpty())throw new IllegalArgumentException("A non-empty PDF is required");if(file.getOriginalFilename()==null||!file.getOriginalFilename().toLowerCase().endsWith(".pdf"))throw new IllegalArgumentException("Only PDF subject outlines are supported");if(file.getSize()>10_000_000)throw new IllegalArgumentException("PDF must be 10 MB or smaller");
-   try{byte[] bytes=file.getBytes();String text=pdf.extract(bytes);ExtractionResult result=extractor.extract(bytes,text);var item=imports.save(new SubjectOutlineImport(file.getOriginalFilename(),text,json.writeValueAsString(result)));return review(item,result);}catch(java.io.IOException e){throw new IllegalArgumentException("The uploaded PDF could not be processed",e);}
+ private final InternalSubjectRepository subjects; private final InternalImportRepository imports; private final DocumentTextExtractor documents; private final OutlineExtraction extractor; private final ObjectMapper json; private final AssessmentImportClient assessments; private final SubjectConfirmationTransactions confirmations; private final ConfiguredChatModel configuredModel;
+ SubjectApplicationService(InternalSubjectRepository subjects,InternalImportRepository imports,DocumentTextExtractor documents,OutlineExtraction extractor,ObjectMapper json,AssessmentImportClient assessments,SubjectConfirmationTransactions confirmations,ConfiguredChatModel configuredModel){this.subjects=subjects;this.imports=imports;this.documents=documents;this.extractor=extractor;this.json=json;this.assessments=assessments;this.confirmations=confirmations;this.configuredModel=configuredModel;}
+ public ImportReview upload(MultipartFile file){
+   try{String text=documents.extract(file);ExtractionResult result=extractor.extract(text);var item=imports.save(new SubjectOutlineImport(file.getOriginalFilename(),text,json.writeValueAsString(result)));return review(item,result);}catch(java.io.IOException e){throw new IllegalArgumentException("The extracted document data could not be stored",e);}
  }
+ public SubjectResponse createManual(ManualSubjectRequest request){
+   ExtractionResult extraction=new ExtractionResult(request.code(),request.name(),request.creditPoints(),request.assessments(),List.of());validate(extraction);
+   Subject subject=confirmations.createManual(request);
+   if(!request.assessments().isEmpty())assessments.importAssessments(subject.getId(),request.assessments());
+   return response(subject);
+ }
+ public AiStatus aiStatus(){return configuredModel.status();}
  public SubjectResponse confirm(UUID id,ConfirmImportRequest request){
    validate(request.extraction());
    var prepared=confirmations.prepare(id,request);

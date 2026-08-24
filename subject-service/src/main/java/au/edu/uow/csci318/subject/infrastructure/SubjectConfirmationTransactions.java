@@ -3,6 +3,7 @@ package au.edu.uow.csci318.subject.infrastructure;
 import au.edu.uow.csci318.subject.domain.Subject;
 import au.edu.uow.csci318.subject.domain.SubjectOutlineImport;
 import au.edu.uow.csci318.subject.dto.SubjectDtos.ConfirmImportRequest;
+import au.edu.uow.csci318.subject.dto.SubjectDtos.ManualSubjectRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,6 +60,19 @@ class SubjectConfirmationTransactions {
         if (item.getStatus() == SubjectOutlineImport.Status.CONFIRMING) {
             item.confirm();
         }
+    }
+
+    @Transactional
+    Subject createManual(ManualSubjectRequest request) {
+        return subjects.findByCode(request.code().toUpperCase())
+                .map(existing -> {
+                    if (!existing.getName().equalsIgnoreCase(request.name())) {
+                        throw new IllegalArgumentException("A different subject already uses code " + request.code());
+                    }
+                    return existing;
+                })
+                .orElseGet(() -> subjects.save(new Subject(
+                        request.code(), request.name(), request.creditPoints(), request.weeklyStudyTargetMinutes())));
     }
 
     record PreparedConfirmation(Subject subject, boolean alreadyConfirmed) {

@@ -11,7 +11,6 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OutlineExtractionTest {
@@ -29,7 +28,7 @@ class OutlineExtractionTest {
                 Assessment 2: Demo Presentation 30% Due Week 10
                 """;
 
-        var result = extractor.extract(new byte[]{1}, text);
+        var result = extractor.extract(text);
 
         assertEquals("CSCI318", result.subjectCode());
         assertEquals("Software Engineering Practices and Principles", result.subjectName());
@@ -47,7 +46,7 @@ class OutlineExtractionTest {
                 "auto", "", "gemini-3.6-flash", "", "gpt-4.1-mini");
         SafeOutlineExtractor extractor = new SafeOutlineExtractor(new ObjectMapper(), model);
 
-        var result = extractor.extract(new byte[]{1}, """
+        var result = extractor.extract("""
                 CSCI318 Software Engineering Practices and Principles
                 Assessment: Group Project 40% Due Week 8
                 """);
@@ -62,7 +61,7 @@ class OutlineExtractionTest {
                 "auto", "", "gemini-3.6-flash", "", "gpt-4.1-mini");
         SafeOutlineExtractor extractor = new SafeOutlineExtractor(new ObjectMapper(), model);
 
-        var result = extractor.extract(new byte[]{1}, """
+        var result = extractor.extract("""
                 CSCI318 Software Engineering Practices and Principles
                 Assessment 1: Architecture Report 25%
                 Assessment 2: Demo Presentation 30% Due: 25/10/2026
@@ -84,15 +83,13 @@ class OutlineExtractionTest {
                 "gemini", "configured-key", "retired-model", "", "gpt-4.1-mini") {
             @Override
             Optional<Selection> selection() {
-                return Optional.of(new Selection("Gemini", "retired-model", failingModel, true));
+                return Optional.of(new Selection("Gemini", "retired-model", failingModel));
             }
         };
-        SafeOutlineExtractor extractor = new SafeOutlineExtractor(new ObjectMapper(), configured);
+        String error = SafeOutlineExtractor.providerFailure(configured.selection().orElseThrow(),
+                new RuntimeException("404: this model is no longer available"));
 
-        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> extractor.extract(new byte[]{1}, "Assessment policy text 40%"));
-
-        assertTrue(error.getMessage().contains("retired-model"));
-        assertTrue(error.getMessage().contains("gemini-3.6-flash"));
+        assertTrue(error.contains("retired-model"));
+        assertTrue(error.contains("gemini-3.6-flash"));
     }
 }

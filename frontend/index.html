@@ -23,7 +23,7 @@
       <button data-view="plan">Study plan</button>
       <button data-view="activity">Record activity</button>
     </nav>
-    <div class="service-dot"><span aria-hidden="true">●</span> Local prototype</div>
+    <div class="service-dot"><span aria-hidden="true">●</span> Local workspace</div>
   </aside>
 
   <main>
@@ -32,7 +32,10 @@
         <p class="eyebrow">CSCI318 PROTOTYPE</p>
         <h1 id="page-title">Good morning</h1>
       </div>
-      <button class="primary" data-view="upload">＋ Upload Subject Outline</button>
+      <div class="header-actions">
+        <div id="system-status" class="system-status" aria-live="polite"></div>
+        <button class="primary" data-view="upload">＋ Add subject</button>
+      </div>
     </header>
     <div id="app-announcer" class="sr-only" aria-live="assertive"></div>
 
@@ -76,36 +79,59 @@
 
     <section id="upload" class="view">
       <p class="eyebrow">GET STARTED</p>
-      <h2>Upload a subject outline</h2>
-      <p class="lede">Drop or choose a PDF. Gemini can read the original document layout; you still review every value before anything is confirmed.</p>
+      <h2>Add a subject</h2>
+      <p class="lede">Import a subject outline or enter the subject yourself. Extracted information is always shown for review before it is saved.</p>
 
-      <label id="outline-drop" class="drop" tabindex="0" role="button" aria-controls="outline-file" aria-describedby="drop-help">
-        <input id="outline-file" type="file" accept="application/pdf,.pdf">
-        <span class="drop-icon" aria-hidden="true">⇧</span>
-        <strong>Drop a PDF here</strong>
-        <span>or choose a file</span>
-        <small id="drop-help">Maximum 10 MB · nothing is confirmed automatically</small>
-      </label>
+      <div class="segmented" role="tablist" aria-label="Add subject method">
+        <button id="upload-tab" class="active" type="button" role="tab" aria-selected="true">Upload document</button>
+        <button id="manual-tab" type="button" role="tab" aria-selected="false">Enter manually</button>
+      </div>
 
-      <div id="file-summary" class="file-summary" hidden>
-        <div class="file-symbol" aria-hidden="true">PDF</div>
-        <div class="file-body">
-          <strong id="file-name"></strong>
-          <small id="file-size"></small>
+      <div id="upload-panel" class="method-panel">
+        <div class="method-heading">
+          <div><h3>Import an outline</h3><p>Text is extracted locally first, then Gemini identifies the subject and genuine assessment rows.</p></div>
+          <span class="format-list">PDF · DOCX · JPG · JPEG</span>
         </div>
-        <span class="ready-pill">Ready</span>
+        <label id="outline-drop" class="drop" tabindex="0" role="button" aria-controls="outline-file" aria-describedby="drop-help">
+          <input id="outline-file" type="file" accept=".pdf,.docx,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg">
+          <span class="drop-icon" aria-hidden="true">⇧</span>
+          <strong>Drop your outline here</strong>
+          <span>or browse your device</span>
+          <small id="drop-help">Maximum 15 MB · PDF, DOCX, JPG or JPEG</small>
+        </label>
+
+        <div id="file-summary" class="file-summary" hidden>
+          <div id="file-symbol" class="file-symbol" aria-hidden="true">FILE</div>
+          <div class="file-body"><strong id="file-name"></strong><small id="file-size"></small></div>
+          <span class="ready-pill">Ready</span>
+        </div>
+        <div class="actions">
+          <button id="extract-btn" class="primary" disabled>Analyse with Gemini</button>
+          <button id="clear-file-btn" class="secondary" type="button" hidden>Choose another</button>
+        </div>
+        <div id="upload-progress" class="processing" hidden aria-live="polite">
+          <span class="spinner" aria-hidden="true"></span>
+          <div><strong>Extracting text, then asking Gemini</strong><small>Tables, OCR and assessment details can take a moment.</small></div>
+        </div>
+        <div id="upload-feedback" class="feedback" aria-live="polite"></div>
+        <div id="review"></div>
       </div>
 
-      <div class="actions">
-        <button id="extract-btn" class="primary" disabled>Analyse outline</button>
-        <button id="clear-file-btn" class="secondary" type="button" hidden>Choose another</button>
+      <div id="manual-panel" class="method-panel" hidden>
+        <div class="method-heading"><div><h3>Enter subject details</h3><p>Add only the fields you know. Assessments are optional and can be added later.</p></div></div>
+        <form id="manual-subject-form">
+          <div class="review-grid manual-grid">
+            <label>Subject code<input id="m-code" required placeholder="e.g. CSCI318"></label>
+            <label>Subject name<input id="m-name" required placeholder="Software Engineering Practices"></label>
+            <label>Credit points<input id="m-cp" type="number" min="1" value="6" required></label>
+            <label>Weekly study target<input id="m-target" type="number" min="0" max="10080" value="240" required></label>
+          </div>
+          <div class="review-section-head"><h3>Assessments <small>(optional)</small></h3><button id="manual-add-assessment" class="secondary" type="button">＋ Add assessment</button></div>
+          <div id="manual-assessments"></div>
+          <div id="manual-feedback" class="feedback" aria-live="polite"></div>
+          <button class="primary" type="submit">Save subject</button>
+        </form>
       </div>
-      <div id="upload-progress" class="processing" hidden aria-live="polite">
-        <span class="spinner" aria-hidden="true"></span>
-        <div><strong>Reading and analysing your outline</strong><small>Tables and assessment details may take a moment.</small></div>
-      </div>
-      <div id="upload-feedback" class="feedback" aria-live="polite"></div>
-      <div id="review"></div>
     </section>
 
     <section id="subjects" class="view">
@@ -133,15 +159,42 @@
 
     <section id="plan" class="view">
       <p class="eyebrow">AI-ASSISTED PLANNING</p>
-      <h2>Seven-day study plan</h2>
-      <p class="lede">Set your daily availability. The planner reads live assessments and progress, then validates every item before saving.</p>
-      <form id="plan-form" class="form">
-        <label>Week starts<input id="plan-start" type="date" required></label>
-        <label>Minutes available each day<input id="plan-minutes" type="number" min="0" max="1440" value="120" required></label>
-        <button class="primary">Generate plan</button>
-      </form>
+      <h2>Plan your week together</h2>
+      <p class="lede">Tell the planning assistant when you are free in normal language, check the interpreted time slots, then generate a validated plan.</p>
+      <div class="planner-layout">
+        <article class="panel chat-card">
+          <div class="panel-head"><div><p class="eyebrow">AVAILABILITY ASSISTANT</p><h3>When can you study?</h3></div><span id="planner-ai-badge" class="status-chip">Checking AI…</span></div>
+          <label class="week-label">Week starts<input id="plan-start" type="date" required></label>
+          <div id="chat-messages" class="chat-messages" aria-live="polite">
+            <div class="chat-bubble assistant">Tell me your free times, for example: “Monday 6–8pm and Wednesday after 4pm.”</div>
+          </div>
+          <div class="prompt-chips">
+            <button type="button" data-prompt="I'm free Monday and Wednesday from 6pm to 8pm.">Mon &amp; Wed evenings</button>
+            <button type="button" data-prompt="I can study every weekday from 7pm to 8:30pm.">Weekday evenings</button>
+            <button type="button" data-prompt="Clear my availability and let me start again.">Start over</button>
+          </div>
+          <form id="availability-chat-form" class="chat-form">
+            <label class="sr-only" for="availability-message">Availability message</label>
+            <input id="availability-message" placeholder="Type when you are available…" required autocomplete="off">
+            <button class="primary" aria-label="Send availability">Send</button>
+          </form>
+          <div id="chat-feedback" class="feedback" aria-live="polite"></div>
+        </article>
+        <article class="panel availability-card">
+          <p class="eyebrow">INTERPRETED SCHEDULE</p>
+          <h3>Your available slots</h3>
+          <div id="availability-summary" class="availability-summary empty">No times added yet.</div>
+          <button id="generate-chat-plan" class="primary full" disabled>Generate my study plan</button>
+          <details class="quick-setup"><summary>Prefer a simple daily amount?</summary>
+            <form id="plan-form" class="compact-form">
+              <label>Minutes each day<input id="plan-minutes" type="number" min="0" max="1440" value="120" required></label>
+              <button class="secondary">Use quick setup</button>
+            </form>
+          </details>
+        </article>
+      </div>
       <div id="plan-feedback" class="feedback" aria-live="polite"></div>
-      <div id="plan-list" class="list"></div>
+      <div id="plan-list" class="plan-board"></div>
     </section>
 
     <section id="activity" class="view">

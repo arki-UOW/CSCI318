@@ -1,4 +1,90 @@
-package au.edu.uow.csci318.planning.application;import au.edu.uow.csci318.planning.dto.PlanningDtos.*;import org.springframework.beans.factory.annotation.Value;import org.springframework.core.ParameterizedTypeReference;import org.springframework.stereotype.Component;import org.springframework.web.client.RestClient;import java.time.*;import java.util.*;
-@Component public class PlanningTools{private final RestClient assessments;private final RestClient subjects;public PlanningTools(RestClient.Builder b,@Value("${services.assessment-url}")String a,@Value("${services.subject-url}")String s){assessments=b.baseUrl(a).build();subjects=b.baseUrl(s).build();}
- public List<AssessmentView>getIncompleteAssessments(){return getAssessments().stream().filter(a->"INCOMPLETE".equals(a.status())).toList();}public List<AssessmentView>getUpcomingAssessments(){return getIncompleteAssessments().stream().filter(a->a.dueDate()!=null&&!a.dueDate().isBefore(LocalDate.now())).sorted(Comparator.comparing(AssessmentView::dueDate)).toList();}public List<AssessmentView>getAssessmentsDueThisWeek(){LocalDate from=LocalDate.now().with(java.time.DayOfWeek.MONDAY);LocalDate to=from.plusDays(6);return getIncompleteAssessments().stream().filter(a->a.dueDate()!=null&&!a.dueDate().isBefore(from)&&!a.dueDate().isAfter(to)).toList();}public List<SubjectView>getSubjects(){var r=subjects.get().uri("/api/subjects").retrieve().body(new ParameterizedTypeReference<List<SubjectView>>(){});return r==null?List.of():r;}
- private List<AssessmentView>getAssessments(){var r=assessments.get().uri("/api/assessments").retrieve().body(new ParameterizedTypeReference<List<AssessmentView>>(){});return r==null?List.of():r;}}
+package au.edu.uow.csci318.planning.application;
+
+import au.edu.uow.csci318.planning.dto.PlanningDtos.AssessmentView;
+import au.edu.uow.csci318.planning.dto.PlanningDtos.SubjectView;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
+
+import java.time.LocalDate;
+import java.util.Comparator;
+import java.util.List;
+import java.util.UUID;
+
+@Component
+public class PlanningTools {
+    private final RestClient assessments;
+    private final RestClient subjects;
+    private final RestClient activity;
+
+    public PlanningTools(
+            RestClient.Builder builder,
+            @Value("${services.assessment-url}") String assessmentUrl,
+            @Value("${services.subject-url}") String subjectUrl,
+            @Value("${services.activity-url}") String activityUrl) {
+        assessments = builder.clone().baseUrl(assessmentUrl).build();
+        subjects = builder.clone().baseUrl(subjectUrl).build();
+        activity = builder.clone().baseUrl(activityUrl).build();
+    }
+
+    public List<AssessmentView> getIncompleteAssessments() {
+        return getAssessments().stream()
+                .filter(assessment -> "INCOMPLETE".equals(assessment.status()))
+                .filter(this::plausibleAssessment)
+                .toList();
+    }
+
+    public List<AssessmentView> getUpcomingAssessments() {
+        return getIncompleteAssessments().stream()
+                .filter(assessment -> assessment.dueDate() != null
+                        && !assessment.dueDate().isBefore(LocalDate.now()))
+                .sorted(Comparator.comparing(AssessmentView::dueDate))
+                .toList();
+    }
+
+    public List<AssessmentView> getAssessmentsDueThisWeek() {
+        LocalDate from = LocalDate.now().with(java.time.DayOfWeek.MONDAY);
+        LocalDate to = from.plusDays(6);
+        return getIncompleteAssessments().stream()
+                .filter(assessment -> assessment.dueDate() != null
+                        && !assessment.dueDate().isBefore(from)
+                        && !assessment.dueDate().isAfter(to))
+                .toList();
+    }
+
+    public List<SubjectView> getSubjects() {
+        List<SubjectView> response = subjects.get().uri("/api/subjects").retrieve()
+                .body(new ParameterizedTypeReference<>() {
+                });
+        return response == null ? List.of() : response;
+    }
+
+    public int getStudiedMinutes(UUID subjectId, LocalDate weekStart) {
+        StudySummary response = activity.get()
+                .uri(uri -> uri.path("/api/study-sessions/summary")
+                        .queryParam("subjectId", subjectId)
+                        .queryParam("weekOf", weekStart)
+                        .build())
+                .retrieve().body(StudySummary.class);
+        return response == null ? 0 : response.totalMinutes();
+    }
+
+    private List<AssessmentView> getAssessments() {
+        List<AssessmentView> response = assessments.get().uri("/api/assessments").retrieve()
+                .body(new ParameterizedTypeReference<>() {
+                });
+        return response == null ? List.of() : response;
+    }
+
+    private boolean plausibleAssessment(AssessmentView assessment) {
+        String title = assessment.title() == null ? "" : assessment.title().toLowerCase();
+        return title.length() >= 3 && title.length() <= 120
+                && !title.matches(".*(learning outcome|eligible for a pass|submitted late|late submission|"
+                + "academic integrity|marking criteria|name type|student must|policy).*?");
+    }
+
+    private record StudySummary(UUID subjectId, LocalDate weekStart, LocalDate weekEnd,
+                                int totalMinutes, int sessionCount) {
+    }
+}
