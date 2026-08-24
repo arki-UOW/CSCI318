@@ -191,9 +191,12 @@ function renderSystemStatus() {
   const status = $('#system-status');
   const subjectReady = state.subjectAi?.configured;
   const planningReady = state.planningAi?.configured;
+  const subjectStatusUnavailable = state.serviceFailures.includes('subjectAi');
   const planningOffline = state.serviceFailures.some(name => ['week', 'plan', 'planningAi'].includes(name));
+  const subjectLabel = subjectReady ? '● Gemini ready'
+    : subjectStatusUnavailable ? '○ Gemini status unavailable' : '○ Gemini not loaded';
   status.innerHTML = `
-    <span class="status-chip ${subjectReady ? 'ready' : 'warning'}" title="${esc(state.subjectAi?.message || 'Subject AI status unavailable')}">${subjectReady ? '● Gemini ready' : '○ Gemini not loaded'}</span>
+    <span class="status-chip ${subjectReady ? 'ready' : subjectStatusUnavailable ? 'offline' : 'warning'}" title="${esc(state.subjectAi?.message || 'Subject AI status unavailable')}">${subjectLabel}</span>
     <span class="status-chip ${planningOffline ? 'offline' : 'ready'}">${planningOffline ? '○ Planner offline' : '● Planner online'}</span>`;
   const plannerBadge = $('#planner-ai-badge');
   if (plannerBadge) {

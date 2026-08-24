@@ -64,11 +64,15 @@ class SubjectConfirmationTransactions {
 
     @Transactional
     Subject createManual(ManualSubjectRequest request) {
-        if (subjects.findByCode(request.code().toUpperCase()).isPresent()) {
-            throw new IllegalArgumentException("A subject with code " + request.code() + " already exists");
-        }
-        return subjects.save(new Subject(
-                request.code(), request.name(), request.creditPoints(), request.weeklyStudyTargetMinutes()));
+        return subjects.findByCode(request.code().toUpperCase())
+                .map(existing -> {
+                    if (!existing.getName().equalsIgnoreCase(request.name())) {
+                        throw new IllegalArgumentException("A different subject already uses code " + request.code());
+                    }
+                    return existing;
+                })
+                .orElseGet(() -> subjects.save(new Subject(
+                        request.code(), request.name(), request.creditPoints(), request.weeklyStudyTargetMinutes())));
     }
 
     record PreparedConfirmation(Subject subject, boolean alreadyConfirmed) {
