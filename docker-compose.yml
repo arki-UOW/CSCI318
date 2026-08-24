@@ -5,47 +5,63 @@ services:
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENERS: INTERNAL://:29092,CONTROLLER://:9093,EXTERNAL://:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:29092 --list >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 15s
   subject-service:
     build: {context: ., dockerfile: subject-service/Dockerfile}
     ports: ["8081:8081"]
     environment:
       ASSESSMENT_SERVICE_URL: "http://assessment-service:8082"
-      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
       AI_PROVIDER: "${AI_PROVIDER:-auto}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
-      GEMINI_MODEL: "${GEMINI_MODEL:-gemini-2.5-flash}"
+      GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.6-flash}"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4.1-mini}"
-    depends_on: [kafka]
+    depends_on:
+      kafka: {condition: service_healthy}
+    restart: on-failure
   assessment-service:
     build: {context: ., dockerfile: assessment-service/Dockerfile}
     ports: ["8082:8082"]
-    environment: {SUBJECT_SERVICE_URL: "http://subject-service:8081", KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"}
-    depends_on: [kafka]
+    environment: {SUBJECT_SERVICE_URL: "http://subject-service:8081", KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"}
+    depends_on:
+      kafka: {condition: service_healthy}
+    restart: on-failure
   study-activity-service:
     build: {context: ., dockerfile: study-activity-service/Dockerfile}
     ports: ["8083:8083"]
-    environment: {SUBJECT_SERVICE_URL: "http://subject-service:8081", KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"}
-    depends_on: [kafka]
+    environment: {SUBJECT_SERVICE_URL: "http://subject-service:8081", KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"}
+    depends_on:
+      kafka: {condition: service_healthy}
+    restart: on-failure
   planning-service:
     build: {context: ., dockerfile: planning-service/Dockerfile}
     ports: ["8084:8084"]
     environment:
       ASSESSMENT_SERVICE_URL: "http://assessment-service:8082"
       SUBJECT_SERVICE_URL: "http://subject-service:8081"
-      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
       AI_PROVIDER: "${AI_PROVIDER:-auto}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
-      GEMINI_MODEL: "${GEMINI_MODEL:-gemini-2.5-flash}"
+      GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.6-flash}"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4.1-mini}"
-    depends_on: [kafka, assessment-service]
+    depends_on:
+      kafka: {condition: service_healthy}
+      assessment-service: {condition: service_started}
+    restart: on-failure
   frontend:
     image: nginx:1.29-alpine
     ports: ["3000:80"]

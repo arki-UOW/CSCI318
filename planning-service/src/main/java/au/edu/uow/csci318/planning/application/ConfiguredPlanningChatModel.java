@@ -25,7 +25,7 @@ class ConfiguredPlanningChatModel {
     ConfiguredPlanningChatModel(
             @Value("${study.ai.provider:auto}") String provider,
             @Value("${study.ai.gemini.api-key:}") String geminiKey,
-            @Value("${study.ai.gemini.model:gemini-2.5-flash}") String geminiModel,
+            @Value("${study.ai.gemini.model:gemini-3.6-flash}") String geminiModel,
             @Value("${study.ai.openai.api-key:}") String openAiKey,
             @Value("${study.ai.openai.model:gpt-4.1-mini}") String openAiModel) {
         this.provider = provider == null ? "auto" : provider.trim().toLowerCase(Locale.ROOT);
