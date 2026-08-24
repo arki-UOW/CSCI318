@@ -4,7 +4,7 @@
 
 | Service | Method and path | Purpose |
 |---|---|---|
-| Subject | `POST /api/subject-outlines` | Upload and extract PDF/DOCX/JPG/JPEG |
+| Subject | `POST /api/subject-outlines` | Upload and extract one PDF/DOCX/JPG/JPEG; the web client queues up to 10 and submits them sequentially |
 | Subject | `GET /api/subject-outlines/{id}` | Retrieve review state |
 | Subject | `POST /api/subject-outlines/{id}/confirm` | Confirm corrected extraction |
 | Subject | `GET /api/subjects` | Subject overview |

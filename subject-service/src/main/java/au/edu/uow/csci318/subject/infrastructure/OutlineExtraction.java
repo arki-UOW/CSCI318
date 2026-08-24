@@ -3,6 +3,7 @@ package au.edu.uow.csci318.subject.infrastructure;
 import au.edu.uow.csci318.subject.dto.SubjectDtos.AssessmentCandidate;
 import au.edu.uow.csci318.subject.dto.SubjectDtos.AiStatus;
 import au.edu.uow.csci318.subject.dto.SubjectDtos.ExtractionResult;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ResponseFormat;
@@ -14,6 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
@@ -65,9 +67,9 @@ class ConfiguredChatModel {
             @Value("${study.ai.openai.model:gpt-4.1-mini}") String openAiModel) {
         this.provider = provider == null ? "auto" : provider.trim().toLowerCase(Locale.ROOT);
         this.geminiKey = geminiKey == null ? "" : geminiKey.trim();
-        this.geminiModel = geminiModel;
+        this.geminiModel = geminiModel == null || geminiModel.isBlank() ? "gemini-3.6-flash" : geminiModel.trim();
         this.openAiKey = openAiKey == null ? "" : openAiKey.trim();
-        this.openAiModel = openAiModel;
+        this.openAiModel = openAiModel == null || openAiModel.isBlank() ? "gpt-4.1-mini" : openAiModel.trim();
     }
 
     Optional<Selection> selection() {
@@ -80,6 +82,9 @@ class ConfiguredChatModel {
                     .modelName(geminiModel)
                     .temperature(0.0)
                     .responseFormat(ResponseFormat.JSON)
+                    .maxOutputTokens(8192)
+                    .timeout(Duration.ofSeconds(120))
+                    .maxRetries(2)
                     .build();
             return Optional.of(new Selection("Gemini", geminiModel, model));
         }
@@ -150,11 +155,13 @@ class SafeOutlineExtractor implements OutlineExtraction {
 
             Rules:
             - Use ISO yyyy-MM-dd for an exact dueDate.
+            - dueWeek must be an integer from 1 to 52, without the word "Week". When a task spans multiple
+              weeks, use the earliest week and explain the full range in warning or description.
             - Preserve a stated teaching week in dueWeek. Never invent a calendar date from a week number.
             - Use null when a value is absent or uncertain; do not guess.
             - Associate wrapped table cells with the correct assessment row.
-            - Weighting is a number from 0 to 100, without the percent sign.
-            - confidence is a number from 0 to 1.
+            - creditPoints is an integer. weighting is a number from 0 to 100 without the percent sign.
+            - estimatedHours is a number and confidence is a number from 0 to 1. Never quote numeric fields.
             - Do not treat learning outcomes, weekly topics, policies, or contact details as assessments.
             - Do not use table headings, eligibility requirements, late-submission rules or SLO mappings as titles.
             - Include an assessment only when the text explicitly identifies a real task, exam, quiz, project,
@@ -173,17 +180,24 @@ class SafeOutlineExtractor implements OutlineExtraction {
     @Override
     public ExtractionResult extract(String extractedText) {
         String text = extractedText == null ? "" : extractedText.trim();
-        Optional<ConfiguredChatModel.Selection> selection = configuredModel.selection();
-        if (selection.isPresent()) {
-            try {
-                return validate(ai(selection.get(), text));
-            } catch (Exception e) {
-                throw new IllegalArgumentException(providerFailure(selection.get(), e), e);
-            }
-        }
         if (text.isBlank()) {
             throw new IllegalArgumentException(
                     "No readable text could be extracted from this document. Upload a clearer file or enter the subject manually.");
+        }
+        Optional<ConfiguredChatModel.Selection> selection = configuredModel.selection();
+        if (selection.isPresent()) {
+            String raw;
+            try {
+                raw = requestAi(selection.get(), text);
+            } catch (Exception e) {
+                throw new IllegalArgumentException(providerFailure(selection.get(), e), e);
+            }
+            try {
+                return validate(parseAiResponse(raw));
+            } catch (Exception e) {
+                throw new IllegalArgumentException(selection.get().provider()
+                        + " returned assessment data in an unreadable format. Retry the document; if it happens again, enter the subject manually.", e);
+            }
         }
         return withWarning(deterministic(text),
                 configuredModel.missingConfigurationMessage() + "; deterministic extraction was used.");
@@ -221,14 +235,106 @@ class SafeOutlineExtractor implements OutlineExtraction {
         return prefix + "The provider request failed. Check the API key, model and provider quota, then retry.";
     }
 
-    private ExtractionResult ai(ConfiguredChatModel.Selection selection, String text) throws Exception {
-        if (text.isBlank()) {
-            throw new IllegalArgumentException("The document extractor returned no text");
-        }
-        String raw = selection.model().chat(EXTRACTION_PROMPT + "\n\nEXTRACTED DOCUMENT TEXT:\n"
+    private String requestAi(ConfiguredChatModel.Selection selection, String text) {
+        return selection.model().chat(EXTRACTION_PROMPT + "\n\nEXTRACTED DOCUMENT TEXT:\n"
                 + text.substring(0, Math.min(text.length(), MAX_TEXT_LENGTH)));
+    }
+
+    ExtractionResult parseAiResponse(String raw) throws IOException {
         raw = raw.replaceFirst("(?s)^```(?:json)?\\s*", "").replaceFirst("(?s)\\s*```$", "");
-        return json.readValue(raw, ExtractionResult.class);
+        JsonNode root = json.readTree(raw);
+        if (root == null || !root.isObject()) {
+            throw new IOException("AI response was not a JSON object");
+        }
+        List<String> warnings = textList(root.get("warnings"));
+        List<AssessmentCandidate> assessments = new ArrayList<>();
+        JsonNode suppliedAssessments = root.get("assessments");
+        if (suppliedAssessments != null && suppliedAssessments.isArray()) {
+            for (JsonNode item : suppliedAssessments) {
+                if (!item.isObject()) {
+                    warnings.add("One malformed assessment row was ignored");
+                    continue;
+                }
+                String dueWeekText = text(item.get("dueWeek"));
+                List<Integer> dueWeeks = integers(dueWeekText);
+                String itemWarning = text(item.get("warning"));
+                if (dueWeeks.size() > 1) {
+                    itemWarning = appendWarning(itemWarning,
+                            "Multiple due weeks were reported (" + dueWeekText + "); the earliest week is shown for planning");
+                }
+                String dueDateText = text(item.get("dueDate"));
+                LocalDate dueDate = dueDateText == null ? null : findDate(dueDateText);
+                assessments.add(new AssessmentCandidate(
+                        text(item.get("title")),
+                        text(item.get("type")),
+                        decimal(item.get("weighting")),
+                        dueDate,
+                        dueWeeks.isEmpty() ? null : dueWeeks.getFirst(),
+                        text(item.get("description")),
+                        decimal(item.get("estimatedHours")),
+                        decimal(item.get("confidence")),
+                        itemWarning));
+            }
+        } else if (suppliedAssessments != null && !suppliedAssessments.isNull()) {
+            warnings.add("Gemini did not return assessments as a list; add them during review");
+        }
+        return new ExtractionResult(
+                text(root.get("subjectCode")),
+                text(root.get("subjectName")),
+                integer(root.get("creditPoints")),
+                assessments,
+                warnings);
+    }
+
+    private List<String> textList(JsonNode node) {
+        List<String> values = new ArrayList<>();
+        if (node == null || node.isNull()) {
+            return values;
+        }
+        if (node.isArray()) {
+            node.forEach(value -> {
+                String item = text(value);
+                if (item != null) values.add(item);
+            });
+        } else {
+            String item = text(node);
+            if (item != null) values.add(item);
+        }
+        return values;
+    }
+
+    private String text(JsonNode node) {
+        if (node == null || node.isNull()) return null;
+        String value = node.isTextual() ? node.asText() : node.asText(null);
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private Integer integer(JsonNode node) {
+        if (node == null || node.isNull()) return null;
+        if (node.isIntegralNumber()) return node.intValue();
+        List<Integer> values = integers(text(node));
+        return values.isEmpty() ? null : values.getFirst();
+    }
+
+    private List<Integer> integers(String value) {
+        if (value == null) return List.of();
+        Matcher matcher = Pattern.compile("(?<!\\d)(\\d{1,3})(?!\\d)").matcher(value);
+        List<Integer> values = new ArrayList<>();
+        while (matcher.find()) values.add(Integer.valueOf(matcher.group(1)));
+        return values;
+    }
+
+    private Double decimal(JsonNode node) {
+        if (node == null || node.isNull()) return null;
+        if (node.isNumber()) return node.doubleValue();
+        String value = text(node);
+        if (value == null) return null;
+        Matcher matcher = Pattern.compile("-?\\d+(?:\\.\\d+)?").matcher(value.replace(",", ""));
+        return matcher.find() ? Double.valueOf(matcher.group()) : null;
+    }
+
+    private String appendWarning(String current, String addition) {
+        return current == null ? addition : current + "; " + addition;
     }
 
     private ExtractionResult deterministic(String text) {

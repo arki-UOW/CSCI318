@@ -92,4 +92,56 @@ class OutlineExtractionTest {
         assertTrue(error.contains("retired-model"));
         assertTrue(error.contains("gemini-3.6-flash"));
     }
+
+    @Test
+    void normalisesGeminiNumericStringsAndMultiWeekValues() throws Exception {
+        ConfiguredChatModel model = new ConfiguredChatModel(
+                "auto", "", "gemini-3.6-flash", "", "gpt-4.1-mini");
+        SafeOutlineExtractor extractor = new SafeOutlineExtractor(new ObjectMapper(), model);
+
+        var result = extractor.parseAiResponse("""
+                {
+                  "subjectCode": "ECTE351",
+                  "subjectName": "Engineering Design and Management 3",
+                  "creditPoints": "12 credit points",
+                  "assessments": [{
+                    "title": "Project Management Assessments",
+                    "type": "Assignment",
+                    "weighting": "15%",
+                    "dueDate": null,
+                    "dueWeek": "Weeks 10 & 12",
+                    "description": "Three project management activities",
+                    "estimatedHours": "8 hours",
+                    "confidence": "0.91",
+                    "warning": null
+                  }],
+                  "warnings": "Review the extracted dates"
+                }
+                """);
+
+        assertEquals(12, result.creditPoints());
+        assertEquals(15.0, result.assessments().getFirst().weighting());
+        assertEquals(10, result.assessments().getFirst().dueWeek());
+        assertEquals(8.0, result.assessments().getFirst().estimatedHours());
+        assertEquals(0.91, result.assessments().getFirst().confidence());
+        assertTrue(result.assessments().getFirst().warning().contains("Weeks 10 & 12"));
+        assertEquals("Review the extracted dates", result.warnings().getFirst());
+    }
+
+    @Test
+    void acceptsAnnualSubjectWeeksBeyondTwenty() throws Exception {
+        ConfiguredChatModel model = new ConfiguredChatModel(
+                "auto", "", "gemini-3.6-flash", "", "gpt-4.1-mini");
+        SafeOutlineExtractor extractor = new SafeOutlineExtractor(new ObjectMapper(), model);
+
+        var result = extractor.parseAiResponse("""
+                {"subjectCode":"ECTE351","subjectName":"Engineering Design and Management 3",
+                 "creditPoints":12,"assessments":[{"title":"Innovation Fair Presentation",
+                 "type":"Presentation","weighting":"5%","dueDate":"2026-10-30","dueWeek":"Week 26"}],
+                 "warnings":[]}
+                """);
+
+        assertEquals(26, result.assessments().getFirst().dueWeek());
+        assertEquals(LocalDate.of(2026, 10, 30), result.assessments().getFirst().dueDate());
+    }
 }

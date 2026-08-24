@@ -11,7 +11,8 @@ const state = {
   week: null,
   plan: null,
   review: null,
-  selectedFile: null,
+  uploadItems: [],
+  reviewQueue: [],
   subjectAi: null,
   planningAi: null,
   serviceFailures: [],
@@ -281,7 +282,7 @@ function manualAssessmentEditor(assessment, index) {
     <label>Type<input class="type" value="${esc(assessment.type || 'Assessment')}" placeholder="Type"></label>
     <label>Weight %<input class="weight" type="number" min="0" max="100" step="0.1" value="${esc(assessment.weighting)}"></label>
     <label>Due date<input class="due-date" type="date" value="${esc(assessment.dueDate)}"></label>
-    <label>Due week<input class="due-week" type="number" min="1" max="20" value="${esc(assessment.dueWeek)}"></label>
+    <label>Due week<input class="due-week" type="number" min="1" max="52" value="${esc(assessment.dueWeek)}"></label>
     <label>Est. hours<input class="hours" type="number" min="0.1" step="0.1" value="${esc(assessment.estimatedHours)}"></label>
     <button class="icon-button remove-manual-assessment" type="button" data-index="${index}" aria-label="Remove assessment">×</button>
   </div>`;
@@ -364,35 +365,82 @@ function validateDocument(file) {
   return null;
 }
 
-function selectFile(file, source) {
-  const error = validateDocument(file);
-  if (error) {
-    feedback('upload-feedback', error, 'error');
-    return;
+function uploadItemId(file) {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function addFiles(fileList, source) {
+  const incoming = [...(fileList || [])];
+  if (!incoming.length) return;
+  const errors = [];
+  const existing = new Set(state.uploadItems.map(item => item.id));
+  for (const file of incoming) {
+    const error = validateDocument(file);
+    if (error) {
+      errors.push(`${file.name}: ${error}`);
+      continue;
+    }
+    const id = uploadItemId(file);
+    if (existing.has(id)) continue;
+    if (state.uploadItems.length >= 10) {
+      errors.push('A maximum of 10 files can be queued at once.');
+      break;
+    }
+    state.uploadItems.push({ id, file, source, status: 'ready', error: null, importId: null });
+    existing.add(id);
   }
-  state.selectedFile = file;
-  $('#file-name').textContent = file.name;
-  $('#file-symbol').textContent = file.name.split('.').pop().toUpperCase();
-  $('#file-size').textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB · ${source}`;
-  $('#file-summary').hidden = false;
-  $('#clear-file-btn').hidden = false;
-  extractButton.disabled = false;
-  dropZone.classList.add('has-file');
-  feedback('upload-feedback', `${file.name} is ready to analyse.`, 'success');
-}
-
-function clearSelectedFile() {
-  state.selectedFile = null;
   fileInput.value = '';
-  $('#file-summary').hidden = true;
-  $('#clear-file-btn').hidden = true;
-  extractButton.disabled = true;
-  dropZone.classList.remove('has-file', 'dragging');
-  feedback('upload-feedback', 'Choose or drop a PDF, DOCX, JPG or JPEG when you are ready.', 'info');
+  renderUploadQueue();
+  const ready = state.uploadItems.filter(item => item.status === 'ready').length;
+  if (errors.length) {
+    feedback('upload-feedback', errors.join(' '), 'error');
+  } else if (ready) {
+    feedback('upload-feedback', `${ready} ${ready === 1 ? 'document is' : 'documents are'} ready to analyse.`, 'success');
+  }
 }
 
-fileInput.addEventListener('change', () => selectFile(fileInput.files[0], 'selected from this device'));
-$('#clear-file-btn').addEventListener('click', clearSelectedFile);
+function uploadStatus(item) {
+  return {
+    ready: 'Ready', analysing: 'Analysing', complete: 'Review ready', confirmed: 'Saved', error: 'Retry'
+  }[item.status] || 'Ready';
+}
+
+function renderUploadQueue() {
+  const target = $('#file-summary');
+  target.hidden = !state.uploadItems.length;
+  target.innerHTML = state.uploadItems.map(item => `<div class="file-summary">
+    <div class="file-symbol" aria-hidden="true">${esc(item.file.name.split('.').pop().toUpperCase())}</div>
+    <div class="file-body"><strong>${esc(item.file.name)}</strong><small>${(item.file.size / 1024 / 1024).toFixed(2)} MB · ${esc(item.error || item.source)}</small></div>
+    <span class="file-status ${esc(item.status)}">${esc(uploadStatus(item))}</span>
+    ${['ready', 'error'].includes(item.status) ? `<button class="icon-button remove-upload-file" type="button" data-file-id="${esc(item.id)}" aria-label="Remove ${esc(item.file.name)}">×</button>` : ''}
+  </div>`).join('');
+  $$('.remove-upload-file').forEach(button => button.addEventListener('click', () => {
+    state.uploadItems = state.uploadItems.filter(item => item.id !== button.dataset.fileId);
+    renderUploadQueue();
+  }));
+  const retryable = state.uploadItems.filter(item => ['ready', 'error'].includes(item.status)).length;
+  extractButton.disabled = !retryable;
+  extractButton.dataset.idleText = retryable > 1 ? `Analyse ${retryable} documents with Gemini` : 'Analyse with Gemini';
+  if (!extractButton.getAttribute('aria-busy') || extractButton.getAttribute('aria-busy') === 'false') {
+    extractButton.textContent = extractButton.dataset.idleText;
+  }
+  $('#clear-file-btn').hidden = !state.uploadItems.length;
+  dropZone.classList.toggle('has-file', Boolean(state.uploadItems.length));
+}
+
+function clearSelectedFiles() {
+  state.uploadItems = [];
+  state.reviewQueue = [];
+  state.review = null;
+  fileInput.value = '';
+  $('#review').replaceChildren();
+  renderUploadQueue();
+  dropZone.classList.remove('has-file', 'dragging');
+  feedback('upload-feedback', 'Choose or drop up to 10 PDF, DOCX, JPG or JPEG files when you are ready.', 'info');
+}
+
+fileInput.addEventListener('change', () => addFiles(fileInput.files, 'selected from this device'));
+$('#clear-file-btn').addEventListener('click', clearSelectedFiles);
 dropZone.addEventListener('keydown', event => {
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault();
@@ -418,7 +466,7 @@ dropZone.addEventListener('drop', event => {
   event.preventDefault();
   dragDepth = 0;
   dropZone.classList.remove('dragging');
-  selectFile(event.dataTransfer?.files?.[0], 'dropped into Study Leftovers');
+  addFiles(event.dataTransfer?.files, 'dropped into Study Leftovers');
 });
 document.addEventListener('dragover', event => {
   if (event.dataTransfer?.types?.includes('Files')) event.preventDefault();
@@ -428,26 +476,47 @@ document.addEventListener('drop', event => {
 });
 
 extractButton.addEventListener('click', async () => {
-  const file = state.selectedFile || fileInput.files[0];
-  const error = validateDocument(file);
-  if (error) return feedback('upload-feedback', error, 'error');
-  const data = new FormData();
-  data.append('file', file);
-  setBusy(extractButton, true, 'Analysing');
+  const items = state.uploadItems.filter(item => ['ready', 'error'].includes(item.status));
+  if (!items.length) return feedback('upload-feedback', 'Add at least one document to analyse.', 'error');
+  setBusy(extractButton, true, `Analysing 0 of ${items.length}`);
   $('#upload-progress').hidden = false;
-  feedback('upload-feedback', 'Document received. Extracting clean text before Gemini analyses it…', 'info');
-  try {
-    state.review = await request(`${API.subjects}/subject-outlines`, { method: 'POST', body: data });
-    renderReview();
-    feedback('upload-feedback', 'Extraction complete. Review and correct every value below.', 'success');
-    $('#review').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } catch (requestError) {
-    feedback('upload-feedback', requestError.message, 'error');
-  } finally {
-    $('#upload-progress').hidden = true;
-    setBusy(extractButton, false);
-    extractButton.disabled = !state.selectedFile;
+  state.reviewQueue = state.reviewQueue || [];
+  let succeeded = 0;
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    item.status = 'analysing';
+    item.error = null;
+    renderUploadQueue();
+    setBusy(extractButton, true, `Analysing ${index + 1} of ${items.length}`);
+    $('#upload-progress-detail').textContent = `${item.file.name} · extracting locally before Gemini analyses it.`;
+    feedback('upload-feedback', `Analysing ${item.file.name}…`, 'info');
+    const data = new FormData();
+    data.append('file', item.file);
+    try {
+      const review = await request(`${API.subjects}/subject-outlines`, { method: 'POST', body: data });
+      item.status = 'complete';
+      item.importId = review.importId;
+      state.reviewQueue.push(review);
+      succeeded += 1;
+    } catch (requestError) {
+      item.status = 'error';
+      item.error = requestError.message;
+    }
+    renderUploadQueue();
   }
+  $('#upload-progress').hidden = true;
+  setBusy(extractButton, false);
+  renderUploadQueue();
+  if (!state.review && state.reviewQueue.length) {
+    state.review = state.reviewQueue.shift();
+    renderReview();
+    $('#review').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  const failed = items.length - succeeded;
+  feedback('upload-feedback', failed
+    ? `${succeeded} ${succeeded === 1 ? 'document is' : 'documents are'} ready for review; ${failed} failed. Use Retry after checking each message.`
+    : `${succeeded} ${succeeded === 1 ? 'document is' : 'documents are'} ready. Review and confirm each subject below.`,
+  failed ? 'error' : 'success');
 });
 
 function renderReview() {
@@ -457,8 +526,8 @@ function renderReview() {
   const warnings = extraction.warnings || [];
   $('#review').innerHTML = `<div class="review-card">
     <p class="eyebrow">REVIEW REQUIRED</p>
-    <h3>Check extracted information</h3>
-    <p class="review-intro">Nothing is permanent yet. Correct missing or uncertain fields, then confirm.</p>
+    <h3>Check ${esc(state.review.filename || 'the extracted information')}</h3>
+    <p class="review-intro">Nothing is permanent yet. Correct missing or uncertain fields, then confirm.${state.reviewQueue.length ? ` ${state.reviewQueue.length} more ${state.reviewQueue.length === 1 ? 'subject is' : 'subjects are'} waiting.` : ''}</p>
     <div class="review-grid">
       <label>Subject code<input id="r-code" value="${esc(extraction.subjectCode)}" placeholder="e.g. CSCI318"></label>
       <label>Subject name<input id="r-name" value="${esc(extraction.subjectName)}" placeholder="Subject name"></label>
@@ -469,7 +538,7 @@ function renderReview() {
     <div id="r-assessments">${extraction.assessments.map(assessmentEditor).join('')}</div>
     ${warnings.length ? `<ul class="warning-list">${warnings.map(warning => `<li>${esc(warning)}</li>`).join('')}</ul>` : ''}
     <div id="review-feedback" class="feedback" aria-live="polite"></div>
-    <button id="confirm-btn" class="primary">Confirm subject and assessments</button>
+    <button id="confirm-btn" class="primary">${state.reviewQueue.length ? 'Save subject and review next' : 'Confirm subject and assessments'}</button>
   </div>`;
   $('#confirm-btn').addEventListener('click', confirmReview);
   $('#add-assessment-btn').addEventListener('click', () => {
@@ -497,7 +566,7 @@ function assessmentEditor(assessment, index) {
     <label>Type<input class="type" value="${esc(assessment.type || 'Assessment')}" placeholder="Type"></label>
     <label>Weight %<input class="weight" type="number" min="0" max="100" step="0.1" value="${esc(assessment.weighting)}"></label>
     <label>Due date<input class="due-date" type="date" value="${esc(assessment.dueDate)}"></label>
-    <label>Due week<input class="due-week" type="number" min="1" max="20" value="${esc(assessment.dueWeek)}"></label>
+    <label>Due week<input class="due-week" type="number" min="1" max="52" value="${esc(assessment.dueWeek)}"></label>
     <label>Est. hours<input class="hours" type="number" min="0.1" step="0.1" value="${esc(assessment.estimatedHours)}"></label>
     <button class="icon-button remove-assessment" type="button" data-index="${index}" aria-label="Remove ${esc(assessment.title || 'assessment')}">×</button>
   </div>`;
@@ -530,23 +599,36 @@ async function confirmReview() {
   const button = $('#confirm-btn');
   const weeklyTarget = state.review.weeklyStudyTargetMinutes;
   const body = { weeklyStudyTargetMinutes: weeklyTarget, extraction: state.review.extraction };
-  if (!body.extraction.assessments.length) {
-    return feedback('review-feedback', 'Add at least one assessment before confirming.', 'error');
-  }
+  const confirmedImportId = state.review.importId;
+  const confirmedName = state.review.filename || body.extraction.subjectCode;
   setBusy(button, true, 'Confirming');
-  feedback('review-feedback', 'Saving the subject, then confirming assessments with Assessment Service…', 'info');
+  feedback('review-feedback', body.extraction.assessments.length
+    ? 'Saving the subject, then confirming assessments with Assessment Service…'
+    : 'Saving the subject without assessments…', 'info');
   try {
-    await request(`${API.subjects}/subject-outlines/${state.review.importId}/confirm`, {
+    await request(`${API.subjects}/subject-outlines/${confirmedImportId}/confirm`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
+    const uploadItem = state.uploadItems.find(item => item.importId === confirmedImportId);
+    if (uploadItem) uploadItem.status = 'confirmed';
     state.review = null;
     $('#review').replaceChildren();
-    clearSelectedFile();
     await load();
-    show('dashboard');
-    feedback('dashboard-feedback', 'Subject and assessments confirmed successfully.', 'success');
+    if (state.reviewQueue.length) {
+      state.review = state.reviewQueue.shift();
+      renderUploadQueue();
+      renderReview();
+      feedback('upload-feedback', `${confirmedName} was saved. ${state.reviewQueue.length + 1} ${state.reviewQueue.length ? 'subjects remain' : 'subject remains'} to review.`, 'success');
+      $('#review').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      const savedCount = state.uploadItems.filter(item => item.status === 'confirmed').length;
+      state.uploadItems = state.uploadItems.filter(item => item.status === 'error');
+      renderUploadQueue();
+      show('subjects');
+      feedback('subject-feedback', `${savedCount} ${savedCount === 1 ? 'subject was' : 'subjects were'} added successfully.`, 'success');
+    }
   } catch (error) {
     feedback('review-feedback', error.message, 'error');
     setBusy(button, false);

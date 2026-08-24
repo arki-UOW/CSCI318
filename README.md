@@ -4,7 +4,7 @@ Study Leftovers is a CSCI318 prototype that turns subject-outline documents into
 
 ## What works
 
-- PDF, DOCX, JPG and JPEG upload, local text/OCR extraction, explicit review and confirmation
+- Up to 10 PDF, DOCX, JPG or JPEG outlines per batch, local text/OCR extraction, and a review queue before confirmation
 - LangChain4j/Gemini analysis of cleaned extracted text and AI-assisted planning, with optional OpenAI compatibility
 - manual subject and assessment entry when no document is available
 - four independently persisted Spring Boot services with clear data ownership
@@ -89,8 +89,8 @@ Serve `frontend/` with any static server. The UI expects the documented localhos
 
 ## Demo path
 
-1. Upload a PDF, DOCX, JPG or JPEG, or choose **Enter manually**.
-2. Confirm it; the subject is stored by Subject Service and assessments by Assessment Service.
+1. Upload or drop up to 10 PDF, DOCX, JPG or JPEG files together, or choose **Enter manually**.
+2. Review and confirm each queued subject; subjects are stored by Subject Service and assessments by Assessment Service.
 3. Record a study session and refresh the live progress view.
 4. Tell the planning assistant your time slots and generate a seven-day plan.
 5. Complete or remove incorrect assessments, then regenerate.

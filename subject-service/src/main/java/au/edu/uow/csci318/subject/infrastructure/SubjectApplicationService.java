@@ -26,7 +26,7 @@ public class SubjectApplicationService {
    validate(request.extraction());
    var prepared=confirmations.prepare(id,request);
    if(prepared.alreadyConfirmed())return response(prepared.subject());
-   assessments.importAssessments(prepared.subject().getId(),request.extraction().assessments());
+   if(!request.extraction().assessments().isEmpty())assessments.importAssessments(prepared.subject().getId(),request.extraction().assessments());
    confirmations.complete(id,prepared.subject().getId());
    return response(prepared.subject());
  }
@@ -36,6 +36,6 @@ public class SubjectApplicationService {
  @Transactional public SubjectResponse target(UUID id,int minutes){var s=subjects.findById(id).orElseThrow(()->new NoSuchElementException("Subject not found"));s.changeWeeklyStudyTarget(minutes);return response(s);}
  private ImportReview review(SubjectOutlineImport i,ExtractionResult r){return new ImportReview(i.getId(),i.getFilename(),i.getStatus().name(),r);}
  private SubjectResponse response(Subject s){return new SubjectResponse(s.getId(),s.getCode(),s.getName(),s.getCreditPoints(),s.getWeeklyStudyTargetMinutes());}
- private void validate(ExtractionResult r){if(r==null)throw new IllegalArgumentException("Extraction result is required");new Subject(r.subjectCode(),r.subjectName(),r.creditPoints(),0);if(r.assessments()==null)throw new IllegalArgumentException("Assessments are required");Set<String> seen=new HashSet<>();for(var a:r.assessments()){if(a.title()==null||a.title().isBlank())throw new IllegalArgumentException("Assessment title is required");if(a.weighting()!=null&&(a.weighting()<0||a.weighting()>100))throw new IllegalArgumentException("Assessment weighting is invalid");if(a.dueWeek()!=null&&(a.dueWeek()<1||a.dueWeek()>20))throw new IllegalArgumentException("Due week must be between 1 and 20");if(!seen.add(a.title().trim().toLowerCase()))throw new IllegalArgumentException("Duplicate assessment: "+a.title());}}
+ private void validate(ExtractionResult r){if(r==null)throw new IllegalArgumentException("Extraction result is required");new Subject(r.subjectCode(),r.subjectName(),r.creditPoints(),0);if(r.assessments()==null)throw new IllegalArgumentException("Assessments are required");Set<String> seen=new HashSet<>();for(var a:r.assessments()){if(a.title()==null||a.title().isBlank())throw new IllegalArgumentException("Assessment title is required");if(a.weighting()!=null&&(a.weighting()<0||a.weighting()>100))throw new IllegalArgumentException("Assessment weighting is invalid");if(a.dueWeek()!=null&&(a.dueWeek()<1||a.dueWeek()>52))throw new IllegalArgumentException("Due week must be between 1 and 52");if(!seen.add(a.title().trim().toLowerCase()))throw new IllegalArgumentException("Duplicate assessment: "+a.title());}}
  public static class ServiceDependencyException extends RuntimeException{public ServiceDependencyException(String m,Throwable c){super(m,c);}}
 }
