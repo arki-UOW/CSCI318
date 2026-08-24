@@ -15,6 +15,8 @@ public class SubjectController {
  @GetMapping("/subject-outlines/{id}") public ImportReview review(@PathVariable UUID id){return service.getImport(id);}
  @PostMapping("/subject-outlines/{id}/confirm") @ResponseStatus(HttpStatus.CREATED) public SubjectResponse confirm(@PathVariable UUID id,@Valid @RequestBody ConfirmImportRequest request){return service.confirm(id,request);}
  @GetMapping("/subjects") public List<SubjectResponse> subjects(){return service.all();}
+ @PostMapping("/subjects") @ResponseStatus(HttpStatus.CREATED) public SubjectResponse createManual(@Valid @RequestBody ManualSubjectRequest request){return service.createManual(request);}
  @GetMapping("/subjects/{id}") public SubjectResponse subject(@PathVariable UUID id){return service.one(id);}
  @PatchMapping("/subjects/{id}/study-target") public SubjectResponse target(@PathVariable UUID id,@RequestBody Map<String,Integer> body){return service.target(id,body.getOrDefault("minutes",-1));}
+ @GetMapping("/ai/status") public AiStatus aiStatus(){return service.aiStatus();}
 }

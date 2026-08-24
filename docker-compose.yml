@@ -52,15 +52,16 @@ services:
     environment:
       ASSESSMENT_SERVICE_URL: "http://assessment-service:8082"
       SUBJECT_SERVICE_URL: "http://subject-service:8081"
-      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      STUDY_ACTIVITY_SERVICE_URL: "http://study-activity-service:8083"
       AI_PROVIDER: "${AI_PROVIDER:-auto}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.6-flash}"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4.1-mini}"
     depends_on:
-      kafka: {condition: service_healthy}
       assessment-service: {condition: service_started}
+      subject-service: {condition: service_started}
+      study-activity-service: {condition: service_started}
     restart: on-failure
   frontend:
     image: nginx:1.29-alpine

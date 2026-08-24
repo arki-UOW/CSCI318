@@ -11,5 +11,7 @@ public final class SubjectDtos {
  public record ExtractionResult(@NotBlank String subjectCode,@NotBlank String subjectName,@Positive Integer creditPoints,@NotNull List<@Valid AssessmentCandidate> assessments,List<String> warnings){}
  public record ImportReview(UUID importId,String filename,String status,ExtractionResult extraction){}
  public record ConfirmImportRequest(@Valid @NotNull ExtractionResult extraction,@Min(0) @Max(10080) int weeklyStudyTargetMinutes){}
+ public record ManualSubjectRequest(@NotBlank String code,@NotBlank String name,@Positive Integer creditPoints,@Min(0) @Max(10080) int weeklyStudyTargetMinutes,@NotNull List<@Valid AssessmentCandidate> assessments){}
  public record SubjectResponse(UUID id,String code,String name,Integer creditPoints,int weeklyStudyTargetMinutes){}
+ public record AiStatus(String provider,String model,boolean configured,String message){}
 }

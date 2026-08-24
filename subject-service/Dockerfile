@@ -8,5 +8,8 @@ COPY planning-service/pom.xml planning-service/pom.xml
 COPY subject-service/src subject-service/src
 RUN mvn -pl subject-service -am package -DskipTests
 FROM eclipse-temurin:21-jre
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tesseract-ocr \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=build /workspace/subject-service/target/*.jar app.jar
 ENTRYPOINT ["java","-jar","/app.jar"]

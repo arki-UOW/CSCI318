@@ -1,11 +1,9 @@
 package au.edu.uow.csci318.subject.infrastructure;
 
 import au.edu.uow.csci318.subject.dto.SubjectDtos.AssessmentCandidate;
+import au.edu.uow.csci318.subject.dto.SubjectDtos.AiStatus;
 import au.edu.uow.csci318.subject.dto.SubjectDtos.ExtractionResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.data.message.PdfFileContent;
-import dev.langchain4j.data.message.TextContent;
-import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ResponseFormat;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
@@ -16,13 +14,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -32,7 +28,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public interface OutlineExtraction {
-    ExtractionResult extract(byte[] pdfBytes, String locallyExtractedText);
+    ExtractionResult extract(String extractedText);
 }
 
 @Component
@@ -42,26 +38,17 @@ class PdfTextExtractor {
             PDFTextStripper stripper = new PDFTextStripper();
             stripper.setSortByPosition(true);
             stripper.setLineSeparator("\n");
-            return normalise(stripper.getText(document));
+            return DocumentTextExtractor.normalise(stripper.getText(document));
         } catch (IOException e) {
             throw new IllegalArgumentException("The PDF could not be read", e);
         }
     }
 
-    private String normalise(String text) {
-        return Normalizer.normalize(text == null ? "" : text, Normalizer.Form.NFKC)
-                .replace('\u00a0', ' ')
-                .replace("\u00ad", "")
-                .replaceAll("[\\t\\x0B\\f\\r ]+", " ")
-                .replaceAll("(?m)^ +| +$", "")
-                .replaceAll("\n{3,}", "\n\n")
-                .trim();
-    }
 }
 
 @Component
 class ConfiguredChatModel {
-    record Selection(String provider, String modelName, ChatModel model, boolean acceptsPdf) {
+    record Selection(String provider, String modelName, ChatModel model) {
     }
 
     private final String provider;
@@ -94,7 +81,7 @@ class ConfiguredChatModel {
                     .temperature(0.0)
                     .responseFormat(ResponseFormat.JSON)
                     .build();
-            return Optional.of(new Selection("Gemini", geminiModel, model, true));
+            return Optional.of(new Selection("Gemini", geminiModel, model));
         }
         if ((provider.equals("auto") || provider.equals("openai")) && !openAiKey.isBlank()) {
             ChatModel model = OpenAiChatModel.builder()
@@ -102,7 +89,7 @@ class ConfiguredChatModel {
                     .modelName(openAiModel)
                     .temperature(0.0)
                     .build();
-            return Optional.of(new Selection("OpenAI", openAiModel, model, false));
+            return Optional.of(new Selection("OpenAI", openAiModel, model));
         }
         return Optional.empty();
     }
@@ -113,6 +100,17 @@ class ConfiguredChatModel {
             case "openai" -> "OpenAI is selected but OPENAI_API_KEY is not configured";
             default -> "No AI API key is configured";
         };
+    }
+
+    AiStatus status() {
+        Optional<Selection> selected = selection();
+        if (selected.isPresent()) {
+            return new AiStatus(selected.get().provider(), selected.get().modelName(), true,
+                    selected.get().provider() + " is configured in the running Subject Service");
+        }
+        String model = provider.equals("openai") ? openAiModel : geminiModel;
+        String label = provider.equals("openai") ? "OpenAI" : "Gemini";
+        return new AiStatus(label, model, false, missingConfigurationMessage());
     }
 }
 
@@ -131,6 +129,10 @@ class SafeOutlineExtractor implements OutlineExtraction {
     private static final Pattern NAMED_DATE = Pattern.compile(
             "(?i)\\b(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)?\\s*"
                     + "(\\d{1,2}(?:st|nd|rd|th)?\\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+20\\d{2})\\b");
+    private static final Pattern NON_ASSESSMENT_TITLE = Pattern.compile(
+            "(?i).*(learning outcome|\\bslo\\d*\\b|eligible for a pass|submitted late|late submission|"
+                    + "academic integrity|marking criteria|assessment summary|name\\s+type|weighting|"
+                    + "contact details|student must|policy|penalt(?:y|ies)).*");
     private static final List<DateTimeFormatter> DATE_FORMATS = List.of(
             DateTimeFormatter.ISO_LOCAL_DATE,
             new DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern("d/M/uuuu").toFormatter(Locale.ENGLISH),
@@ -140,8 +142,8 @@ class SafeOutlineExtractor implements OutlineExtraction {
             new DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern("d MMMM uuuu").toFormatter(Locale.ENGLISH));
 
     private static final String EXTRACTION_PROMPT = """
-            You extract factual academic-planning data from a university subject-outline PDF.
-            Read the whole PDF, including tables and text embedded as images. Return ONLY one JSON object with:
+            You extract factual academic-planning data from text produced by a university subject-outline
+            document extractor. The source may have been PDF, DOCX or OCR text from a JPG. Return ONLY one JSON object with:
             subjectCode, subjectName, creditPoints, assessments, warnings.
             assessments is an array of objects with title, type, weighting, dueDate, dueWeek, description,
             estimatedHours, confidence, warning.
@@ -154,6 +156,9 @@ class SafeOutlineExtractor implements OutlineExtraction {
             - Weighting is a number from 0 to 100, without the percent sign.
             - confidence is a number from 0 to 1.
             - Do not treat learning outcomes, weekly topics, policies, or contact details as assessments.
+            - Do not use table headings, eligibility requirements, late-submission rules or SLO mappings as titles.
+            - Include an assessment only when the text explicitly identifies a real task, exam, quiz, project,
+              report, presentation, laboratory, portfolio or test.
             - Add a concise warning for every ambiguous or missing planning field.
             """;
 
@@ -166,20 +171,19 @@ class SafeOutlineExtractor implements OutlineExtraction {
     }
 
     @Override
-    public ExtractionResult extract(byte[] pdfBytes, String locallyExtractedText) {
-        String text = locallyExtractedText == null ? "" : locallyExtractedText.trim();
+    public ExtractionResult extract(String extractedText) {
+        String text = extractedText == null ? "" : extractedText.trim();
         Optional<ConfiguredChatModel.Selection> selection = configuredModel.selection();
         if (selection.isPresent()) {
             try {
-                return validate(ai(selection.get(), pdfBytes, text));
+                return validate(ai(selection.get(), text));
             } catch (Exception e) {
                 throw new IllegalArgumentException(providerFailure(selection.get(), e), e);
             }
         }
         if (text.isBlank()) {
             throw new IllegalArgumentException(
-                    "No text could be extracted from this PDF. Configure GEMINI_API_KEY for image-based PDFs "
-                            + "or upload a text-based PDF.");
+                    "No readable text could be extracted from this document. Upload a clearer file or enter the subject manually.");
         }
         return withWarning(deterministic(text),
                 configuredModel.missingConfigurationMessage() + "; deterministic extraction was used.");
@@ -195,7 +199,7 @@ class SafeOutlineExtractor implements OutlineExtraction {
             current = current.getCause();
         }
         String details = messages.toString();
-        String prefix = selection.provider() + " could not analyse this PDF. ";
+        String prefix = selection.provider() + " could not analyse this document. ";
         if (details.contains("429") || details.contains("quota") || details.contains("resource_exhausted")) {
             return prefix + "The API quota or rate limit was reached. Wait briefly or check the provider quota, then retry.";
         }
@@ -217,20 +221,12 @@ class SafeOutlineExtractor implements OutlineExtraction {
         return prefix + "The provider request failed. Check the API key, model and provider quota, then retry.";
     }
 
-    private ExtractionResult ai(ConfiguredChatModel.Selection selection, byte[] pdfBytes, String text) throws Exception {
-        String raw;
-        if (selection.acceptsPdf()) {
-            UserMessage message = UserMessage.from(
-                    PdfFileContent.from(Base64.getEncoder().encodeToString(pdfBytes), "application/pdf"),
-                    TextContent.from(EXTRACTION_PROMPT));
-            raw = selection.model().chat(message).aiMessage().text();
-        } else {
-            if (text.isBlank()) {
-                throw new IllegalArgumentException("The configured provider requires extractable PDF text");
-            }
-            raw = selection.model().chat(EXTRACTION_PROMPT + "\n\nEXTRACTED PDF TEXT:\n"
-                    + text.substring(0, Math.min(text.length(), MAX_TEXT_LENGTH)));
+    private ExtractionResult ai(ConfiguredChatModel.Selection selection, String text) throws Exception {
+        if (text.isBlank()) {
+            throw new IllegalArgumentException("The document extractor returned no text");
         }
+        String raw = selection.model().chat(EXTRACTION_PROMPT + "\n\nEXTRACTED DOCUMENT TEXT:\n"
+                + text.substring(0, Math.min(text.length(), MAX_TEXT_LENGTH)));
         raw = raw.replaceFirst("(?s)^```(?:json)?\\s*", "").replaceFirst("(?s)\\s*```$", "");
         return json.readValue(raw, ExtractionResult.class);
     }
@@ -390,7 +386,8 @@ class SafeOutlineExtractor implements OutlineExtraction {
 
     private boolean isUsefulAssessmentTitle(String title) {
         return title != null && title.length() >= 3 && title.length() <= 120
-                && !title.matches("(?i).*(weighting|total|assessment summary|marking criteria|learning outcome).*?");
+                && !NON_ASSESSMENT_TITLE.matcher(title).matches()
+                && title.chars().filter(Character::isLetter).count() >= 3;
     }
 
     private String inferType(String title) {
@@ -407,25 +404,38 @@ class SafeOutlineExtractor implements OutlineExtraction {
         if (result == null) {
             throw new IllegalArgumentException("AI extraction returned no result");
         }
-        List<AssessmentCandidate> assessments = result.assessments() == null ? List.of() : result.assessments();
+        List<AssessmentCandidate> supplied = result.assessments() == null ? List.of() : result.assessments();
+        List<AssessmentCandidate> assessments = new ArrayList<>();
+        List<String> warnings = new ArrayList<>(result.warnings() == null ? List.of() : result.warnings());
         Set<String> seen = new HashSet<>();
-        for (AssessmentCandidate assessment : assessments) {
+        int removed = 0;
+        for (AssessmentCandidate assessment : supplied) {
             if (assessment.title() == null || assessment.title().isBlank()) {
-                throw new IllegalArgumentException("Assessment title is required");
+                removed++;
+                continue;
             }
             if (assessment.weighting() != null && (assessment.weighting() < 0 || assessment.weighting() > 100)) {
                 throw new IllegalArgumentException("Assessment weighting is invalid");
             }
-            if (!seen.add(assessment.title().trim().toLowerCase(Locale.ROOT))) {
-                throw new IllegalArgumentException("Duplicate assessment: " + assessment.title());
+            if (!isUsefulAssessmentTitle(assessment.title())) {
+                removed++;
+                continue;
             }
+            if (!seen.add(assessment.title().trim().toLowerCase(Locale.ROOT))) {
+                removed++;
+                continue;
+            }
+            assessments.add(assessment);
+        }
+        if (removed > 0) {
+            warnings.add(removed + " low-confidence or policy-like row(s) were removed before review");
         }
         return new ExtractionResult(
                 blankToNull(result.subjectCode()),
                 blankToNull(result.subjectName()),
                 result.creditPoints(),
                 assessments,
-                result.warnings() == null ? List.of() : result.warnings());
+                warnings);
     }
 
     private ExtractionResult withWarning(ExtractionResult result, String warning) {
