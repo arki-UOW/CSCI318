@@ -89,29 +89,25 @@
 
       <div id="upload-panel" class="method-panel">
         <div class="method-heading">
-          <div><h3>Import an outline</h3><p>Text is extracted locally first, then Gemini identifies the subject and genuine assessment rows.</p></div>
+          <div><h3>Import subject outlines</h3><p>Add several files at once. Text is extracted locally first, then Gemini identifies each subject and its genuine assessment rows.</p></div>
           <span class="format-list">PDF · DOCX · JPG · JPEG</span>
         </div>
         <label id="outline-drop" class="drop" tabindex="0" role="button" aria-controls="outline-file" aria-describedby="drop-help">
-          <input id="outline-file" type="file" accept=".pdf,.docx,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg">
+          <input id="outline-file" type="file" multiple accept=".pdf,.docx,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg">
           <span class="drop-icon" aria-hidden="true">⇧</span>
-          <strong>Drop your outline here</strong>
-          <span>or browse your device</span>
-          <small id="drop-help">Maximum 15 MB · PDF, DOCX, JPG or JPEG</small>
+          <strong>Drop your outlines here</strong>
+          <span>or browse your device to select several</span>
+          <small id="drop-help">Up to 10 files · maximum 15 MB each · PDF, DOCX, JPG or JPEG</small>
         </label>
 
-        <div id="file-summary" class="file-summary" hidden>
-          <div id="file-symbol" class="file-symbol" aria-hidden="true">FILE</div>
-          <div class="file-body"><strong id="file-name"></strong><small id="file-size"></small></div>
-          <span class="ready-pill">Ready</span>
-        </div>
+        <div id="file-summary" class="file-summary-list" hidden></div>
         <div class="actions">
           <button id="extract-btn" class="primary" disabled>Analyse with Gemini</button>
-          <button id="clear-file-btn" class="secondary" type="button" hidden>Choose another</button>
+          <button id="clear-file-btn" class="secondary" type="button" hidden>Clear files</button>
         </div>
         <div id="upload-progress" class="processing" hidden aria-live="polite">
           <span class="spinner" aria-hidden="true"></span>
-          <div><strong>Extracting text, then asking Gemini</strong><small>Tables, OCR and assessment details can take a moment.</small></div>
+          <div><strong>Extracting text, then asking Gemini</strong><small id="upload-progress-detail">Tables, OCR and assessment details can take a moment.</small></div>
         </div>
         <div id="upload-feedback" class="feedback" aria-live="polite"></div>
         <div id="review"></div>

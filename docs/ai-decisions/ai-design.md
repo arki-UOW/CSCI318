@@ -2,7 +2,7 @@
 
 ## Outline extraction
 
-`DocumentTextExtractor` converts each supported upload to normalised text before any provider call: PDFBox handles PDFs, Apache POI handles DOCX paragraphs/tables, and Tesseract OCR handles JPG/JPEG. `OutlineExtraction` then sends only this bounded cleaned text to Gemini in JSON mode. The prompt instructs the model to use null rather than invent facts and to reject policy, SLO and table-heading text as assessments.
+`DocumentTextExtractor` converts each supported upload to normalised text before any provider call: PDFBox handles PDFs, Apache POI handles DOCX paragraphs/tables, and Tesseract OCR handles JPG/JPEG. `OutlineExtraction` then sends only this bounded cleaned text to Gemini in JSON mode. The prompt instructs the model to use null rather than invent facts and to reject policy, SLO and table-heading text as assessments. Provider calls use a bounded 120-second timeout; after a successful call, the response normaliser accepts common Gemini variants such as `"5%"`, `"Week 6"` and `"Weeks 10 & 12"` before domain validation. Provider transport failures and invalid response shapes are reported separately.
 
 `AI_PROVIDER=auto` prefers Gemini, then OpenAI. An explicitly selected provider uses its matching key/model variables. Without a key, conservative labelled-field/table extraction creates reviewable candidates and a visible warning. When a configured provider fails, extraction stops with an actionable key, model, quota, or connectivity message instead of silently replacing the AI result with low-confidence deterministic rows. The UI also reads a status endpoint so it can distinguish a missing key in a running container from a provider failure.
 
