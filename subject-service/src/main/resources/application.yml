@@ -11,7 +11,7 @@ study:
     provider: "${AI_PROVIDER:auto}"
     gemini:
       api-key: "${GEMINI_API_KEY:}"
-      model: "${GEMINI_MODEL:gemini-2.5-flash}"
+      model: "${GEMINI_MODEL:gemini-3.6-flash}"
     openai:
       api-key: "${OPENAI_API_KEY:}"
       model: "${OPENAI_MODEL:gpt-4.1-mini}"

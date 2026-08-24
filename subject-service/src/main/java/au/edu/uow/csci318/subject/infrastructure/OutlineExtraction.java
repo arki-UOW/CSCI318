@@ -61,7 +61,7 @@ class PdfTextExtractor {
 
 @Component
 class ConfiguredChatModel {
-    record Selection(String provider, ChatModel model, boolean acceptsPdf) {
+    record Selection(String provider, String modelName, ChatModel model, boolean acceptsPdf) {
     }
 
     private final String provider;
@@ -73,7 +73,7 @@ class ConfiguredChatModel {
     ConfiguredChatModel(
             @Value("${study.ai.provider:auto}") String provider,
             @Value("${study.ai.gemini.api-key:}") String geminiKey,
-            @Value("${study.ai.gemini.model:gemini-2.5-flash}") String geminiModel,
+            @Value("${study.ai.gemini.model:gemini-3.6-flash}") String geminiModel,
             @Value("${study.ai.openai.api-key:}") String openAiKey,
             @Value("${study.ai.openai.model:gpt-4.1-mini}") String openAiModel) {
         this.provider = provider == null ? "auto" : provider.trim().toLowerCase(Locale.ROOT);
@@ -94,7 +94,7 @@ class ConfiguredChatModel {
                     .temperature(0.0)
                     .responseFormat(ResponseFormat.JSON)
                     .build();
-            return Optional.of(new Selection("Gemini", model, true));
+            return Optional.of(new Selection("Gemini", geminiModel, model, true));
         }
         if ((provider.equals("auto") || provider.equals("openai")) && !openAiKey.isBlank()) {
             ChatModel model = OpenAiChatModel.builder()
@@ -102,7 +102,7 @@ class ConfiguredChatModel {
                     .modelName(openAiModel)
                     .temperature(0.0)
                     .build();
-            return Optional.of(new Selection("OpenAI", model, false));
+            return Optional.of(new Selection("OpenAI", openAiModel, model, false));
         }
         return Optional.empty();
     }
@@ -173,14 +173,7 @@ class SafeOutlineExtractor implements OutlineExtraction {
             try {
                 return validate(ai(selection.get(), pdfBytes, text));
             } catch (Exception e) {
-                if (text.isBlank()) {
-                    throw new IllegalArgumentException(
-                            selection.get().provider() + " could not analyse this image-based PDF. "
-                                    + "Check the API key/model and try again.", e);
-                }
-                return withWarning(deterministic(text),
-                        selection.get().provider() + " extraction was unavailable; deterministic extraction was used. "
-                                + "Review every field carefully.");
+                throw new IllegalArgumentException(providerFailure(selection.get(), e), e);
             }
         }
         if (text.isBlank()) {
@@ -190,6 +183,38 @@ class SafeOutlineExtractor implements OutlineExtraction {
         }
         return withWarning(deterministic(text),
                 configuredModel.missingConfigurationMessage() + "; deterministic extraction was used.");
+    }
+
+    static String providerFailure(ConfiguredChatModel.Selection selection, Exception failure) {
+        StringBuilder messages = new StringBuilder();
+        Throwable current = failure;
+        while (current != null) {
+            if (current.getMessage() != null) {
+                messages.append(' ').append(current.getMessage().toLowerCase(Locale.ROOT));
+            }
+            current = current.getCause();
+        }
+        String details = messages.toString();
+        String prefix = selection.provider() + " could not analyse this PDF. ";
+        if (details.contains("429") || details.contains("quota") || details.contains("resource_exhausted")) {
+            return prefix + "The API quota or rate limit was reached. Wait briefly or check the provider quota, then retry.";
+        }
+        if (details.contains("401") || details.contains("403") || details.contains("api key")
+                || details.contains("permission_denied") || details.contains("unauthenticated")) {
+            return prefix + "The API key was rejected or lacks permission. Check the private .env key, then restart the services.";
+        }
+        if (details.contains("404") || details.contains("not found") || details.contains("no longer available")
+                || details.contains("unsupported model")) {
+            String modelAction = selection.provider().equals("Gemini")
+                    ? "Update GEMINI_MODEL to gemini-3.6-flash and restart the services."
+                    : "Update the configured provider model and restart the services.";
+            return prefix + "The configured model '" + selection.modelName() + "' is unavailable. " + modelAction;
+        }
+        if (details.contains("timeout") || details.contains("timed out") || details.contains("connection")
+                || details.contains("unknown host")) {
+            return prefix + "The provider could not be reached. Check the internet connection and retry.";
+        }
+        return prefix + "The provider request failed. Check the API key, model and provider quota, then retry.";
     }
 
     private ExtractionResult ai(ConfiguredChatModel.Selection selection, byte[] pdfBytes, String text) throws Exception {

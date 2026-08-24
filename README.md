@@ -52,7 +52,7 @@ To enable Gemini-backed extraction/planning, set `GEMINI_API_KEY` in `.env`. Gem
    ```dotenv
    AI_PROVIDER=gemini
    GEMINI_API_KEY=your_key_here
-   GEMINI_MODEL=gemini-2.5-flash
+   GEMINI_MODEL=gemini-3.6-flash
    ```
 
 4. Restart the containers after changing the key:
@@ -67,7 +67,7 @@ For local `mvn spring-boot:run` processes, set the same variables in each termin
 ```powershell
 $env:AI_PROVIDER = "gemini"
 $env:GEMINI_API_KEY = "your_key_here"
-$env:GEMINI_MODEL = "gemini-2.5-flash"
+$env:GEMINI_MODEL = "gemini-3.6-flash"
 ```
 
 `AI_PROVIDER=auto` prefers Gemini when both provider keys are present. `AI_PROVIDER=openai` preserves the existing OpenAI path. Never put a real key in `application.yml`, frontend JavaScript, `.env.example`, screenshots, commits, or chat messages.

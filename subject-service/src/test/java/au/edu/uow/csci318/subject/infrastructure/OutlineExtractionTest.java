@@ -1,19 +1,24 @@
 package au.edu.uow.csci318.subject.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.response.ChatResponse;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OutlineExtractionTest {
     @Test
     void deterministicFallbackExtractsLabelledSubjectAndAssessmentRows() {
         ConfiguredChatModel model = new ConfiguredChatModel(
-                "auto", "", "gemini-2.5-flash", "", "gpt-4.1-mini");
+                "auto", "", "gemini-3.6-flash", "", "gpt-4.1-mini");
         SafeOutlineExtractor extractor = new SafeOutlineExtractor(new ObjectMapper(), model);
         String text = """
                 Subject Code: CSCI318
@@ -39,7 +44,7 @@ class OutlineExtractionTest {
     @Test
     void fallbackDoesNotInventAnExactDateFromAWeekNumber() {
         ConfiguredChatModel model = new ConfiguredChatModel(
-                "auto", "", "gemini-2.5-flash", "", "gpt-4.1-mini");
+                "auto", "", "gemini-3.6-flash", "", "gpt-4.1-mini");
         SafeOutlineExtractor extractor = new SafeOutlineExtractor(new ObjectMapper(), model);
 
         var result = extractor.extract(new byte[]{1}, """
@@ -54,7 +59,7 @@ class OutlineExtractionTest {
     @Test
     void fallbackDoesNotBorrowTheNextAssessmentDate() {
         ConfiguredChatModel model = new ConfiguredChatModel(
-                "auto", "", "gemini-2.5-flash", "", "gpt-4.1-mini");
+                "auto", "", "gemini-3.6-flash", "", "gpt-4.1-mini");
         SafeOutlineExtractor extractor = new SafeOutlineExtractor(new ObjectMapper(), model);
 
         var result = extractor.extract(new byte[]{1}, """
@@ -65,5 +70,29 @@ class OutlineExtractionTest {
 
         assertNull(result.assessments().getFirst().dueDate());
         assertEquals(LocalDate.of(2026, 10, 25), result.assessments().get(1).dueDate());
+    }
+
+    @Test
+    void configuredProviderFailureIsActionableAndDoesNotReturnDeterministicGarbage() {
+        ChatModel failingModel = new ChatModel() {
+            @Override
+            public ChatResponse chat(ChatMessage... messages) {
+                throw new RuntimeException("404: this model is no longer available");
+            }
+        };
+        ConfiguredChatModel configured = new ConfiguredChatModel(
+                "gemini", "configured-key", "retired-model", "", "gpt-4.1-mini") {
+            @Override
+            Optional<Selection> selection() {
+                return Optional.of(new Selection("Gemini", "retired-model", failingModel, true));
+            }
+        };
+        SafeOutlineExtractor extractor = new SafeOutlineExtractor(new ObjectMapper(), configured);
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> extractor.extract(new byte[]{1}, "Assessment policy text 40%"));
+
+        assertTrue(error.getMessage().contains("retired-model"));
+        assertTrue(error.getMessage().contains("gemini-3.6-flash"));
     }
 }

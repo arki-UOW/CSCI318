@@ -412,7 +412,8 @@ async function confirmReview() {
 
 $('#activity-form').addEventListener('submit', async event => {
   event.preventDefault();
-  const button = event.submitter || event.currentTarget.querySelector('button');
+  const form = event.currentTarget;
+  const button = event.submitter || form.querySelector('button');
   setBusy(button, true, 'Recording');
   feedback('activity-feedback', 'Recording your study session…', 'info');
   try {
@@ -427,7 +428,7 @@ $('#activity-form').addEventListener('submit', async event => {
       })
     });
     feedback('activity-feedback', 'Study session recorded. Kafka will update your progress view.', 'success');
-    event.currentTarget.reset();
+    form.reset();
     $('#activity-date').value = localDate(new Date());
     await load();
   } catch (error) {
