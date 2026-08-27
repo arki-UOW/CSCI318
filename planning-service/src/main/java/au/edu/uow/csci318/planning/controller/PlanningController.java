@@ -2,6 +2,7 @@ package au.edu.uow.csci318.planning.controller;
 
 import au.edu.uow.csci318.planning.application.PlanningApplicationService;
 import au.edu.uow.csci318.planning.dto.PlanningDtos.*;
+import au.edu.uow.csci318.planning.infrastructure.IdentityClient;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,45 +15,54 @@ import java.util.UUID;
 @CrossOrigin
 public class PlanningController {
     private final PlanningApplicationService service;
+    private final IdentityClient identity;
 
-    public PlanningController(PlanningApplicationService service) {
+    public PlanningController(PlanningApplicationService service, IdentityClient identity) {
         this.service = service;
+        this.identity = identity;
     }
 
     @GetMapping("/workload")
-    public WorkloadSummary workload() {
-        return service.workload();
+    public WorkloadSummary workload(@RequestHeader("Authorization") String authorization) {
+        identity.require(authorization);
+        return service.workload(authorization);
     }
 
     @GetMapping("/this-week")
-    public ThisWeek week() {
-        return service.thisWeek();
+    public ThisWeek week(@RequestHeader("Authorization") String authorization) {
+        return service.thisWeek(identity.require(authorization), authorization);
     }
 
     @GetMapping("/ai/status")
-    public AiStatus aiStatus() {
+    public AiStatus aiStatus(@RequestHeader("Authorization") String authorization) {
+        identity.require(authorization);
         return service.aiStatus();
     }
 
     @PostMapping("/availability/chat")
-    public AvailabilityChatResponse updateAvailability(@Valid @RequestBody AvailabilityChatRequest request) {
+    public AvailabilityChatResponse updateAvailability(@RequestHeader("Authorization") String authorization,
+                                                       @Valid @RequestBody AvailabilityChatRequest request) {
+        identity.require(authorization);
         return service.updateAvailability(request);
     }
 
     @GetMapping("/plans/latest")
-    public ResponseEntity<PlanResponse> latest() {
-        return service.latest().map(ResponseEntity::ok).orElse(ResponseEntity.noContent().build());
+    public ResponseEntity<PlanResponse> latest(@RequestHeader("Authorization") String authorization) {
+        return service.latest(identity.require(authorization)).map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
     }
 
     @PostMapping("/plans")
     @ResponseStatus(HttpStatus.CREATED)
-    public PlanResponse generate(@Valid @RequestBody PlanRequest request) {
-        return service.generate(request);
+    public PlanResponse generate(@RequestHeader("Authorization") String authorization,
+                                 @Valid @RequestBody PlanRequest request) {
+        return service.generate(identity.require(authorization), authorization, request);
     }
 
     @PostMapping("/plans/{id}/regenerate")
     @ResponseStatus(HttpStatus.CREATED)
-    public PlanResponse regenerate(@PathVariable UUID id, @Valid @RequestBody PlanRequest request) {
-        return service.regenerate(id, request);
+    public PlanResponse regenerate(@RequestHeader("Authorization") String authorization,
+                                   @PathVariable("id") UUID id, @Valid @RequestBody PlanRequest request) {
+        return service.regenerate(identity.require(authorization), authorization, id, request);
     }
 }

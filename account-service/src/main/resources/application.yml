@@ -1,0 +1,10 @@
+server: {port: 8085}
+spring:
+  application: {name: account-service}
+  datasource: {url: "jdbc:h2:file:./data/account-db;AUTO_SERVER=TRUE", username: sa, password: ""}
+  jpa:
+    hibernate: {ddl-auto: update}
+    open-in-view: false
+study:
+  auth:
+    session-days: ${AUTH_SESSION_DAYS:30}

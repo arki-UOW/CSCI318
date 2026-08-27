@@ -19,50 +19,58 @@ public class PlanningApplicationService {
     private final PlanningTools tools;
     private final AvailabilityAssistant availabilityAssistant;
     private final ConfiguredPlanningChatModel configuredModel;
+    private final CalendarApplicationService calendar;
     private final ObjectMapper json;
 
     public PlanningApplicationService(StudyPlanRepository plans, StudyPlanningAgent agent,
                                       PlanningTools tools, AvailabilityAssistant availabilityAssistant,
-                                      ConfiguredPlanningChatModel configuredModel, ObjectMapper json) {
+                                      ConfiguredPlanningChatModel configuredModel,
+                                      CalendarApplicationService calendar, ObjectMapper json) {
         this.plans = plans;
         this.agent = agent;
         this.tools = tools;
         this.availabilityAssistant = availabilityAssistant;
         this.configuredModel = configuredModel;
+        this.calendar = calendar;
         this.json = json;
     }
 
     @Transactional
-    public PlanResponse generate(PlanRequest request) {
+    public PlanResponse generate(UUID ownerId, String authorization, PlanRequest request) {
         validatePeriod(request);
-        List<PlanItem> items = agent.generate(request);
-        validateItems(request, items);
+        List<PlanItem> items = agent.generate(request, authorization);
+        validateItems(authorization, request, items);
         try {
-            int version = plans.findTopByOrderByCreatedAtDesc()
+            int version = plans.findTopByOwnerIdOrderByCreatedAtDesc(ownerId)
                     .map(existing -> existing.getVersion() + 1).orElse(1);
             String explanation = "Generated with " + agent.providerLabel()
-                    + " from approved incomplete assessments and the supplied availability.";
-            return response(plans.save(new StudyPlan(request.startDate(), request.startDate().plusDays(6),
-                    version, json.writeValueAsString(items), explanation)));
+                    + " from approved incomplete assessments and your supplied availability. "
+                    + "Study blocks were added to your calendar with spaced review enabled.";
+            StudyPlan saved = plans.save(new StudyPlan(ownerId, request.startDate(),
+                    request.startDate().plusDays(6), version, json.writeValueAsString(items), explanation));
+            calendar.replaceAiPlan(ownerId, saved.getId(), request.startDate(), items);
+            return response(saved);
         } catch (Exception exception) {
             throw new IllegalStateException("Plan could not be stored", exception);
         }
     }
 
     @Transactional
-    public PlanResponse regenerate(UUID previousId, PlanRequest request) {
-        StudyPlan old = plans.findById(previousId)
+    public PlanResponse regenerate(UUID ownerId, String authorization, UUID previousId, PlanRequest request) {
+        StudyPlan old = plans.findByIdAndOwnerId(previousId, ownerId)
                 .orElseThrow(() -> new NoSuchElementException("Study plan not found"));
         validatePeriod(request);
-        List<PlanItem> items = agent.generate(request);
-        validateItems(request, items);
+        List<PlanItem> items = agent.generate(request, authorization);
+        validateItems(authorization, request, items);
         try {
-            List<PlanItem> before = json.readValue(old.getItemsJson(), new TypeReference<>() {
-            });
+            List<PlanItem> before = json.readValue(old.getItemsJson(), new TypeReference<>() {});
             String explanation = "Regenerated with " + agent.providerLabel()
                     + " after live academic data was re-read: " + difference(before, items) + ".";
-            return response(plans.save(new StudyPlan(request.startDate(), request.startDate().plusDays(6),
-                    old.getVersion() + 1, json.writeValueAsString(items), explanation)));
+            StudyPlan saved = plans.save(new StudyPlan(ownerId, request.startDate(),
+                    request.startDate().plusDays(6), old.getVersion() + 1,
+                    json.writeValueAsString(items), explanation));
+            calendar.replaceAiPlan(ownerId, saved.getId(), request.startDate(), items);
+            return response(saved);
         } catch (Exception exception) {
             throw new IllegalStateException("Plan could not be regenerated", exception);
         }
@@ -72,16 +80,14 @@ public class PlanningApplicationService {
         return availabilityAssistant.assist(request);
     }
 
-    public AiStatus aiStatus() {
-        return configuredModel.status();
+    public AiStatus aiStatus() { return configuredModel.status(); }
+
+    public Optional<PlanResponse> latest(UUID ownerId) {
+        return plans.findTopByOwnerIdOrderByCreatedAtDesc(ownerId).map(this::response);
     }
 
-    public Optional<PlanResponse> latest() {
-        return plans.findTopByOrderByCreatedAtDesc().map(this::response);
-    }
-
-    public WorkloadSummary workload() {
-        List<AssessmentView> assessments = currentAssessments();
+    public WorkloadSummary workload(String authorization) {
+        List<AssessmentView> assessments = currentAssessments(authorization);
         LocalDate now = LocalDate.now();
         LocalDate weekEnd = now.with(DayOfWeek.SUNDAY);
         int incomplete = (int) assessments.stream().filter(a -> "INCOMPLETE".equals(a.status())).count();
@@ -90,8 +96,7 @@ public class PlanningApplicationService {
         int dueSevenDays = (int) assessments.stream().filter(a -> "INCOMPLETE".equals(a.status())
                 && between(a.dueDate(), now, now.plusDays(7))).count();
         int minutes = assessments.stream().filter(a -> "INCOMPLETE".equals(a.status()))
-                .map(AssessmentView::estimatedMinutes).filter(Objects::nonNull)
-                .mapToInt(Integer::intValue).sum();
+                .map(AssessmentView::estimatedMinutes).filter(Objects::nonNull).mapToInt(Integer::intValue).sum();
         int high = (int) assessments.stream().filter(a -> "INCOMPLETE".equals(a.status())
                 && "HIGH".equals(a.priority())).count();
         String state = dueSevenDays >= 3 || minutes > 1200 ? "HIGH"
@@ -99,10 +104,10 @@ public class PlanningApplicationService {
         return new WorkloadSummary(incomplete, dueWeek, dueSevenDays, minutes, high, state);
     }
 
-    public ThisWeek thisWeek() {
+    public ThisWeek thisWeek(UUID ownerId, String authorization) {
         LocalDate from = LocalDate.now().with(DayOfWeek.MONDAY);
         LocalDate to = from.plusDays(6);
-        List<AssessmentView> all = currentAssessments();
+        List<AssessmentView> all = currentAssessments(authorization);
         List<AssessmentView> due = all.stream()
                 .filter(a -> "INCOMPLETE".equals(a.status()) && between(a.dueDate(), from, to))
                 .sorted(Comparator.comparing(AssessmentView::dueDate)).toList();
@@ -111,33 +116,25 @@ public class PlanningApplicationService {
                 .sorted(Comparator.comparing(AssessmentView::dueDate)).limit(5).toList();
         List<StudyProgress> progress;
         try {
-            progress = tools.getSubjects().stream().map(subject -> {
+            progress = tools.getSubjects(authorization).stream().map(subject -> {
                 int done;
-                try {
-                    done = tools.getStudiedMinutes(subject.id(), from);
-                } catch (Exception ignored) {
-                    done = 0;
-                }
+                try { done = tools.getStudiedMinutes(authorization, subject.id(), from); }
+                catch (Exception ignored) { done = 0; }
                 int target = subject.weeklyStudyTargetMinutes();
                 int remaining = Math.max(0, target - done);
                 String state = done == 0 ? "NO_ACTIVITY" : done >= target ? "TARGET_REACHED"
                         : done * 2 >= target ? "ON_TRACK" : "BEHIND_TARGET";
                 return new StudyProgress(subject.id(), done, target, remaining, state);
             }).toList();
-        } catch (Exception ignored) {
-            progress = List.of();
-        }
-        List<PlanItem> items = latest().map(PlanResponse::items).orElse(List.of()).stream()
+        } catch (Exception ignored) { progress = List.of(); }
+        List<PlanItem> items = latest(ownerId).map(PlanResponse::items).orElse(List.of()).stream()
                 .filter(item -> !item.date().isBefore(from) && !item.date().isAfter(to)).toList();
-        return new ThisWeek(from, to, due, upcoming, workload(), progress, items);
+        return new ThisWeek(from, to, due, upcoming, workload(authorization), progress, items);
     }
 
-    private List<AssessmentView> currentAssessments() {
-        try {
-            return tools.getIncompleteAssessments();
-        } catch (Exception ignored) {
-            return List.of();
-        }
+    private List<AssessmentView> currentAssessments(String authorization) {
+        try { return tools.getIncompleteAssessments(authorization); }
+        catch (Exception ignored) { return List.of(); }
     }
 
     private void validatePeriod(PlanRequest request) {
@@ -148,32 +145,26 @@ public class PlanningApplicationService {
             if (entry.getKey() == null || entry.getKey().isBefore(request.startDate())
                     || entry.getKey().isAfter(request.startDate().plusDays(6))
                     || entry.getValue() == null || entry.getValue() < 0) {
-                throw new IllegalArgumentException(
-                        "Availability must be non-negative and within the seven-day period");
+                throw new IllegalArgumentException("Availability must be non-negative and within the seven-day period");
             }
         }
     }
 
-    private void validateItems(PlanRequest request, List<PlanItem> items) {
+    private void validateItems(String authorization, PlanRequest request, List<PlanItem> items) {
         Map<UUID, AssessmentView> known = new HashMap<>();
-        tools.getIncompleteAssessments().forEach(assessment -> known.put(assessment.id(), assessment));
+        tools.getIncompleteAssessments(authorization).forEach(a -> known.put(a.id(), a));
         Map<LocalDate, Integer> daily = new HashMap<>();
         for (PlanItem item : items) {
             AssessmentView assessment = known.get(item.assessmentId());
-            if (assessment == null) {
-                throw new IllegalArgumentException(
-                        "Plan references a missing or completed assessment: " + item.assessmentId());
-            }
+            if (assessment == null) throw new IllegalArgumentException(
+                    "Plan references a missing or completed assessment: " + item.assessmentId());
             if (!assessment.subjectId().equals(item.subjectId())) {
                 throw new IllegalArgumentException("Assessment and subject do not match");
             }
-            if (item.date().isBefore(request.startDate())
-                    || item.date().isAfter(request.startDate().plusDays(6))) {
+            if (item.date().isBefore(request.startDate()) || item.date().isAfter(request.startDate().plusDays(6))) {
                 throw new IllegalArgumentException("Plan item lies outside the requested period");
             }
-            if (item.allocatedMinutes() <= 0) {
-                throw new IllegalArgumentException("Allocated minutes must be positive");
-            }
+            if (item.allocatedMinutes() <= 0) throw new IllegalArgumentException("Allocated minutes must be positive");
             int total = daily.merge(item.date(), item.allocatedMinutes(), Integer::sum);
             if (total > request.dailyAvailabilityMinutes().getOrDefault(item.date(), 0)) {
                 throw new IllegalArgumentException("Plan exceeds availability on " + item.date());
@@ -192,17 +183,14 @@ public class PlanningApplicationService {
         after.forEach(item -> current.add(item.assessmentId()));
         int added = (int) current.stream().filter(id -> !previous.contains(id)).count();
         int removed = (int) previous.stream().filter(id -> !current.contains(id)).count();
-        return added + " assessment(s) added and " + removed
-                + " removed; dates and minutes were recalculated";
+        return added + " assessment(s) added and " + removed + " removed; dates and minutes were recalculated";
     }
 
     private PlanResponse response(StudyPlan plan) {
         try {
             return new PlanResponse(plan.getId(), plan.getStartDate(), plan.getEndDate(), plan.getVersion(),
-                    json.readValue(plan.getItemsJson(), new TypeReference<>() {
-                    }), plan.getExplanation(), plan.getCreatedAt());
-        } catch (Exception exception) {
-            throw new IllegalStateException("Stored plan is unreadable", exception);
-        }
+                    json.readValue(plan.getItemsJson(), new TypeReference<>() {}),
+                    plan.getExplanation(), plan.getCreatedAt());
+        } catch (Exception exception) { throw new IllegalStateException("Stored plan is unreadable", exception); }
     }
 }

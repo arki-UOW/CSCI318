@@ -31,8 +31,8 @@ public class StudyPlanningAgent {
         this.configuredModel = configuredModel;
     }
 
-    public List<PlanItem> generate(PlanRequest request) {
-        List<AssessmentView> work = tools.getIncompleteAssessments();
+    public List<PlanItem> generate(PlanRequest request, String authorization) {
+        List<AssessmentView> work = tools.getIncompleteAssessments(authorization);
         if (work.isEmpty()) {
             throw new IllegalArgumentException(
                     "No usable incomplete assessments were found. Remove incorrect rows or add an assessment first.");

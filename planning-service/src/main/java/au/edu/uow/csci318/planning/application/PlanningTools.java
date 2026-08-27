@@ -28,50 +28,52 @@ public class PlanningTools {
         activity = builder.clone().baseUrl(activityUrl).build();
     }
 
-    public List<AssessmentView> getIncompleteAssessments() {
-        return getAssessments().stream()
+    public List<AssessmentView> getIncompleteAssessments(String authorization) {
+        return getAssessments(authorization).stream()
                 .filter(assessment -> "INCOMPLETE".equals(assessment.status()))
                 .filter(this::plausibleAssessment)
                 .toList();
     }
 
-    public List<AssessmentView> getUpcomingAssessments() {
-        return getIncompleteAssessments().stream()
+    public List<AssessmentView> getUpcomingAssessments(String authorization) {
+        return getIncompleteAssessments(authorization).stream()
                 .filter(assessment -> assessment.dueDate() != null
                         && !assessment.dueDate().isBefore(LocalDate.now()))
                 .sorted(Comparator.comparing(AssessmentView::dueDate))
                 .toList();
     }
 
-    public List<AssessmentView> getAssessmentsDueThisWeek() {
+    public List<AssessmentView> getAssessmentsDueThisWeek(String authorization) {
         LocalDate from = LocalDate.now().with(java.time.DayOfWeek.MONDAY);
         LocalDate to = from.plusDays(6);
-        return getIncompleteAssessments().stream()
+        return getIncompleteAssessments(authorization).stream()
                 .filter(assessment -> assessment.dueDate() != null
                         && !assessment.dueDate().isBefore(from)
                         && !assessment.dueDate().isAfter(to))
                 .toList();
     }
 
-    public List<SubjectView> getSubjects() {
-        List<SubjectView> response = subjects.get().uri("/api/subjects").retrieve()
+    public List<SubjectView> getSubjects(String authorization) {
+        List<SubjectView> response = subjects.get().uri("/api/subjects")
+                .header("Authorization", authorization).retrieve()
                 .body(new ParameterizedTypeReference<>() {
                 });
         return response == null ? List.of() : response;
     }
 
-    public int getStudiedMinutes(UUID subjectId, LocalDate weekStart) {
+    public int getStudiedMinutes(String authorization, UUID subjectId, LocalDate weekStart) {
         StudySummary response = activity.get()
                 .uri(uri -> uri.path("/api/study-sessions/summary")
                         .queryParam("subjectId", subjectId)
                         .queryParam("weekOf", weekStart)
                         .build())
-                .retrieve().body(StudySummary.class);
+                .header("Authorization", authorization).retrieve().body(StudySummary.class);
         return response == null ? 0 : response.totalMinutes();
     }
 
-    private List<AssessmentView> getAssessments() {
-        List<AssessmentView> response = assessments.get().uri("/api/assessments").retrieve()
+    private List<AssessmentView> getAssessments(String authorization) {
+        List<AssessmentView> response = assessments.get().uri("/api/assessments")
+                .header("Authorization", authorization).retrieve()
                 .body(new ParameterizedTypeReference<>() {
                 });
         return response == null ? List.of() : response;

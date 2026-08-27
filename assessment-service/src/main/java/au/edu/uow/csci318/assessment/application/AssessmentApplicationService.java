@@ -1,19 +1,160 @@
 package au.edu.uow.csci318.assessment.application;
-import au.edu.uow.csci318.assessment.domain.Assessment;import au.edu.uow.csci318.assessment.domain.Assessment.*;import au.edu.uow.csci318.assessment.dto.AssessmentDtos.*;import au.edu.uow.csci318.assessment.infrastructure.AssessmentRepository;import org.springframework.beans.factory.annotation.Value;import org.springframework.cloud.stream.function.StreamBridge;import org.springframework.stereotype.Service;import org.springframework.transaction.annotation.Transactional;import org.springframework.web.client.HttpClientErrorException;import org.springframework.web.client.ResourceAccessException;import org.springframework.web.client.RestClient;import org.springframework.web.client.RestClientResponseException;import java.time.*;import java.util.*;
-@Service public class AssessmentApplicationService{
- private final AssessmentRepository repo;private final StreamBridge events;private final RestClient subjects;
- public AssessmentApplicationService(AssessmentRepository repo,StreamBridge events,RestClient.Builder b,@Value("${services.subject-url}")String url){this.repo=repo;this.events=events;subjects=b.baseUrl(url).build();}
- @Transactional public List<Response> importAll(ImportRequest request){verifySubject(request.subjectId());List<Response>out=new ArrayList<>();Set<String>titles=new HashSet<>();for(var c:request.assessments()){String key=c.title().trim().toLowerCase();if(!titles.add(key))throw new IllegalArgumentException("Duplicate assessment: "+c.title());var existing=repo.findBySubjectIdAndTitleIgnoreCase(request.subjectId(),c.title());if(existing.isPresent()){out.add(response(existing.get()));continue;}Integer mins=c.estimatedHours()==null?null:(int)Math.round(c.estimatedHours()*60);out.add(createInternal(new Assessment(request.subjectId(),c.title(),c.type(),c.weighting(),c.dueDate(),c.dueWeek(),c.description(),mins,Priority.MEDIUM),"AssessmentCreated"));}return out;}
- @Transactional public Response create(CreateRequest r){verifySubject(r.subjectId());if(repo.existsBySubjectIdAndTitleIgnoreCase(r.subjectId(),r.title()))throw new IllegalArgumentException("Duplicate assessment: "+r.title());return createInternal(new Assessment(r.subjectId(),r.title(),r.type(),r.weighting(),r.dueDate(),r.dueWeek(),r.description(),r.estimatedMinutes(),r.priority()),"AssessmentCreated");}
- public List<Response> all(String status,UUID subjectId){return repo.findAllByOrderByDueDateAsc().stream().filter(a->status==null||a.getStatus().name().equalsIgnoreCase(status)).filter(a->subjectId==null||a.getSubjectId().equals(subjectId)).map(this::response).toList();}
- public Response one(UUID id){return response(find(id));}
- @Transactional public Response update(UUID id,UpdateRequest r){var a=find(id);String type="AssessmentUpdated";if(r.dueDate()!=null||r.dueWeek()!=null){a.changeDeadline(r.dueDate(),r.dueWeek());type="AssessmentDeadlineChanged";}if(r.weighting()!=null)a.changeWeighting(r.weighting());if(r.estimatedMinutes()!=null){a.changeEstimatedWorkload(r.estimatedMinutes());type="AssessmentWorkloadChanged";}if(r.priority()!=null){a.changePriority(r.priority());type="AssessmentPriorityChanged";}repo.save(a);publish(type,a);return response(a);}
- @Transactional public Response complete(UUID id){var a=find(id);a.markCompleted();repo.save(a);publish("AssessmentCompleted",a);return response(a);}
- @Transactional public void delete(UUID id){var a=find(id);publish("AssessmentDeleted",a);repo.delete(a);}
- private void verifySubject(UUID id){try{subjects.get().uri("/api/subjects/{id}",id).retrieve().toBodilessEntity();}catch(HttpClientErrorException.NotFound e){throw new IllegalArgumentException("Referenced subject does not exist",e);}catch(RestClientResponseException e){if(e.getStatusCode().is4xxClientError())throw new IllegalArgumentException("Subject Service rejected subject verification",e);throw new DependencyException("Subject Service is unavailable",e);}catch(ResourceAccessException e){throw new DependencyException("Subject Service is unavailable",e);}}
- private Response createInternal(Assessment a,String type){repo.save(a);publish(type,a);return response(a);}private Assessment find(UUID id){return repo.findById(id).orElseThrow(()->new NoSuchElementException("Assessment not found"));}
- private void publish(String type,Assessment a){events.send("assessmentEvents-out-0",new EventEnvelope(UUID.randomUUID(),type,1,Instant.now(),"assessment-service",response(a)));}
- private Response response(Assessment a){return new Response(a.getId(),a.getSubjectId(),a.getTitle(),a.getType(),a.getWeighting(),a.getDueDate(),a.getDueWeek(),a.getDescription(),a.getEstimatedMinutes(),a.getPriority(),a.getStatus(),a.getUpdatedAt());}
- public record EventEnvelope(UUID eventId,String eventType,int eventVersion,Instant eventTimestamp,String sourceService,Object payload){}
- public static class DependencyException extends RuntimeException{public DependencyException(String m,Throwable c){super(m,c);}}
+
+import au.edu.uow.csci318.assessment.domain.Assessment;
+import au.edu.uow.csci318.assessment.domain.Assessment.Priority;
+import au.edu.uow.csci318.assessment.dto.AssessmentDtos.*;
+import au.edu.uow.csci318.assessment.infrastructure.AssessmentRepository;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.stream.function.StreamBridge;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Set;
+import java.util.UUID;
+
+@Service
+public class AssessmentApplicationService {
+    private final AssessmentRepository repo;
+    private final StreamBridge events;
+    private final RestClient subjects;
+
+    public AssessmentApplicationService(AssessmentRepository repo, StreamBridge events, RestClient.Builder builder,
+                                        @Value("${services.subject-url}") String url) {
+        this.repo = repo;
+        this.events = events;
+        this.subjects = builder.baseUrl(url).build();
+    }
+
+    @Transactional
+    public List<Response> importAll(UUID ownerId, String authorization, ImportRequest request) {
+        verifySubject(authorization, request.subjectId());
+        List<Response> output = new ArrayList<>();
+        Set<String> titles = new HashSet<>();
+        for (AssessmentCandidate candidate : request.assessments()) {
+            String key = candidate.title().trim().toLowerCase();
+            if (!titles.add(key)) throw new IllegalArgumentException("Duplicate assessment: " + candidate.title());
+            var existing = repo.findByOwnerIdAndSubjectIdAndTitleIgnoreCase(ownerId, request.subjectId(), candidate.title());
+            if (existing.isPresent()) {
+                output.add(response(existing.get()));
+                continue;
+            }
+            Integer minutes = candidate.estimatedHours() == null ? null
+                    : (int) Math.round(candidate.estimatedHours() * 60);
+            output.add(createInternal(new Assessment(ownerId, request.subjectId(), candidate.title(), candidate.type(),
+                    candidate.weighting(), candidate.dueDate(), candidate.dueWeek(), candidate.description(), minutes,
+                    Priority.MEDIUM), "AssessmentCreated"));
+        }
+        return output;
+    }
+
+    @Transactional
+    public Response create(UUID ownerId, String authorization, CreateRequest request) {
+        verifySubject(authorization, request.subjectId());
+        if (repo.existsByOwnerIdAndSubjectIdAndTitleIgnoreCase(ownerId, request.subjectId(), request.title())) {
+            throw new IllegalArgumentException("Duplicate assessment: " + request.title());
+        }
+        return createInternal(new Assessment(ownerId, request.subjectId(), request.title(), request.type(),
+                request.weighting(), request.dueDate(), request.dueWeek(), request.description(),
+                request.estimatedMinutes(), request.priority()), "AssessmentCreated");
+    }
+
+    public List<Response> all(UUID ownerId, String status, UUID subjectId) {
+        return repo.findByOwnerIdOrderByDueDateAsc(ownerId).stream()
+                .filter(item -> status == null || item.getStatus().name().equalsIgnoreCase(status))
+                .filter(item -> subjectId == null || item.getSubjectId().equals(subjectId))
+                .map(this::response).toList();
+    }
+
+    public Response one(UUID ownerId, UUID id) { return response(find(ownerId, id)); }
+
+    @Transactional
+    public Response update(UUID ownerId, UUID id, UpdateRequest request) {
+        Assessment assessment = find(ownerId, id);
+        String eventType = "AssessmentUpdated";
+        if (request.dueDate() != null || request.dueWeek() != null) {
+            assessment.changeDeadline(request.dueDate(), request.dueWeek());
+            eventType = "AssessmentDeadlineChanged";
+        }
+        if (request.weighting() != null) assessment.changeWeighting(request.weighting());
+        if (request.estimatedMinutes() != null) {
+            assessment.changeEstimatedWorkload(request.estimatedMinutes());
+            eventType = "AssessmentWorkloadChanged";
+        }
+        if (request.priority() != null) {
+            assessment.changePriority(request.priority());
+            eventType = "AssessmentPriorityChanged";
+        }
+        repo.save(assessment);
+        publish(eventType, assessment);
+        return response(assessment);
+    }
+
+    @Transactional
+    public Response complete(UUID ownerId, UUID id) {
+        Assessment assessment = find(ownerId, id);
+        assessment.markCompleted();
+        repo.save(assessment);
+        publish("AssessmentCompleted", assessment);
+        return response(assessment);
+    }
+
+    @Transactional
+    public void delete(UUID ownerId, UUID id) {
+        Assessment assessment = find(ownerId, id);
+        publish("AssessmentDeleted", assessment);
+        repo.delete(assessment);
+    }
+
+    private void verifySubject(String authorization, UUID id) {
+        try {
+            subjects.get().uri("/api/subjects/{id}", id).header("Authorization", authorization)
+                    .retrieve().toBodilessEntity();
+        } catch (HttpClientErrorException.NotFound exception) {
+            throw new IllegalArgumentException("Referenced subject does not exist", exception);
+        } catch (RestClientResponseException exception) {
+            if (exception.getStatusCode().is4xxClientError()) {
+                throw new IllegalArgumentException("Subject Service rejected subject verification", exception);
+            }
+            throw new DependencyException("Subject Service is unavailable", exception);
+        } catch (ResourceAccessException exception) {
+            throw new DependencyException("Subject Service is unavailable", exception);
+        }
+    }
+
+    private Response createInternal(Assessment assessment, String eventType) {
+        repo.save(assessment);
+        publish(eventType, assessment);
+        return response(assessment);
+    }
+
+    private Assessment find(UUID ownerId, UUID id) {
+        return repo.findByIdAndOwnerId(id, ownerId)
+                .orElseThrow(() -> new NoSuchElementException("Assessment not found"));
+    }
+
+    private void publish(String type, Assessment assessment) {
+        events.send("assessmentEvents-out-0", new EventEnvelope(UUID.randomUUID(), type, 1, Instant.now(),
+                "assessment-service", response(assessment)));
+    }
+
+    private Response response(Assessment assessment) {
+        return new Response(assessment.getId(), assessment.getSubjectId(), assessment.getTitle(), assessment.getType(),
+                assessment.getWeighting(), assessment.getDueDate(), assessment.getDueWeek(), assessment.getDescription(),
+                assessment.getEstimatedMinutes(), assessment.getPriority(), assessment.getStatus(), assessment.getUpdatedAt());
+    }
+
+    public record EventEnvelope(UUID eventId, String eventType, int eventVersion, Instant eventTimestamp,
+                                String sourceService, Object payload) {}
+    public static class DependencyException extends RuntimeException {
+        public DependencyException(String message, Throwable cause) { super(message, cause); }
+    }
 }

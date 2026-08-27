@@ -1,17 +1,21 @@
 # Study Leftovers
 
-Study Leftovers is a CSCI318 prototype that turns subject-outline documents into reviewable subject and assessment data, then combines deadlines and availability into a practical seven-day plan.
+Study Leftovers is a personal academic workspace that turns subject-outline documents into reviewable data, combines deadlines and availability into a practical plan, and carries that plan into editable weekly and monthly calendars.
 
 ## What works
 
 - Up to 10 PDF, DOCX, JPG or JPEG outlines per batch, local text/OCR extraction, and a review queue before confirmation
 - LangChain4j/Gemini analysis of cleaned extracted text and AI-assisted planning, with optional OpenAI compatibility
 - manual subject and assessment entry when no document is available
-- four independently persisted Spring Boot services with clear data ownership
+- five independently persisted Spring Boot services with clear data ownership
 - assessment and study-session domain events through Spring Cloud Stream and Kafka
 - live REST-backed workload, study progress, “This Week,” assessment overview, plan generation and regeneration
 - conversational availability capture for time slots such as “Monday 6–8pm”
 - deterministic validation before any AI-produced plan is stored
+- editable monthly overview and detailed weekly calendar, including manual tasks and study sessions
+- spaced repetition that creates reviews 1, 3, 7, 14 and 30 days after completed study blocks
+- Gemini/OpenAI study-assistant chat grounded in the signed-in student's subjects, assessments and schedule
+- remembered username/password accounts with profile-scoped academic data, session history and theme colours
 - responsive, dependency-free frontend covering the end-to-end workflow
 
 ## Architecture
@@ -22,6 +26,7 @@ Study Leftovers is a CSCI318 prototype that turns subject-outline documents into
 | Assessment Service | 8082 | confirmed assessments and their lifecycle |
 | Study Activity Service | 8083 | study sessions |
 | Planning Service | 8084 | workload/progress views, availability chat and versioned plans |
+| Account Service | 8085 | accounts, password hashes, remembered sessions, profiles and theme settings |
 | Frontend | 3000 | browser UI; no domain persistence |
 
 Each service has its own file-backed H2 database. REST handles commands and immediate verification. Kafka carries completed business facts. No service reads another service’s database.
@@ -35,7 +40,7 @@ Copy-Item .env.example .env
 docker compose up -d --build --force-recreate
 ```
 
-Open <http://localhost:3000>. Kafka and all four services start together. On a first start, allow roughly two minutes for images, Maven dependencies and Kafka initialisation.
+Open <http://localhost:3000>. Create an account on the welcome screen; its login remains valid for 30 days unless you sign out. Kafka and all five services start together. On a first start, allow roughly two minutes for images, Maven dependencies and Kafka initialisation.
 
 To enable Gemini-backed extraction and planning, set `GEMINI_API_KEY` in the private `.env` file—not in `.env.example`. The backend first extracts and normalises PDF/DOCX text or runs OCR for JPG/JPEG, then Gemini receives that cleaned text. This keeps provider input bounded and makes incorrect policy/SLO rows easier to reject.
 
@@ -79,6 +84,7 @@ Requirements: JDK 21, Maven 3.9+, Kafka on port 9092 for domain-event services.
 
 ```powershell
 mvn test
+mvn -pl account-service spring-boot:run
 mvn -pl subject-service spring-boot:run
 mvn -pl assessment-service spring-boot:run
 mvn -pl study-activity-service spring-boot:run
@@ -89,11 +95,13 @@ Serve `frontend/` with any static server. The UI expects the documented localhos
 
 ## Demo path
 
-1. Upload or drop up to 10 PDF, DOCX, JPG or JPEG files together, or choose **Enter manually**.
-2. Review and confirm each queued subject; subjects are stored by Subject Service and assessments by Assessment Service.
-3. Record a study session and refresh the live progress view.
+1. Create an account or sign back in to restore your profile, data and theme.
+2. Upload or drop up to 10 PDF, DOCX, JPG or JPEG files together, or choose **Enter manually**.
+3. Review and confirm each queued subject; subjects are stored by Subject Service and assessments by Assessment Service.
 4. Tell the planning assistant your time slots and generate a seven-day plan.
-5. Complete or remove incorrect assessments, then regenerate.
+5. Open the weekly schedule to edit generated blocks, or add your own tasks and sessions.
+6. Mark a spaced-repetition block complete and check the next review in the monthly overview.
+7. Ask the Study Assistant for explanations or help breaking down the nearest assessment.
 
 The Postman collection in `postman/` includes query and command examples. IDs returned by earlier calls should be placed into the collection variables.
 
