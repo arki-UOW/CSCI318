@@ -1,4 +1,9 @@
 services:
+  account-service:
+    build: {context: ., dockerfile: account-service/Dockerfile}
+    ports: ["8085:8085"]
+    environment: {AUTH_SESSION_DAYS: "30"}
+    restart: on-failure
   kafka:
     image: apache/kafka:3.9.1
     ports: ["9092:9092"]
@@ -29,22 +34,26 @@ services:
       GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.6-flash}"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4.1-mini}"
+      ACCOUNT_SERVICE_URL: "http://account-service:8085"
     depends_on:
       kafka: {condition: service_healthy}
+      account-service: {condition: service_started}
     restart: on-failure
   assessment-service:
     build: {context: ., dockerfile: assessment-service/Dockerfile}
     ports: ["8082:8082"]
-    environment: {SUBJECT_SERVICE_URL: "http://subject-service:8081", KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"}
+    environment: {SUBJECT_SERVICE_URL: "http://subject-service:8081", ACCOUNT_SERVICE_URL: "http://account-service:8085", KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"}
     depends_on:
       kafka: {condition: service_healthy}
+      account-service: {condition: service_started}
     restart: on-failure
   study-activity-service:
     build: {context: ., dockerfile: study-activity-service/Dockerfile}
     ports: ["8083:8083"]
-    environment: {SUBJECT_SERVICE_URL: "http://subject-service:8081", KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"}
+    environment: {SUBJECT_SERVICE_URL: "http://subject-service:8081", ACCOUNT_SERVICE_URL: "http://account-service:8085", KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"}
     depends_on:
       kafka: {condition: service_healthy}
+      account-service: {condition: service_started}
     restart: on-failure
   planning-service:
     build: {context: ., dockerfile: planning-service/Dockerfile}
@@ -58,7 +67,9 @@ services:
       GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.6-flash}"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4.1-mini}"
+      ACCOUNT_SERVICE_URL: "http://account-service:8085"
     depends_on:
+      account-service: {condition: service_started}
       assessment-service: {condition: service_started}
       subject-service: {condition: service_started}
       study-activity-service: {condition: service_started}
@@ -67,4 +78,4 @@ services:
     image: nginx:1.29-alpine
     ports: ["3000:80"]
     volumes: ["./frontend:/usr/share/nginx/html:ro"]
-    depends_on: [subject-service, assessment-service, study-activity-service, planning-service]
+    depends_on: [account-service, subject-service, assessment-service, study-activity-service, planning-service]

@@ -1,4 +1,5 @@
 const API = {
+  accounts: 'http://localhost:8085/api',
   subjects: 'http://localhost:8081/api',
   assessments: 'http://localhost:8082/api',
   activity: 'http://localhost:8083/api',
@@ -6,6 +7,8 @@ const API = {
 };
 
 const state = {
+  token: localStorage.getItem('studyLeftoversToken'),
+  account: null,
   subjects: [],
   assessments: [],
   week: null,
@@ -19,6 +22,11 @@ const state = {
   availability: {},
   availabilityMinutes: {},
   manualAssessments: [],
+  sessions: [],
+  calendarEntries: [],
+  calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  calendarWeek: null,
+  assistantHistory: [],
   currentView: 'dashboard'
 };
 
@@ -39,8 +47,14 @@ function show(view) {
     subjects: 'Subjects',
     assessments: 'Assessments',
     plan: 'Study plan',
-    activity: 'Study activity'
+    calendar: 'Monthly calendar',
+    week: 'Weekly schedule',
+    assistant: 'Study assistant',
+    activity: 'Study activity',
+    profile: 'Your profile',
+    settings: 'Settings'
   }[view];
+  if (view === 'calendar' || view === 'week') loadCalendar();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -80,9 +94,13 @@ function setBusy(button, busy, busyText) {
 }
 
 async function request(url, options) {
+  const requestOptions = { ...(options || {}) };
+  const headers = new Headers(requestOptions.headers || {});
+  if (state.token) headers.set('Authorization', `Bearer ${state.token}`);
+  requestOptions.headers = headers;
   let response;
   try {
-    response = await fetch(url, options);
+    response = await fetch(url, requestOptions);
   } catch (error) {
     throw new Error('Could not reach the service. Check that the application is running and try again.');
   }
@@ -96,12 +114,114 @@ async function request(url, options) {
     const validation = payload.validationErrors
       ? Object.values(payload.validationErrors).filter(Boolean).join('; ')
       : '';
+    if (response.status === 401 && state.token) signOut(false);
     throw new Error([payload.message || 'Request failed', validation].filter(Boolean).join(': '));
   }
   if (response.status === 204) return null;
   const contentType = response.headers.get('content-type') || '';
   return contentType.includes('application/json') ? response.json() : response.text();
 }
+
+function setAuthMode(mode) {
+  const signup = mode === 'signup';
+  $('#signup-form').hidden = !signup;
+  $('#login-form').hidden = signup;
+  $('#signup-tab').classList.toggle('active', signup);
+  $('#login-tab').classList.toggle('active', !signup);
+  $('#signup-tab').setAttribute('aria-selected', String(signup));
+  $('#login-tab').setAttribute('aria-selected', String(!signup));
+  feedback('auth-feedback', '');
+}
+
+function applyTheme(account) {
+  if (!account) return;
+  const root = document.documentElement;
+  root.style.setProperty('--green', account.primaryColor);
+  root.style.setProperty('--green-dark', account.primaryColor);
+  root.style.setProperty('--focus', account.accentColor);
+  root.style.setProperty('--page-bg', account.backgroundColor);
+  root.style.setProperty('--surface', account.surfaceColor);
+  root.style.setProperty('--text', account.textColor);
+  root.style.color = account.textColor;
+  root.style.background = account.backgroundColor;
+}
+
+function populateAccount() {
+  const account = state.account;
+  if (!account) return;
+  $('#account-name').textContent = account.displayName || account.username;
+  $('#account-username').textContent = `@${account.username}`;
+  $('#account-avatar').textContent = (account.displayName || account.username).slice(0, 2).toUpperCase();
+  $('#profile-name').value = account.displayName || '';
+  $('#profile-institution').value = account.institution || '';
+  $('#profile-course').value = account.course || '';
+  $('#profile-goal').value = account.studyGoal || '';
+  $('#profile-timezone').value = account.timezone || 'Australia/Sydney';
+  $('#theme-primary').value = account.primaryColor;
+  $('#theme-accent').value = account.accentColor;
+  $('#theme-background').value = account.backgroundColor;
+  $('#theme-surface').value = account.surfaceColor;
+  $('#theme-text').value = account.textColor;
+  applyTheme(account);
+}
+
+async function establishSession(session) {
+  state.token = session.token;
+  state.account = session.account;
+  localStorage.setItem('studyLeftoversToken', state.token);
+  document.body.classList.remove('auth-required');
+  $('#auth-shell').hidden = true;
+  populateAccount();
+  await load();
+}
+
+async function signOut(callServer = true) {
+  const token = state.token;
+  if (callServer && token) {
+    try { await request(`${API.accounts}/auth/logout`, { method: 'POST' }); } catch { /* local sign-out still succeeds */ }
+  }
+  state.token = null;
+  state.account = null;
+  localStorage.removeItem('studyLeftoversToken');
+  document.body.classList.add('auth-required');
+  $('#auth-shell').hidden = false;
+  setAuthMode('login');
+}
+
+$('#signup-tab').addEventListener('click', () => setAuthMode('signup'));
+$('#login-tab').addEventListener('click', () => setAuthMode('login'));
+$('#logout-btn').addEventListener('click', () => signOut(true));
+
+$('#signup-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = event.submitter;
+  setBusy(button, true, 'Creating');
+  feedback('auth-feedback', 'Creating your private study workspace…', 'info');
+  try {
+    const session = await request(`${API.accounts}/auth/register`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: $('#signup-username').value.trim(),
+        password: $('#signup-password').value, displayName: $('#signup-name').value.trim() })
+    });
+    await establishSession(session);
+  } catch (error) { feedback('auth-feedback', error.message, 'error'); }
+  finally { setBusy(button, false); }
+});
+
+$('#login-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = event.submitter;
+  setBusy(button, true, 'Signing in');
+  feedback('auth-feedback', 'Opening your remembered workspace…', 'info');
+  try {
+    const session = await request(`${API.accounts}/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: $('#login-username').value.trim(), password: $('#login-password').value })
+    });
+    await establishSession(session);
+  } catch (error) { feedback('auth-feedback', error.message, 'error'); }
+  finally { setBusy(button, false); }
+});
 
 function dateCard(dueDate, dueWeek) {
   if (!dueDate) {
@@ -135,6 +255,7 @@ async function load() {
     ['plan', request(`${API.planning}/planning/plans/latest`)],
     ['subjectAi', request(`${API.subjects}/ai/status`)],
     ['planningAi', request(`${API.planning}/planning/ai/status`)]
+    ,['sessions', request(`${API.activity}/study-sessions`)]
   ];
   const results = await Promise.allSettled(calls.map(([, promise]) => promise));
   results.forEach((result, index) => {
@@ -151,6 +272,7 @@ async function load() {
     feedback('dashboard-feedback', '');
   }
   render();
+  await loadCalendar(false);
 }
 
 function render() {
@@ -180,12 +302,30 @@ function render() {
     : '<p>No subjects yet. Upload an outline to begin.</p>';
   $('#activity-subject').innerHTML = '<option value="">Choose subject</option>'
     + state.subjects.map(subject => `<option value="${esc(subject.id)}">${esc(subject.code)} — ${esc(subject.name)}</option>`).join('');
+  $('#calendar-subject').innerHTML = '<option value="">No subject</option>'
+    + state.subjects.map(subject => `<option value="${esc(subject.id)}">${esc(subject.code)} — ${esc(subject.name)}</option>`).join('');
+
+  $('#assistant-subject-count').textContent = state.subjects.length;
+  $('#assistant-assessment-count').textContent = state.assessments.filter(item => item.status === 'INCOMPLETE').length;
+  $('#assistant-calendar-count').textContent = state.calendarEntries.filter(item => item.status === 'PLANNED').length;
+  $('#session-history').classList.toggle('empty', !state.sessions.length);
+  $('#session-history').innerHTML = state.sessions.length
+    ? state.sessions.slice(0, 10).map(session => `<div class="row"><div class="body"><strong>${esc(session.description)}</strong><br><small>${esc(subjectName(session.subjectId))} · ${esc(session.studyDate)}</small></div><span class="pill">${session.durationMinutes} min</span></div>`).join('')
+    : 'No study sessions recorded yet.';
+
+  const upcomingCalendar = state.calendarEntries.filter(item => item.status === 'PLANNED'
+    && new Date(item.endAt) >= new Date()).sort((a, b) => a.startAt.localeCompare(b.startAt)).slice(0, 4);
+  $('#dashboard-calendar').classList.toggle('empty', !upcomingCalendar.length);
+  $('#dashboard-calendar').innerHTML = upcomingCalendar.length
+    ? upcomingCalendar.map(item => `<button class="calendar-list-item" data-calendar-id="${esc(item.id)}"><span class="calendar-dot ${item.type.toLowerCase()}"></span><span><strong>${esc(item.title)}</strong><small>${formatDateTime(item.startAt)}</small></span></button>`).join('')
+    : 'Nothing scheduled yet.';
 
   renderAssessments();
   renderPlan('#dashboard-plan');
   renderPlan('#plan-list');
   bindComplete();
   bindDeleteAssessments();
+  bindCalendarItems();
 }
 
 function renderSystemStatus() {
@@ -767,6 +907,264 @@ $('#generate-chat-plan').addEventListener('click', async event => {
   await generatePlan(state.availabilityMinutes, event.currentTarget);
 });
 
+function mondayFor(date) {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  result.setDate(result.getDate() - ((result.getDay() + 6) % 7));
+  return result;
+}
+
+function addDays(date, days) {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+function monthRange() {
+  const from = mondayFor(new Date(state.calendarMonth.getFullYear(), state.calendarMonth.getMonth(), 1));
+  return { from, to: addDays(from, 41) };
+}
+
+function formatDateTime(value) {
+  return new Date(value).toLocaleString('en-AU', { weekday: 'short', day: 'numeric', month: 'short',
+    hour: 'numeric', minute: '2-digit' });
+}
+
+function formatTime(value) {
+  return new Date(value).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' });
+}
+
+async function loadCalendar(showErrors = true) {
+  if (!state.token) return;
+  const month = monthRange();
+  const weekStart = state.calendarWeek || mondayFor(new Date());
+  const from = new Date(Math.min(month.from.getTime(), weekStart.getTime()));
+  const to = new Date(Math.max(month.to.getTime(), addDays(weekStart, 6).getTime()));
+  try {
+    state.calendarEntries = await request(`${API.planning}/calendar?from=${localDate(from)}&to=${localDate(to)}`);
+    renderCalendar();
+    renderWeek();
+    render();
+  } catch (error) {
+    if (showErrors) feedback(state.currentView === 'week' ? 'week-feedback' : 'calendar-feedback', error.message, 'error');
+  }
+}
+
+function entriesForDate(date) {
+  return state.calendarEntries.filter(item => item.startAt.slice(0, 10) === date)
+    .sort((a, b) => a.startAt.localeCompare(b.startAt));
+}
+
+function calendarEvent(item, compact = false) {
+  return `<button class="calendar-event ${item.type.toLowerCase()} ${item.status.toLowerCase()}" data-calendar-id="${esc(item.id)}" title="${esc(item.title)}"><span>${formatTime(item.startAt)}</span>${compact ? '' : `<strong>${esc(item.title)}</strong>`}</button>`;
+}
+
+function renderCalendar() {
+  const range = monthRange();
+  $('#month-title').textContent = state.calendarMonth.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
+  const todayValue = localDate(new Date());
+  $('#month-grid').innerHTML = Array.from({ length: 42 }, (_, index) => {
+    const date = addDays(range.from, index);
+    const dateValue = localDate(date);
+    const entries = entriesForDate(dateValue);
+    const outside = date.getMonth() !== state.calendarMonth.getMonth();
+    return `<div class="month-day ${outside ? 'outside' : ''} ${dateValue === todayValue ? 'today' : ''}" data-calendar-date="${dateValue}">
+      <button class="day-number" data-new-calendar-date="${dateValue}" aria-label="Add item on ${date.toLocaleDateString('en-AU')}">${date.getDate()}</button>
+      <div class="month-events">${entries.slice(0, 3).map(item => calendarEvent(item)).join('')}${entries.length > 3 ? `<small>+${entries.length - 3} more</small>` : ''}</div>
+    </div>`;
+  }).join('');
+  bindCalendarItems();
+}
+
+function renderWeek() {
+  const start = state.calendarWeek || mondayFor(new Date());
+  state.calendarWeek = start;
+  const end = addDays(start, 6);
+  $('#week-title').textContent = `${start.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} – ${end.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  $('#week-grid').innerHTML = Array.from({ length: 7 }, (_, index) => {
+    const date = addDays(start, index);
+    const dateValue = localDate(date);
+    const entries = entriesForDate(dateValue);
+    return `<article class="week-day ${dateValue === localDate(new Date()) ? 'today' : ''}"><button class="week-day-head" data-new-calendar-date="${dateValue}"><span>${date.toLocaleDateString('en-AU', { weekday: 'short' })}</span><strong>${date.getDate()}</strong></button><div class="week-events">${entries.length ? entries.map(item => calendarEvent(item)).join('') : '<small>Free</small>'}</div></article>`;
+  }).join('');
+  bindCalendarItems();
+}
+
+function dateTimeInput(date) {
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function openCalendarDialog(item = null, dateValue = null) {
+  const start = item ? new Date(item.startAt) : new Date(`${dateValue || localDate(new Date())}T18:00:00`);
+  const end = item ? new Date(item.endAt) : new Date(start.getTime() + 60 * 60000);
+  $('#calendar-id').value = item?.id || '';
+  $('#calendar-title').value = item?.title || '';
+  $('#calendar-description').value = item?.description || '';
+  $('#calendar-type').value = item?.type || 'STUDY_SESSION';
+  $('#calendar-subject').value = item?.subjectId || '';
+  $('#calendar-start').value = dateTimeInput(start);
+  $('#calendar-end').value = dateTimeInput(end);
+  $('#calendar-spaced').checked = item?.spacedRepetition ?? true;
+  $('#calendar-dialog-title').textContent = item ? 'Edit calendar item' : 'New study item';
+  $('#delete-calendar-entry').hidden = !item;
+  $('#complete-calendar-entry').hidden = !item || item.status === 'COMPLETED';
+  feedback('calendar-dialog-feedback', '');
+  $('#calendar-dialog').showModal();
+  $('#calendar-title').focus();
+}
+
+function bindCalendarItems() {
+  $$('[data-calendar-id]:not([data-bound])').forEach(button => {
+    button.dataset.bound = 'true';
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      openCalendarDialog(state.calendarEntries.find(item => item.id === button.dataset.calendarId));
+    });
+  });
+  $$('[data-new-calendar-date]:not([data-bound])').forEach(button => {
+    button.dataset.bound = 'true';
+    button.addEventListener('click', () => openCalendarDialog(null, button.dataset.newCalendarDate));
+  });
+}
+
+$('#month-prev').addEventListener('click', () => { state.calendarMonth.setMonth(state.calendarMonth.getMonth() - 1); loadCalendar(); });
+$('#month-next').addEventListener('click', () => { state.calendarMonth.setMonth(state.calendarMonth.getMonth() + 1); loadCalendar(); });
+$('#month-today').addEventListener('click', () => { state.calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1); loadCalendar(); });
+$('#new-calendar-entry').addEventListener('click', () => openCalendarDialog());
+$('#week-new-entry').addEventListener('click', () => openCalendarDialog(null, localDate(state.calendarWeek)));
+$('#week-prev').addEventListener('click', () => { state.calendarWeek = addDays(state.calendarWeek, -7); loadCalendar(); });
+$('#week-next').addEventListener('click', () => { state.calendarWeek = addDays(state.calendarWeek, 7); loadCalendar(); });
+$('#week-today').addEventListener('click', () => { state.calendarWeek = mondayFor(new Date()); loadCalendar(); });
+$('#close-calendar-dialog').addEventListener('click', () => $('#calendar-dialog').close());
+$('#cancel-calendar-dialog').addEventListener('click', () => $('#calendar-dialog').close());
+
+$('#calendar-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = event.submitter;
+  const id = $('#calendar-id').value;
+  setBusy(button, true, 'Saving');
+  try {
+    await request(`${API.planning}/calendar${id ? `/${id}` : ''}`, {
+      method: id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: $('#calendar-title').value.trim(), description: $('#calendar-description').value.trim(),
+        type: $('#calendar-type').value, subjectId: $('#calendar-subject').value || null, assessmentId: null,
+        startAt: $('#calendar-start').value, endAt: $('#calendar-end').value,
+        spacedRepetition: $('#calendar-spaced').checked })
+    });
+    $('#calendar-dialog').close();
+    await loadCalendar(false);
+    feedback(state.currentView === 'week' ? 'week-feedback' : 'calendar-feedback', id ? 'Calendar item updated.' : 'Calendar item created.', 'success');
+  } catch (error) { feedback('calendar-dialog-feedback', error.message, 'error'); }
+  finally { setBusy(button, false); }
+});
+
+$('#delete-calendar-entry').addEventListener('click', async event => {
+  if (!window.confirm('Delete this calendar item?')) return;
+  setBusy(event.currentTarget, true, 'Deleting');
+  try {
+    await request(`${API.planning}/calendar/${$('#calendar-id').value}`, { method: 'DELETE' });
+    $('#calendar-dialog').close();
+    await loadCalendar(false);
+    feedback(state.currentView === 'week' ? 'week-feedback' : 'calendar-feedback', 'Calendar item deleted.', 'success');
+  } catch (error) { feedback('calendar-dialog-feedback', error.message, 'error'); }
+  finally { setBusy(event.currentTarget, false); }
+});
+
+$('#complete-calendar-entry').addEventListener('click', async event => {
+  setBusy(event.currentTarget, true, 'Completing');
+  try {
+    const result = await request(`${API.planning}/calendar/${$('#calendar-id').value}/complete`, { method: 'POST' });
+    $('#calendar-dialog').close();
+    await loadCalendar(false);
+    const message = result.nextReview ? `Completed. Your next spaced review is ${formatDateTime(result.nextReview.startAt)}.` : 'Calendar item completed.';
+    feedback(state.currentView === 'week' ? 'week-feedback' : 'calendar-feedback', message, 'success');
+  } catch (error) { feedback('calendar-dialog-feedback', error.message, 'error'); }
+  finally { setBusy(event.currentTarget, false); }
+});
+
+function appendStudyChat(role, content) {
+  state.assistantHistory.push({ role, content });
+  const bubble = document.createElement('div');
+  bubble.className = `chat-bubble ${role}`;
+  bubble.textContent = content;
+  $('#study-chat-messages').append(bubble);
+  bubble.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+$('#study-chat-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const input = $('#study-chat-message');
+  const message = input.value.trim();
+  const history = state.assistantHistory.slice(-12);
+  input.value = '';
+  appendStudyChat('user', message);
+  setBusy(event.submitter, true, 'Thinking');
+  feedback('assistant-feedback', 'Your study assistant is considering your subjects and schedule…', 'info');
+  try {
+    const answer = await request(`${API.planning}/planning/assistant/chat`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message, history })
+    });
+    appendStudyChat('assistant', answer.reply);
+    feedback('assistant-feedback', `Answered with ${answer.provider}.`, 'success');
+  } catch (error) { appendStudyChat('assistant', error.message); feedback('assistant-feedback', error.message, 'error'); }
+  finally { setBusy(event.submitter, false); }
+});
+
+$$('[data-study-prompt]').forEach(button => button.addEventListener('click', () => {
+  $('#study-chat-message').value = button.dataset.studyPrompt;
+  $('#study-chat-message').focus();
+}));
+
+$('#profile-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = event.submitter;
+  setBusy(button, true, 'Saving');
+  try {
+    state.account = await request(`${API.accounts}/profile`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ displayName: $('#profile-name').value.trim(), institution: $('#profile-institution').value.trim(),
+        course: $('#profile-course').value.trim(), studyGoal: $('#profile-goal').value.trim(), timezone: $('#profile-timezone').value.trim() }) });
+    populateAccount();
+    feedback('profile-feedback', 'Profile saved.', 'success');
+  } catch (error) { feedback('profile-feedback', error.message, 'error'); }
+  finally { setBusy(button, false); }
+});
+
+const themePresets = {
+  forest: ['#245d45', '#d69b38', '#f5f7f5', '#ffffff', '#17201d'],
+  ocean: ['#175c70', '#e09c46', '#f1f7f9', '#ffffff', '#13242b'],
+  plum: ['#694263', '#d6a34a', '#faf5f9', '#ffffff', '#291d27'],
+  ember: ['#8a3f2d', '#e0a23c', '#fbf6f2', '#ffffff', '#2b1d19']
+};
+
+function previewTheme() {
+  applyTheme({ primaryColor: $('#theme-primary').value, accentColor: $('#theme-accent').value,
+    backgroundColor: $('#theme-background').value, surfaceColor: $('#theme-surface').value,
+    textColor: $('#theme-text').value });
+}
+
+$$('[data-theme-preset]').forEach(button => button.addEventListener('click', () => {
+  const [primary, accent, background, surface, text] = themePresets[button.dataset.themePreset];
+  $('#theme-primary').value = primary; $('#theme-accent').value = accent;
+  $('#theme-background').value = background; $('#theme-surface').value = surface; $('#theme-text').value = text;
+  previewTheme();
+}));
+$$('#theme-form input[type="color"]').forEach(input => input.addEventListener('input', previewTheme));
+
+$('#theme-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = event.submitter;
+  setBusy(button, true, 'Saving');
+  try {
+    state.account = await request(`${API.accounts}/settings/theme`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ primaryColor: $('#theme-primary').value, accentColor: $('#theme-accent').value,
+        backgroundColor: $('#theme-background').value, surfaceColor: $('#theme-surface').value,
+        textColor: $('#theme-text').value }) });
+    populateAccount(); feedback('settings-feedback', 'Theme saved to your profile.', 'success');
+  } catch (error) { applyTheme(state.account); feedback('settings-feedback', error.message, 'error'); }
+  finally { setBusy(button, false); }
+});
+
 function localDate(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -778,5 +1176,22 @@ const today = new Date();
 $('#activity-date').value = localDate(today);
 const monday = new Date(today);
 monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+state.calendarWeek = mondayFor(today);
 $('#plan-start').value = localDate(monday);
-load();
+
+async function bootstrap() {
+  document.body.classList.add('auth-required');
+  if (!state.token) return;
+  try {
+    state.account = await request(`${API.accounts}/auth/session`);
+    document.body.classList.remove('auth-required');
+    $('#auth-shell').hidden = true;
+    populateAccount();
+    await load();
+  } catch (error) {
+    signOut(false);
+    feedback('auth-feedback', 'Your remembered session expired. Sign in again.', 'info');
+  }
+}
+
+bootstrap();

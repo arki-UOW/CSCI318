@@ -42,33 +42,37 @@ class SubjectApplicationServiceTest {
 
     @Test
     void commitsSubjectPreparationBeforeCallingAssessmentService() {
+        UUID ownerId = UUID.randomUUID();
         UUID importId = UUID.randomUUID();
+        String authorization = "Bearer test";
         ConfirmImportRequest request = request();
-        Subject subject = new Subject("CSCI318", "Software Engineering", 6, 240);
-        when(confirmations.prepare(importId, request))
+        Subject subject = new Subject(ownerId, "CSCI318", "Software Engineering", 6, 240);
+        when(confirmations.prepare(ownerId, importId, request))
                 .thenReturn(new SubjectConfirmationTransactions.PreparedConfirmation(subject, false));
 
-        var response = service.confirm(importId, request);
+        var response = service.confirm(ownerId, authorization, importId, request);
 
         assertEquals(subject.getId(), response.id());
         InOrder order = inOrder(confirmations, assessments);
-        order.verify(confirmations).prepare(importId, request);
-        order.verify(assessments).importAssessments(subject.getId(), request.extraction().assessments());
-        order.verify(confirmations).complete(importId, subject.getId());
+        order.verify(confirmations).prepare(ownerId, importId, request);
+        order.verify(assessments).importAssessments(authorization, subject.getId(), request.extraction().assessments());
+        order.verify(confirmations).complete(ownerId, importId, subject.getId());
     }
 
     @Test
     void retryOfCompletedConfirmationDoesNotImportAssessmentsAgain() {
+        UUID ownerId = UUID.randomUUID();
         UUID importId = UUID.randomUUID();
+        String authorization = "Bearer test";
         ConfirmImportRequest request = request();
-        Subject subject = new Subject("CSCI318", "Software Engineering", 6, 240);
-        when(confirmations.prepare(importId, request))
+        Subject subject = new Subject(ownerId, "CSCI318", "Software Engineering", 6, 240);
+        when(confirmations.prepare(ownerId, importId, request))
                 .thenReturn(new SubjectConfirmationTransactions.PreparedConfirmation(subject, true));
 
-        service.confirm(importId, request);
+        service.confirm(ownerId, authorization, importId, request);
 
-        verify(assessments, never()).importAssessments(subject.getId(), request.extraction().assessments());
-        verify(confirmations, never()).complete(importId, subject.getId());
+        verify(assessments, never()).importAssessments(authorization, subject.getId(), request.extraction().assessments());
+        verify(confirmations, never()).complete(ownerId, importId, subject.getId());
     }
 
     private ConfirmImportRequest request() {

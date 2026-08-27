@@ -24,10 +24,11 @@ class AssessmentImportClient {
         this.json = json;
     }
 
-    void importAssessments(UUID subjectId, List<AssessmentCandidate> candidates) {
+    void importAssessments(String authorization, UUID subjectId, List<AssessmentCandidate> candidates) {
         try {
             assessments.post()
                     .uri("/api/assessments/import")
+                    .header("Authorization", authorization)
                     .body(new AssessmentImport(subjectId, candidates))
                     .retrieve()
                     .toBodilessEntity();

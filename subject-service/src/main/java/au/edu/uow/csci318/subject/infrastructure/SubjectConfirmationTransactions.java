@@ -21,12 +21,12 @@ class SubjectConfirmationTransactions {
     }
 
     @Transactional
-    PreparedConfirmation prepare(UUID importId, ConfirmImportRequest request) {
-        SubjectOutlineImport item = imports.findById(importId)
+    PreparedConfirmation prepare(UUID ownerId, UUID importId, ConfirmImportRequest request) {
+        SubjectOutlineImport item = imports.findByIdAndOwnerId(importId, ownerId)
                 .orElseThrow(() -> new NoSuchElementException("Import not found"));
         if (item.getStatus() == SubjectOutlineImport.Status.CONFIRMED
                 || item.getStatus() == SubjectOutlineImport.Status.CONFIRMING) {
-            Subject existing = subjects.findById(item.getSubjectId())
+            Subject existing = subjects.findByIdAndOwnerId(item.getSubjectId(), ownerId)
                     .orElseThrow(() -> new IllegalStateException("The pending subject could not be found"));
             if (!existing.getCode().equalsIgnoreCase(request.extraction().subjectCode())) {
                 throw new IllegalArgumentException(
@@ -38,10 +38,10 @@ class SubjectConfirmationTransactions {
             throw new IllegalStateException("This outline import cannot be confirmed");
         }
         String code = request.extraction().subjectCode().toUpperCase();
-        if (subjects.findByCode(code).isPresent()) {
+        if (subjects.findByOwnerIdAndCode(ownerId, code).isPresent()) {
             throw new IllegalArgumentException("A subject with this code already exists");
         }
-        Subject subject = subjects.save(new Subject(
+        Subject subject = subjects.save(new Subject(ownerId,
                 code,
                 request.extraction().subjectName(),
                 request.extraction().creditPoints(),
@@ -51,8 +51,8 @@ class SubjectConfirmationTransactions {
     }
 
     @Transactional
-    void complete(UUID importId, UUID subjectId) {
-        SubjectOutlineImport item = imports.findById(importId)
+    void complete(UUID ownerId, UUID importId, UUID subjectId) {
+        SubjectOutlineImport item = imports.findByIdAndOwnerId(importId, ownerId)
                 .orElseThrow(() -> new NoSuchElementException("Import not found"));
         if (!subjectId.equals(item.getSubjectId())) {
             throw new IllegalStateException("The confirmed subject does not match the outline import");
@@ -63,15 +63,15 @@ class SubjectConfirmationTransactions {
     }
 
     @Transactional
-    Subject createManual(ManualSubjectRequest request) {
-        return subjects.findByCode(request.code().toUpperCase())
+    Subject createManual(UUID ownerId, ManualSubjectRequest request) {
+        return subjects.findByOwnerIdAndCode(ownerId, request.code().toUpperCase())
                 .map(existing -> {
                     if (!existing.getName().equalsIgnoreCase(request.name())) {
                         throw new IllegalArgumentException("A different subject already uses code " + request.code());
                     }
                     return existing;
                 })
-                .orElseGet(() -> subjects.save(new Subject(
+                .orElseGet(() -> subjects.save(new Subject(ownerId,
                         request.code(), request.name(), request.creditPoints(), request.weeklyStudyTargetMinutes())));
     }
 

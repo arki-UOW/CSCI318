@@ -7,5 +7,5 @@ import java.util.*;
 
 public final class SubjectRepositories { private SubjectRepositories(){} }
 
-interface InternalSubjectRepository extends JpaRepository<Subject,UUID> { Optional<Subject> findByCode(String code); }
-interface InternalImportRepository extends JpaRepository<SubjectOutlineImport,UUID> {}
+interface InternalSubjectRepository extends JpaRepository<Subject,UUID> { Optional<Subject> findByOwnerIdAndCode(UUID ownerId,String code); Optional<Subject> findByIdAndOwnerId(UUID id,UUID ownerId); List<Subject> findByOwnerIdOrderByCode(UUID ownerId); }
+interface InternalImportRepository extends JpaRepository<SubjectOutlineImport,UUID> { Optional<SubjectOutlineImport> findByIdAndOwnerId(UUID id,UUID ownerId); }

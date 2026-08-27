@@ -7,6 +7,38 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <section id="auth-shell" class="auth-shell" aria-labelledby="auth-title">
+    <div class="auth-showcase">
+      <div class="brand auth-brand"><span>SL</span><div><strong>Study Leftovers</strong><small>One calm place for your semester</small></div></div>
+      <div>
+        <p class="eyebrow">YOUR STUDY WORKSPACE</p>
+        <h1 id="auth-title">Plan less. Learn more.</h1>
+        <p>Keep subjects, study history, calendar sessions and AI help safely separated in your own account.</p>
+      </div>
+      <ul class="auth-benefits"><li>Monthly and weekly calendar</li><li>Automatic spaced reviews</li><li>A personal study assistant</li></ul>
+    </div>
+    <div class="auth-card">
+      <div class="segmented" role="tablist" aria-label="Account action">
+        <button id="signup-tab" class="active" type="button" role="tab" aria-selected="true">Create account</button>
+        <button id="login-tab" type="button" role="tab" aria-selected="false">Sign in</button>
+      </div>
+      <form id="signup-form" class="auth-form">
+        <div><p class="eyebrow">WELCOME</p><h2>Make your workspace</h2><p>Your login keeps every subject and session tied to you.</p></div>
+        <label>Display name<input id="signup-name" autocomplete="name" required placeholder="Your name"></label>
+        <label>Username<input id="signup-username" autocomplete="username" required minlength="3" placeholder="e.g. arka"></label>
+        <label>Password<input id="signup-password" type="password" autocomplete="new-password" required minlength="8" placeholder="At least 8 characters"></label>
+        <button class="primary full">Create my account</button>
+      </form>
+      <form id="login-form" class="auth-form" hidden>
+        <div><p class="eyebrow">WELCOME BACK</p><h2>Sign in</h2><p>Your remembered workspace will be ready where you left it.</p></div>
+        <label>Username<input id="login-username" autocomplete="username" required></label>
+        <label>Password<input id="login-password" type="password" autocomplete="current-password" required></label>
+        <button class="primary full">Sign in</button>
+      </form>
+      <div id="auth-feedback" class="feedback" aria-live="polite"></div>
+    </div>
+  </section>
+
   <aside>
     <div class="brand">
       <span>SL</span>
@@ -21,9 +53,15 @@
       <button data-view="subjects">Subjects</button>
       <button data-view="assessments">Assessments</button>
       <button data-view="plan">Study plan</button>
+      <button data-view="calendar">Monthly calendar</button>
+      <button data-view="week">Weekly schedule</button>
+      <button data-view="assistant">Study assistant</button>
       <button data-view="activity">Record activity</button>
+      <button data-view="profile">Profile</button>
+      <button data-view="settings">Settings</button>
     </nav>
-    <div class="service-dot"><span aria-hidden="true">●</span> Local workspace</div>
+    <div class="account-summary"><span id="account-avatar">SL</span><div><strong id="account-name">My workspace</strong><small id="account-username"></small></div></div>
+    <button id="logout-btn" class="logout-button" type="button">Sign out</button>
   </aside>
 
   <main>
@@ -73,6 +111,10 @@
             <button class="link" data-view="plan">Open plan</button>
           </div>
           <div id="dashboard-plan" class="list empty">Generate a plan after adding assessments.</div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><h3>Next calendar items</h3><button class="link" data-view="calendar">Open calendar</button></div>
+          <div id="dashboard-calendar" class="list empty">Nothing scheduled yet.</div>
         </article>
       </div>
     </section>
@@ -193,6 +235,42 @@
       <div id="plan-list" class="plan-board"></div>
     </section>
 
+    <section id="calendar" class="view">
+      <div class="panel-head calendar-heading">
+        <div><p class="eyebrow">MONTHLY OVERVIEW</p><h2 id="month-title">Your calendar</h2></div>
+        <div class="calendar-actions"><button id="month-prev" class="secondary" aria-label="Previous month">←</button><button id="month-today" class="secondary">Today</button><button id="month-next" class="secondary" aria-label="Next month">→</button><button id="new-calendar-entry" class="primary">＋ New item</button></div>
+      </div>
+      <p class="lede">See deadlines, study blocks and spaced reviews together. Select a day to add something yourself.</p>
+      <div id="calendar-feedback" class="feedback" aria-live="polite"></div>
+      <div class="month-weekdays" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+      <div id="month-grid" class="month-grid" aria-label="Monthly calendar"></div>
+    </section>
+
+    <section id="week" class="view">
+      <div class="panel-head calendar-heading">
+        <div><p class="eyebrow">DETAILED SCHEDULE</p><h2 id="week-title">This week</h2></div>
+        <div class="calendar-actions"><button id="week-prev" class="secondary" aria-label="Previous week">←</button><button id="week-today" class="secondary">This week</button><button id="week-next" class="secondary" aria-label="Next week">→</button><button class="primary" id="week-new-entry">＋ Add session</button></div>
+      </div>
+      <p class="lede">Edit any block, mark it complete, or let spaced repetition place the next review automatically.</p>
+      <div id="week-feedback" class="feedback" aria-live="polite"></div>
+      <div id="week-grid" class="week-grid"></div>
+    </section>
+
+    <section id="assistant" class="view">
+      <p class="eyebrow">PERSONAL STUDY ASSISTANT</p>
+      <h2>Ask about your homework</h2>
+      <p class="lede">Get explanations, worked examples and practical next steps using your current subjects, assessments and schedule as context.</p>
+      <div class="assistant-layout">
+        <article class="panel assistant-chat-card">
+          <div id="study-chat-messages" class="study-chat-messages" aria-live="polite"><div class="chat-bubble assistant">Hi! Ask me to explain a concept, break down an assignment, or help decide what to study next.</div></div>
+          <div class="prompt-chips"><button type="button" data-study-prompt="What should I focus on today?">What should I study?</button><button type="button" data-study-prompt="Help me break my nearest assessment into smaller steps.">Break down my assessment</button><button type="button" data-study-prompt="Quiz me on a concept from one of my subjects.">Quiz me</button></div>
+          <form id="study-chat-form" class="chat-form"><label class="sr-only" for="study-chat-message">Question</label><input id="study-chat-message" maxlength="4000" required placeholder="Ask a homework or study question…"><button class="primary">Send</button></form>
+          <div id="assistant-feedback" class="feedback" aria-live="polite"></div>
+        </article>
+        <div class="assistant-context panel"><p class="eyebrow">WHAT I CAN USE</p><h3>Your study context</h3><p>Current subjects</p><strong id="assistant-subject-count">0</strong><p>Incomplete assessments</p><strong id="assistant-assessment-count">0</strong><p>Upcoming calendar blocks</p><strong id="assistant-calendar-count">0</strong><small>I only use data from your signed-in account.</small></div>
+      </div>
+    </section>
+
     <section id="activity" class="view">
       <p class="eyebrow">STUDY ACTIVITY</p>
       <h2>Record a study session</h2>
@@ -205,7 +283,48 @@
       </form>
       <div id="activity-feedback" class="feedback" aria-live="polite"></div>
     </section>
+
+    <section id="profile" class="view">
+      <p class="eyebrow">YOUR ACCOUNT</p><h2>Profile and study history</h2>
+      <div class="profile-grid">
+        <form id="profile-form" class="panel profile-form">
+          <h3>About you</h3>
+          <label>Display name<input id="profile-name" required></label>
+          <label>Institution<input id="profile-institution" placeholder="University of Wollongong"></label>
+          <label>Course<input id="profile-course" placeholder="Bachelor of Computer Science"></label>
+          <label>Study goal<textarea id="profile-goal" rows="4" placeholder="What are you working towards?"></textarea></label>
+          <label>Timezone<input id="profile-timezone" required value="Australia/Sydney"></label>
+          <button class="primary">Save profile</button><div id="profile-feedback" class="feedback" aria-live="polite"></div>
+        </form>
+        <article class="panel"><div class="panel-head"><h3>Recent sessions</h3><button class="link" data-view="activity">Record one</button></div><div id="session-history" class="list empty">No study sessions recorded yet.</div></article>
+      </div>
+    </section>
+
+    <section id="settings" class="view">
+      <p class="eyebrow">PERSONALISE</p><h2>Theme settings</h2>
+      <p class="lede">These colours follow your profile whenever you sign in.</p>
+      <form id="theme-form" class="panel theme-form">
+        <div class="theme-presets"><button type="button" data-theme-preset="forest">Forest</button><button type="button" data-theme-preset="ocean">Ocean</button><button type="button" data-theme-preset="plum">Plum</button><button type="button" data-theme-preset="ember">Ember</button></div>
+        <div class="theme-controls"><label>Primary colour<input id="theme-primary" type="color"></label><label>Accent colour<input id="theme-accent" type="color"></label><label>Background<input id="theme-background" type="color"></label><label>Cards<input id="theme-surface" type="color"></label><label>Text<input id="theme-text" type="color"></label></div>
+        <div class="theme-preview"><span>Preview</span><strong>Your workspace, your colours.</strong><button type="button" class="primary">Example button</button></div>
+        <button class="primary">Save theme</button><div id="settings-feedback" class="feedback" aria-live="polite"></div>
+      </form>
+    </section>
   </main>
+
+  <dialog id="calendar-dialog" class="calendar-dialog">
+    <form id="calendar-form" method="dialog">
+      <div class="panel-head"><div><p class="eyebrow">CALENDAR ITEM</p><h2 id="calendar-dialog-title">New study item</h2></div><button id="close-calendar-dialog" class="icon-button" type="button" aria-label="Close">×</button></div>
+      <input id="calendar-id" type="hidden">
+      <label>Title<input id="calendar-title" maxlength="160" required placeholder="e.g. Review lecture 4"></label>
+      <div class="dialog-grid"><label>Type<select id="calendar-type"><option value="STUDY_SESSION">Study session</option><option value="TASK">Task</option><option value="REVIEW">Review</option></select></label><label>Subject<select id="calendar-subject"><option value="">No subject</option></select></label></div>
+      <div class="dialog-grid"><label>Starts<input id="calendar-start" type="datetime-local" required></label><label>Ends<input id="calendar-end" type="datetime-local" required></label></div>
+      <label>Notes<textarea id="calendar-description" rows="3" maxlength="2000" placeholder="Optional details"></textarea></label>
+      <label class="check-row"><input id="calendar-spaced" type="checkbox" checked><span><strong>Use spaced repetition</strong><small>Completing this item creates reviews after 1, 3, 7, 14 and 30 days.</small></span></label>
+      <div id="calendar-dialog-feedback" class="feedback" aria-live="polite"></div>
+      <div class="dialog-actions"><button id="delete-calendar-entry" class="secondary danger-button" type="button" hidden>Delete</button><button id="complete-calendar-entry" class="secondary" type="button" hidden>Mark complete</button><span></span><button id="cancel-calendar-dialog" class="secondary" type="button">Cancel</button><button class="primary" value="default">Save item</button></div>
+    </form>
+  </dialog>
 
   <script type="module" src="app.js"></script>
 </body>
