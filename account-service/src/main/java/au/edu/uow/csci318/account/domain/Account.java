@@ -3,6 +3,7 @@ package au.edu.uow.csci318.account.domain;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
@@ -26,6 +27,9 @@ public class Account {
     @Column(nullable = false, length = 7) private String backgroundColor;
     @Column(nullable = false, length = 7) private String surfaceColor;
     @Column(nullable = false, length = 7) private String textColor;
+    @Column(length = 7) private String navigationColor;
+    @Column(length = 512) private String navigationOrder;
+    @Lob @Column(columnDefinition = "CLOB") private String profilePicture;
     @Column(nullable = false) private Instant createdAt;
 
     protected Account() {}
@@ -41,6 +45,8 @@ public class Account {
         this.backgroundColor = "#f5f7f5";
         this.surfaceColor = "#ffffff";
         this.textColor = "#17201d";
+        this.navigationColor = "#2a5745";
+        this.navigationOrder = "dashboard,upload,subjects,assessments,plan,calendar,week,assistant,activity";
         this.createdAt = Instant.now();
     }
 
@@ -53,11 +59,39 @@ public class Account {
     }
 
     public void updateTheme(String primary, String accent, String background, String surface, String text) {
+        updateTheme(primary, accent, background, surface, text, navigationColor);
+    }
+
+    public void updateTheme(String primary, String accent, String background, String surface, String text,
+                            String navigation) {
         this.primaryColor = colour(primary, "Primary colour");
         this.accentColor = colour(accent, "Accent colour");
         this.backgroundColor = colour(background, "Background colour");
         this.surfaceColor = colour(surface, "Surface colour");
         this.textColor = colour(text, "Text colour");
+        this.navigationColor = colour(navigation == null ? getNavigationColor() : navigation,
+                "Tab hover and active colour");
+    }
+
+    public void updateNavigationOrder(String order) {
+        this.navigationOrder = require(order, "Navigation order");
+    }
+
+    public void updateProfilePicture(String picture) {
+        if (picture == null || picture.isBlank()) {
+            profilePicture = null;
+            return;
+        }
+        String value = picture.trim();
+        if (value.length() > 1_500_000
+                || !value.matches("(?s)^data:image/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=\\r\\n]+$")) {
+            throw new IllegalArgumentException("Profile picture must be a PNG, JPEG or WebP image up to 1 MB");
+        }
+        profilePicture = value;
+    }
+
+    public void changePasswordHash(String passwordHash) {
+        this.passwordHash = require(passwordHash, "Password hash");
     }
 
     public static String normaliseUsername(String value) {
@@ -93,5 +127,10 @@ public class Account {
     public String getBackgroundColor() { return backgroundColor; }
     public String getSurfaceColor() { return surfaceColor; }
     public String getTextColor() { return textColor; }
+    public String getNavigationColor() { return navigationColor == null ? "#2a5745" : navigationColor; }
+    public String getNavigationOrder() { return navigationOrder == null
+            ? "dashboard,upload,subjects,assessments,plan,calendar,week,assistant,activity"
+            : navigationOrder; }
+    public String getProfilePicture() { return profilePicture; }
     public Instant getCreatedAt() { return createdAt; }
 }

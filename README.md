@@ -15,7 +15,9 @@ Study Leftovers is a personal academic workspace that turns subject-outline docu
 - editable monthly overview and detailed weekly calendar, including manual tasks and study sessions
 - spaced repetition that creates reviews 1, 3, 7, 14 and 30 days after completed study blocks
 - Gemini/OpenAI study-assistant chat grounded in the signed-in student's subjects, assessments and schedule
-- remembered username/password accounts with profile-scoped academic data, session history and theme colours
+- remembered username/password accounts with profile pictures, password management, profile-scoped academic data and session history
+- profile-saved theme colours (including active/hover navigation colour) and draggable navigation order
+- readable LaTeX equations in study-assistant answers through KaTeX
 - responsive, dependency-free frontend covering the end-to-end workflow
 
 ## Architecture

@@ -18,11 +18,16 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.NoSuchElementException;
-import java.util.UUID;
+import java.util.Set;
 
 @Service
 public class AccountApplicationService {
+    private static final Set<String> NAVIGATION_VIEWS = Set.of(
+            "dashboard", "upload", "subjects", "assessments", "plan",
+            "calendar", "week", "assistant", "activity");
     private final AccountRepository accounts;
     private final AccountSessionRepository sessions;
     private final BCryptPasswordEncoder passwords = new BCryptPasswordEncoder(10);
@@ -80,6 +85,7 @@ public class AccountApplicationService {
         ZoneId.of(request.timezone());
         Account account = requireAccount(authorization);
         account.updateProfile(request.displayName(), request.institution(), request.course(), request.studyGoal(), request.timezone());
+        if (request.profilePicture() != null) account.updateProfilePicture(request.profilePicture());
         return response(accounts.save(account));
     }
 
@@ -87,8 +93,32 @@ public class AccountApplicationService {
     public AccountResponse updateTheme(String authorization, ThemeUpdateRequest request) {
         Account account = requireAccount(authorization);
         account.updateTheme(request.primaryColor(), request.accentColor(), request.backgroundColor(),
-                request.surfaceColor(), request.textColor());
+                request.surfaceColor(), request.textColor(), request.navigationColor());
         return response(accounts.save(account));
+    }
+
+    @Transactional
+    public AccountResponse updateNavigation(String authorization, NavigationUpdateRequest request) {
+        LinkedHashSet<String> order = new LinkedHashSet<>(request.navigationOrder());
+        if (order.size() != NAVIGATION_VIEWS.size() || !order.equals(NAVIGATION_VIEWS)) {
+            throw new IllegalArgumentException("Navigation order must contain every tab exactly once");
+        }
+        Account account = requireAccount(authorization);
+        account.updateNavigationOrder(String.join(",", order));
+        return response(accounts.save(account));
+    }
+
+    @Transactional
+    public void changePassword(String authorization, PasswordChangeRequest request) {
+        validatePassword(request.newPassword());
+        String currentTokenHash = hash(bearer(authorization));
+        Account account = requireAccount(authorization);
+        if (!passwords.matches(request.currentPassword(), account.getPasswordHash())) {
+            throw new UnauthorizedException("Current password is incorrect");
+        }
+        account.changePasswordHash(passwords.encode(request.newPassword()));
+        accounts.save(account);
+        sessions.deleteByAccountIdAndTokenHashNot(account.getId(), currentTokenHash);
     }
 
     private SessionResponse createSession(Account account) {
@@ -140,7 +170,8 @@ public class AccountApplicationService {
         return new AccountResponse(account.getId(), account.getUsername(), account.getDisplayName(),
                 account.getInstitution(), account.getCourse(), account.getStudyGoal(), account.getTimezone(),
                 account.getPrimaryColor(), account.getAccentColor(), account.getBackgroundColor(),
-                account.getSurfaceColor(), account.getTextColor(), account.getCreatedAt());
+                account.getSurfaceColor(), account.getTextColor(), account.getNavigationColor(),
+                account.getProfilePicture(), List.of(account.getNavigationOrder().split(",")), account.getCreatedAt());
     }
 
     public static class UnauthorizedException extends RuntimeException {

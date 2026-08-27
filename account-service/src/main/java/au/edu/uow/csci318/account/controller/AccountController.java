@@ -48,4 +48,17 @@ public class AccountController {
                                  @Valid @RequestBody ThemeUpdateRequest request) {
         return service.updateTheme(authorization, request);
     }
+
+    @PatchMapping("/settings/navigation")
+    public AccountResponse navigation(@RequestHeader("Authorization") String authorization,
+                                      @Valid @RequestBody NavigationUpdateRequest request) {
+        return service.updateNavigation(authorization, request);
+    }
+
+    @PatchMapping("/profile/password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void password(@RequestHeader("Authorization") String authorization,
+                         @Valid @RequestBody PasswordChangeRequest request) {
+        service.changePassword(authorization, request);
+    }
 }

@@ -8,4 +8,5 @@ import java.util.UUID;
 
 public interface AccountSessionRepository extends JpaRepository<AccountSession, UUID> {
     Optional<AccountSession> findByTokenHash(String tokenHash);
+    void deleteByAccountIdAndTokenHashNot(UUID accountId, String tokenHash);
 }
