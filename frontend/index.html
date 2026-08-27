@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Study Leftovers</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css" integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ" crossorigin="anonymous">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js" integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/contrib/auto-render.min.js" integrity="sha384-bjyGPfbij8/NDKJhSGZNP/khQVgtHUE5exjm4Ydllo42FwIgYsdLO2lXGmRBf5Mz" crossorigin="anonymous"></script>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -40,34 +43,36 @@
   </section>
 
   <aside>
-    <div class="brand">
-      <span>SL</span>
-      <div>
-        <strong>Study Leftovers</strong>
-        <small>Academic planning, simplified</small>
+    <div class="sidebar-account">
+      <div class="account-summary">
+        <span id="account-avatar"><img id="account-avatar-image" alt="" hidden><span id="account-avatar-initials">SL</span></span>
+        <div><strong id="account-name">My workspace</strong><small id="account-username"></small></div>
+      </div>
+      <div class="account-shortcuts" aria-label="Account pages">
+        <button type="button" data-view="profile" aria-label="Profile" title="Profile"><span aria-hidden="true">◉</span></button>
+        <button type="button" data-view="settings" aria-label="Settings" title="Settings"><span aria-hidden="true">⚙</span></button>
       </div>
     </div>
-    <nav aria-label="Main navigation">
-      <button data-view="dashboard" class="active">Dashboard</button>
-      <button data-view="upload">Upload outline</button>
-      <button data-view="subjects">Subjects</button>
-      <button data-view="assessments">Assessments</button>
-      <button data-view="plan">Study plan</button>
-      <button data-view="calendar">Monthly calendar</button>
-      <button data-view="week">Weekly schedule</button>
-      <button data-view="assistant">Study assistant</button>
-      <button data-view="activity">Record activity</button>
-      <button data-view="profile">Profile</button>
-      <button data-view="settings">Settings</button>
+    <nav id="main-navigation" aria-label="Main navigation">
+      <button type="button" data-view="dashboard" class="active" draggable="true"><span class="nav-icon" aria-hidden="true">⌂</span><span class="nav-label">Dashboard</span><span class="drag-handle" aria-hidden="true">⋮⋮</span></button>
+      <button type="button" data-view="upload" draggable="true"><span class="nav-icon" aria-hidden="true">⇧</span><span class="nav-label">Upload outline</span><span class="drag-handle" aria-hidden="true">⋮⋮</span></button>
+      <button type="button" data-view="subjects" draggable="true"><span class="nav-icon" aria-hidden="true">▣</span><span class="nav-label">Subjects</span><span class="drag-handle" aria-hidden="true">⋮⋮</span></button>
+      <button type="button" data-view="assessments" draggable="true"><span class="nav-icon" aria-hidden="true">✓</span><span class="nav-label">Assessments</span><span class="drag-handle" aria-hidden="true">⋮⋮</span></button>
+      <button type="button" data-view="plan" draggable="true"><span class="nav-icon" aria-hidden="true">✦</span><span class="nav-label">Study plan</span><span class="drag-handle" aria-hidden="true">⋮⋮</span></button>
+      <button type="button" data-view="calendar" draggable="true"><span class="nav-icon" aria-hidden="true">▦</span><span class="nav-label">Monthly calendar</span><span class="drag-handle" aria-hidden="true">⋮⋮</span></button>
+      <button type="button" data-view="week" draggable="true"><span class="nav-icon" aria-hidden="true">☷</span><span class="nav-label">Weekly schedule</span><span class="drag-handle" aria-hidden="true">⋮⋮</span></button>
+      <button type="button" data-view="assistant" draggable="true"><span class="nav-icon" aria-hidden="true">✧</span><span class="nav-label">Study assistant</span><span class="drag-handle" aria-hidden="true">⋮⋮</span></button>
+      <button type="button" data-view="activity" draggable="true"><span class="nav-icon" aria-hidden="true">◷</span><span class="nav-label">Record activity</span><span class="drag-handle" aria-hidden="true">⋮⋮</span></button>
     </nav>
-    <div class="account-summary"><span id="account-avatar">SL</span><div><strong id="account-name">My workspace</strong><small id="account-username"></small></div></div>
-    <button id="logout-btn" class="logout-button" type="button">Sign out</button>
+    <div class="brand sidebar-brand">
+      <span>SL</span>
+      <div><strong>Study Leftovers</strong><small>Academic planning, simplified</small></div>
+    </div>
   </aside>
 
   <main>
     <header>
       <div>
-        <p class="eyebrow">CSCI318 PROTOTYPE</p>
         <h1 id="page-title">Good morning</h1>
       </div>
       <div class="header-actions">
@@ -185,11 +190,9 @@
           <p class="eyebrow">ASSESSMENT OVERVIEW</p>
           <h2>Upcoming assessments</h2>
         </div>
-        <select id="assessment-filter" aria-label="Filter assessments">
-          <option value="">All</option>
-          <option value="INCOMPLETE">Incomplete</option>
-          <option value="COMPLETED">Completed</option>
-        </select>
+        <div class="assessment-page-actions"><select id="assessment-filter" aria-label="Filter assessments">
+            <option value="">All</option><option value="INCOMPLETE">Incomplete</option><option value="COMPLETED">Completed</option>
+          </select><button id="new-assessment" class="primary" type="button">＋ Add assessment</button></div>
       </div>
       <div id="assessment-feedback" class="feedback" aria-live="polite"></div>
       <div id="assessment-list" class="list"></div>
@@ -289,6 +292,10 @@
       <div class="profile-grid">
         <form id="profile-form" class="panel profile-form">
           <h3>About you</h3>
+          <div class="profile-picture-editor">
+            <span class="profile-picture-preview"><img id="profile-picture-preview" alt="Profile picture preview" hidden><span id="profile-picture-initials">SL</span></span>
+            <div><strong>Profile picture</strong><small>PNG, JPEG or WebP · up to 1 MB</small><div class="profile-picture-actions"><label class="secondary" for="profile-picture-input">Choose image</label><input id="profile-picture-input" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp"><button id="remove-profile-picture" class="link danger" type="button">Remove</button></div></div>
+          </div>
           <label>Display name<input id="profile-name" required></label>
           <label>Institution<input id="profile-institution" placeholder="University of Wollongong"></label>
           <label>Course<input id="profile-course" placeholder="Bachelor of Computer Science"></label>
@@ -297,6 +304,14 @@
           <button class="primary">Save profile</button><div id="profile-feedback" class="feedback" aria-live="polite"></div>
         </form>
         <article class="panel"><div class="panel-head"><h3>Recent sessions</h3><button class="link" data-view="activity">Record one</button></div><div id="session-history" class="list empty">No study sessions recorded yet.</div></article>
+        <form id="password-form" class="panel profile-form security-card">
+          <h3>Password and session</h3>
+          <label>Current password<input id="current-password" type="password" autocomplete="current-password" required></label>
+          <label>New password<input id="new-password" type="password" autocomplete="new-password" minlength="8" required></label>
+          <label>Confirm new password<input id="confirm-password" type="password" autocomplete="new-password" minlength="8" required></label>
+          <div class="security-actions"><button class="primary">Change password</button><button id="logout-btn" class="secondary danger-button" type="button">Sign out</button></div>
+          <div id="password-feedback" class="feedback" aria-live="polite"></div>
+        </form>
       </div>
     </section>
 
@@ -305,12 +320,27 @@
       <p class="lede">These colours follow your profile whenever you sign in.</p>
       <form id="theme-form" class="panel theme-form">
         <div class="theme-presets"><button type="button" data-theme-preset="forest">Forest</button><button type="button" data-theme-preset="ocean">Ocean</button><button type="button" data-theme-preset="plum">Plum</button><button type="button" data-theme-preset="ember">Ember</button></div>
-        <div class="theme-controls"><label>Primary colour<input id="theme-primary" type="color"></label><label>Accent colour<input id="theme-accent" type="color"></label><label>Background<input id="theme-background" type="color"></label><label>Cards<input id="theme-surface" type="color"></label><label>Text<input id="theme-text" type="color"></label></div>
+        <div class="theme-controls"><label>Primary colour<input id="theme-primary" type="color"></label><label>Accent colour<input id="theme-accent" type="color"></label><label>Tab hover &amp; active<input id="theme-navigation" type="color"></label><label>Background<input id="theme-background" type="color"></label><label>Cards<input id="theme-surface" type="color"></label><label>Text<input id="theme-text" type="color"></label></div>
         <div class="theme-preview"><span>Preview</span><strong>Your workspace, your colours.</strong><button type="button" class="primary">Example button</button></div>
         <button class="primary">Save theme</button><div id="settings-feedback" class="feedback" aria-live="polite"></div>
       </form>
     </section>
   </main>
+
+  <dialog id="assessment-dialog" class="calendar-dialog">
+    <form id="assessment-form" method="dialog">
+      <div class="panel-head"><div><p class="eyebrow">ASSESSMENT</p><h2 id="assessment-dialog-title">Add assessment</h2></div><button id="close-assessment-dialog" class="icon-button" type="button" aria-label="Close">×</button></div>
+      <input id="assessment-id" type="hidden">
+      <label>Subject<select id="assessment-subject" required></select></label>
+      <div class="dialog-grid"><label>Title<input id="assessment-title" maxlength="255" required placeholder="e.g. Final report"></label><label>Type<input id="assessment-type" maxlength="80" placeholder="Report, exam, presentation…"></label></div>
+      <div class="dialog-grid"><label>Weight %<input id="assessment-weight" type="number" min="0" max="100" step="0.1"></label><label>Priority<select id="assessment-priority"><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select></label></div>
+      <div class="dialog-grid"><label>Due date<input id="assessment-due-date" type="date"></label><label>Due week<input id="assessment-due-week" type="number" min="1" max="52"></label></div>
+      <label>Estimated minutes<input id="assessment-minutes" type="number" min="0" max="100000"></label>
+      <label>Description<textarea id="assessment-description" rows="3" maxlength="2000" placeholder="Optional notes or requirements"></textarea></label>
+      <div id="assessment-dialog-feedback" class="feedback" aria-live="polite"></div>
+      <div class="dialog-actions dialog-actions-right"><span></span><button id="cancel-assessment-dialog" class="secondary" type="button">Cancel</button><button class="primary" value="default">Save assessment</button></div>
+    </form>
+  </dialog>
 
   <dialog id="calendar-dialog" class="calendar-dialog">
     <form id="calendar-form" method="dialog">

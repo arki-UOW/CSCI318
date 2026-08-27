@@ -79,22 +79,13 @@ public class AssessmentApplicationService {
     @Transactional
     public Response update(UUID ownerId, UUID id, UpdateRequest request) {
         Assessment assessment = find(ownerId, id);
-        String eventType = "AssessmentUpdated";
-        if (request.dueDate() != null || request.dueWeek() != null) {
-            assessment.changeDeadline(request.dueDate(), request.dueWeek());
-            eventType = "AssessmentDeadlineChanged";
-        }
-        if (request.weighting() != null) assessment.changeWeighting(request.weighting());
-        if (request.estimatedMinutes() != null) {
-            assessment.changeEstimatedWorkload(request.estimatedMinutes());
-            eventType = "AssessmentWorkloadChanged";
-        }
-        if (request.priority() != null) {
-            assessment.changePriority(request.priority());
-            eventType = "AssessmentPriorityChanged";
-        }
+        repo.findByOwnerIdAndSubjectIdAndTitleIgnoreCase(ownerId, assessment.getSubjectId(), request.title())
+                .filter(existing -> !existing.getId().equals(id))
+                .ifPresent(existing -> { throw new IllegalArgumentException("Duplicate assessment: " + request.title()); });
+        assessment.updateDetails(request.title(), request.type(), request.weighting(), request.dueDate(),
+                request.dueWeek(), request.description(), request.estimatedMinutes(), request.priority());
         repo.save(assessment);
-        publish(eventType, assessment);
+        publish("AssessmentUpdated", assessment);
         return response(assessment);
     }
 

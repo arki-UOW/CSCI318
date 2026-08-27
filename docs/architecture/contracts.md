@@ -7,8 +7,10 @@
 | Account | `POST /api/auth/register` | Create an account and a 30-day remembered session |
 | Account | `POST /api/auth/login` | Verify the password and start a remembered session |
 | Account | `GET /api/auth/session` | Restore the signed-in profile from a bearer token |
-| Account | `PATCH /api/profile` | Save personal academic information |
-| Account | `PATCH /api/settings/theme` | Save the profile's five theme colours |
+| Account | `PATCH /api/profile` | Save personal academic information and an optional validated profile image |
+| Account | `PATCH /api/profile/password` | Verify the current password, replace it and revoke other sessions |
+| Account | `PATCH /api/settings/theme` | Save the profile's theme and navigation-state colours |
+| Account | `PATCH /api/settings/navigation` | Save a complete, validated order for the draggable main tabs |
 | Subject | `POST /api/subject-outlines` | Upload and extract one PDF/DOCX/JPG/JPEG; the web client queues up to 10 and submits them sequentially |
 | Subject | `GET /api/subject-outlines/{id}` | Retrieve review state |
 | Subject | `POST /api/subject-outlines/{id}/confirm` | Confirm corrected extraction |
@@ -17,7 +19,8 @@
 | Subject | `GET /api/ai/status` | Report the AI configuration visible to the running service |
 | Assessment | `POST /api/assessments/import` | Confirmed import contract |
 | Assessment | `GET /api/assessments?status=&subjectId=` | Ordered assessment overview |
-| Assessment | `PATCH /api/assessments/{id}` | Deadline/workload/priority changes |
+| Assessment | `POST /api/assessments` | Manually create an assessment for an owned subject |
+| Assessment | `PATCH /api/assessments/{id}` | Edit title, type, deadline, workload, description and priority |
 | Assessment | `POST /api/assessments/{id}/complete` | Mark complete |
 | Assessment | `DELETE /api/assessments/{id}` | Remove an incorrect assessment |
 | Activity | `POST /api/study-sessions` | Record activity |

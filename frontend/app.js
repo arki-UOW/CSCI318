@@ -27,8 +27,12 @@ const state = {
   calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   calendarWeek: null,
   assistantHistory: [],
+  profilePictureDraft: null,
   currentView: 'dashboard'
 };
+
+const NAVIGATION_VIEWS = ['dashboard', 'upload', 'subjects', 'assessments', 'plan',
+  'calendar', 'week', 'assistant', 'activity'];
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -40,7 +44,7 @@ const num = value => value === '' ? null : Number(value);
 function show(view) {
   state.currentView = view;
   $$('.view').forEach(element => element.classList.toggle('active', element.id === view));
-  $$('nav button').forEach(element => element.classList.toggle('active', element.dataset.view === view));
+  $$('aside [data-view]').forEach(element => element.classList.toggle('active', element.dataset.view === view));
   $('#page-title').textContent = {
     dashboard: 'Good morning',
     upload: 'Add a subject',
@@ -60,6 +64,62 @@ function show(view) {
 
 $$('[data-view]').forEach(button => {
   button.addEventListener('click', () => show(button.dataset.view));
+});
+
+function validNavigationOrder(order) {
+  return Array.isArray(order) && order.length === NAVIGATION_VIEWS.length
+    && new Set(order).size === NAVIGATION_VIEWS.length
+    && order.every(view => NAVIGATION_VIEWS.includes(view));
+}
+
+function applyNavigationOrder(order) {
+  const navigation = $('#main-navigation');
+  const safeOrder = validNavigationOrder(order) ? order : NAVIGATION_VIEWS;
+  safeOrder.forEach(view => {
+    const button = navigation.querySelector(`[data-view="${view}"]`);
+    if (button) navigation.append(button);
+  });
+}
+
+let draggedNavigationButton = null;
+let navigationOrderBeforeDrag = null;
+$('#main-navigation').addEventListener('dragstart', event => {
+  const button = event.target.closest('[data-view][draggable="true"]');
+  if (!button) return;
+  draggedNavigationButton = button;
+  navigationOrderBeforeDrag = $$('#main-navigation [data-view]').map(item => item.dataset.view);
+  button.classList.add('dragging');
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', button.dataset.view);
+});
+$('#main-navigation').addEventListener('dragover', event => {
+  if (!draggedNavigationButton) return;
+  event.preventDefault();
+  const target = event.target.closest('[data-view][draggable="true"]');
+  if (!target || target === draggedNavigationButton) return;
+  const after = event.clientY > target.getBoundingClientRect().top + target.offsetHeight / 2;
+  target.parentElement.insertBefore(draggedNavigationButton, after ? target.nextSibling : target);
+});
+$('#main-navigation').addEventListener('drop', async event => {
+  if (!draggedNavigationButton) return;
+  event.preventDefault();
+  const order = $$('#main-navigation [data-view]').map(item => item.dataset.view);
+  const previousOrder = navigationOrderBeforeDrag;
+  try {
+    state.account = await request(`${API.accounts}/settings/navigation`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ navigationOrder: order })
+    });
+    $('#app-announcer').textContent = 'Navigation order saved.';
+  } catch (error) {
+    applyNavigationOrder(previousOrder);
+    feedback(state.currentView === 'dashboard' ? 'dashboard-feedback' : 'settings-feedback', error.message, 'error');
+  }
+});
+$('#main-navigation').addEventListener('dragend', () => {
+  draggedNavigationButton?.classList.remove('dragging');
+  draggedNavigationButton = null;
+  navigationOrderBeforeDrag = null;
 });
 
 function feedback(targetId, message, type = 'info') {
@@ -142,6 +202,7 @@ function applyTheme(account) {
   root.style.setProperty('--page-bg', account.backgroundColor);
   root.style.setProperty('--surface', account.surfaceColor);
   root.style.setProperty('--text', account.textColor);
+  root.style.setProperty('--nav-active', account.navigationColor || '#2a5745');
   root.style.color = account.textColor;
   root.style.background = account.backgroundColor;
 }
@@ -151,7 +212,11 @@ function populateAccount() {
   if (!account) return;
   $('#account-name').textContent = account.displayName || account.username;
   $('#account-username').textContent = `@${account.username}`;
-  $('#account-avatar').textContent = (account.displayName || account.username).slice(0, 2).toUpperCase();
+  const initials = (account.displayName || account.username).slice(0, 2).toUpperCase();
+  $('#account-avatar-initials').textContent = initials;
+  $('#profile-picture-initials').textContent = initials;
+  state.profilePictureDraft = account.profilePicture || null;
+  renderProfilePictures(state.profilePictureDraft);
   $('#profile-name').value = account.displayName || '';
   $('#profile-institution').value = account.institution || '';
   $('#profile-course').value = account.course || '';
@@ -162,7 +227,21 @@ function populateAccount() {
   $('#theme-background').value = account.backgroundColor;
   $('#theme-surface').value = account.surfaceColor;
   $('#theme-text').value = account.textColor;
+  $('#theme-navigation').value = account.navigationColor || '#2a5745';
+  applyNavigationOrder(account.navigationOrder);
   applyTheme(account);
+}
+
+function renderProfilePictures(picture) {
+  const pairs = [[$('#account-avatar-image'), $('#account-avatar-initials')],
+    [$('#profile-picture-preview'), $('#profile-picture-initials')]];
+  pairs.forEach(([image, fallback]) => {
+    image.hidden = !picture;
+    fallback.hidden = Boolean(picture);
+    if (picture) image.src = picture;
+    else image.removeAttribute('src');
+  });
+  $('#remove-profile-picture').hidden = !picture;
 }
 
 async function establishSession(session) {
@@ -241,6 +320,7 @@ function assessmentRow(assessment) {
     <div class="body"><strong>${esc(assessment.title)}</strong><br><small>${esc(subjectName(assessment.subjectId))} · ${assessment.weighting ?? '—'}% · ${assessment.estimatedMinutes ?? '—'} min</small></div>
     <span class="pill">${esc(assessment.status)}</span>
     <div class="row-actions">
+      <button class="link edit-assessment" data-id="${esc(assessment.id)}">Edit</button>
       ${assessment.status === 'INCOMPLETE' ? `<button class="link complete" data-id="${esc(assessment.id)}">Complete</button>` : ''}
       <button class="link danger remove-saved-assessment" data-id="${esc(assessment.id)}" aria-label="Remove ${esc(assessment.title)}">Remove</button>
     </div>
@@ -304,6 +384,8 @@ function render() {
     + state.subjects.map(subject => `<option value="${esc(subject.id)}">${esc(subject.code)} — ${esc(subject.name)}</option>`).join('');
   $('#calendar-subject').innerHTML = '<option value="">No subject</option>'
     + state.subjects.map(subject => `<option value="${esc(subject.id)}">${esc(subject.code)} — ${esc(subject.name)}</option>`).join('');
+  $('#assessment-subject').innerHTML = '<option value="">Choose subject</option>'
+    + state.subjects.map(subject => `<option value="${esc(subject.id)}">${esc(subject.code)} — ${esc(subject.name)}</option>`).join('');
 
   $('#assistant-subject-count').textContent = state.subjects.length;
   $('#assistant-assessment-count').textContent = state.assessments.filter(item => item.status === 'INCOMPLETE').length;
@@ -325,6 +407,7 @@ function render() {
   renderPlan('#plan-list');
   bindComplete();
   bindDeleteAssessments();
+  bindEditAssessments();
   bindCalendarItems();
 }
 
@@ -354,6 +437,7 @@ function renderAssessments() {
     : 'No assessments match this view.';
   bindComplete();
   bindDeleteAssessments();
+  bindEditAssessments();
 }
 
 function renderPlan(target) {
@@ -400,6 +484,64 @@ function bindDeleteAssessments() {
     });
   });
 }
+
+function bindEditAssessments() {
+  $$('.edit-assessment:not([data-bound])').forEach(button => {
+    button.dataset.bound = 'true';
+    button.addEventListener('click', () => openAssessmentDialog(
+      state.assessments.find(assessment => assessment.id === button.dataset.id)));
+  });
+}
+
+function openAssessmentDialog(assessment = null) {
+  if (!assessment && !state.subjects.length) {
+    feedback('assessment-feedback', 'Add a subject before creating an assessment.', 'error');
+    return;
+  }
+  $('#assessment-id').value = assessment?.id || '';
+  $('#assessment-subject').value = assessment?.subjectId || state.subjects[0]?.id || '';
+  $('#assessment-subject').disabled = Boolean(assessment);
+  $('#assessment-title').value = assessment?.title || '';
+  $('#assessment-type').value = assessment?.type || '';
+  $('#assessment-weight').value = assessment?.weighting ?? '';
+  $('#assessment-priority').value = assessment?.priority || 'MEDIUM';
+  $('#assessment-due-date').value = assessment?.dueDate || '';
+  $('#assessment-due-week').value = assessment?.dueWeek ?? '';
+  $('#assessment-minutes').value = assessment?.estimatedMinutes ?? '';
+  $('#assessment-description').value = assessment?.description || '';
+  $('#assessment-dialog-title').textContent = assessment ? 'Edit assessment' : 'Add assessment';
+  feedback('assessment-dialog-feedback', '');
+  $('#assessment-dialog').showModal();
+  $('#assessment-title').focus();
+}
+
+$('#new-assessment').addEventListener('click', () => openAssessmentDialog());
+$('#close-assessment-dialog').addEventListener('click', () => $('#assessment-dialog').close());
+$('#cancel-assessment-dialog').addEventListener('click', () => $('#assessment-dialog').close());
+$('#assessment-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = event.submitter;
+  const id = $('#assessment-id').value;
+  const payload = {
+    title: $('#assessment-title').value.trim(), type: $('#assessment-type').value.trim() || null,
+    weighting: num($('#assessment-weight').value), priority: $('#assessment-priority').value,
+    dueDate: $('#assessment-due-date').value || null, dueWeek: num($('#assessment-due-week').value),
+    estimatedMinutes: num($('#assessment-minutes').value),
+    description: $('#assessment-description').value.trim() || null
+  };
+  if (!id) payload.subjectId = $('#assessment-subject').value;
+  setBusy(button, true, 'Saving');
+  try {
+    await request(`${API.assessments}/assessments${id ? `/${id}` : ''}`, {
+      method: id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    });
+    $('#assessment-dialog').close();
+    await load();
+    const target = state.currentView === 'dashboard' ? 'dashboard-feedback' : 'assessment-feedback';
+    feedback(target, id ? 'Assessment updated.' : 'Assessment added.', 'success');
+  } catch (error) { feedback('assessment-dialog-feedback', error.message, 'error'); }
+  finally { setBusy(button, false); }
+});
 
 $('#assessment-filter').addEventListener('change', renderAssessments);
 
@@ -1061,18 +1203,20 @@ $('#calendar-form').addEventListener('submit', async event => {
 
 $('#delete-calendar-entry').addEventListener('click', async event => {
   if (!window.confirm('Delete this calendar item?')) return;
-  setBusy(event.currentTarget, true, 'Deleting');
+  const button = event.currentTarget;
+  setBusy(button, true, 'Deleting');
   try {
     await request(`${API.planning}/calendar/${$('#calendar-id').value}`, { method: 'DELETE' });
     $('#calendar-dialog').close();
     await loadCalendar(false);
     feedback(state.currentView === 'week' ? 'week-feedback' : 'calendar-feedback', 'Calendar item deleted.', 'success');
   } catch (error) { feedback('calendar-dialog-feedback', error.message, 'error'); }
-  finally { setBusy(event.currentTarget, false); }
+  finally { setBusy(button, false); }
 });
 
 $('#complete-calendar-entry').addEventListener('click', async event => {
-  setBusy(event.currentTarget, true, 'Completing');
+  const button = event.currentTarget;
+  setBusy(button, true, 'Completing');
   try {
     const result = await request(`${API.planning}/calendar/${$('#calendar-id').value}/complete`, { method: 'POST' });
     $('#calendar-dialog').close();
@@ -1080,7 +1224,7 @@ $('#complete-calendar-entry').addEventListener('click', async event => {
     const message = result.nextReview ? `Completed. Your next spaced review is ${formatDateTime(result.nextReview.startAt)}.` : 'Calendar item completed.';
     feedback(state.currentView === 'week' ? 'week-feedback' : 'calendar-feedback', message, 'success');
   } catch (error) { feedback('calendar-dialog-feedback', error.message, 'error'); }
-  finally { setBusy(event.currentTarget, false); }
+  finally { setBusy(button, false); }
 });
 
 function appendStudyChat(role, content) {
@@ -1089,17 +1233,31 @@ function appendStudyChat(role, content) {
   bubble.className = `chat-bubble ${role}`;
   bubble.textContent = content;
   $('#study-chat-messages').append(bubble);
+  renderAssistantMath(bubble);
   bubble.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderAssistantMath(element) {
+  if (typeof window.renderMathInElement !== 'function') return;
+  window.renderMathInElement(element, {
+    delimiters: [
+      { left: '$$', right: '$$', display: true }, { left: '\\[', right: '\\]', display: true },
+      { left: '\\(', right: '\\)', display: false }, { left: '$', right: '$', display: false }
+    ],
+    throwOnError: false,
+    strict: false
+  });
 }
 
 $('#study-chat-form').addEventListener('submit', async event => {
   event.preventDefault();
+  const button = event.submitter;
   const input = $('#study-chat-message');
   const message = input.value.trim();
   const history = state.assistantHistory.slice(-12);
   input.value = '';
   appendStudyChat('user', message);
-  setBusy(event.submitter, true, 'Thinking');
+  setBusy(button, true, 'Thinking');
   feedback('assistant-feedback', 'Your study assistant is considering your subjects and schedule…', 'info');
   try {
     const answer = await request(`${API.planning}/planning/assistant/chat`, {
@@ -1108,13 +1266,38 @@ $('#study-chat-form').addEventListener('submit', async event => {
     appendStudyChat('assistant', answer.reply);
     feedback('assistant-feedback', `Answered with ${answer.provider}.`, 'success');
   } catch (error) { appendStudyChat('assistant', error.message); feedback('assistant-feedback', error.message, 'error'); }
-  finally { setBusy(event.submitter, false); }
+  finally { setBusy(button, false); }
 });
 
 $$('[data-study-prompt]').forEach(button => button.addEventListener('click', () => {
   $('#study-chat-message').value = button.dataset.studyPrompt;
   $('#study-chat-message').focus();
 }));
+
+$('#profile-picture-input').addEventListener('change', event => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 1024 * 1024) {
+    event.target.value = '';
+    feedback('profile-feedback', 'Choose a PNG, JPEG or WebP image no larger than 1 MB.', 'error');
+    return;
+  }
+  const reader = new FileReader();
+  reader.addEventListener('load', () => {
+    state.profilePictureDraft = String(reader.result);
+    renderProfilePictures(state.profilePictureDraft);
+    feedback('profile-feedback', 'Picture ready. Save your profile to keep it.', 'info');
+  });
+  reader.addEventListener('error', () => feedback('profile-feedback', 'That image could not be read.', 'error'));
+  reader.readAsDataURL(file);
+});
+
+$('#remove-profile-picture').addEventListener('click', () => {
+  state.profilePictureDraft = '';
+  $('#profile-picture-input').value = '';
+  renderProfilePictures(null);
+  feedback('profile-feedback', 'Picture removed. Save your profile to confirm.', 'info');
+});
 
 $('#profile-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -1123,30 +1306,53 @@ $('#profile-form').addEventListener('submit', async event => {
   try {
     state.account = await request(`${API.accounts}/profile`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ displayName: $('#profile-name').value.trim(), institution: $('#profile-institution').value.trim(),
-        course: $('#profile-course').value.trim(), studyGoal: $('#profile-goal').value.trim(), timezone: $('#profile-timezone').value.trim() }) });
+        course: $('#profile-course').value.trim(), studyGoal: $('#profile-goal').value.trim(),
+        timezone: $('#profile-timezone').value.trim(), profilePicture: state.profilePictureDraft ?? null }) });
     populateAccount();
     feedback('profile-feedback', 'Profile saved.', 'success');
   } catch (error) { feedback('profile-feedback', error.message, 'error'); }
   finally { setBusy(button, false); }
 });
 
+$('#password-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = event.submitter;
+  const next = $('#new-password').value;
+  if (next !== $('#confirm-password').value) {
+    feedback('password-feedback', 'The new passwords do not match.', 'error');
+    return;
+  }
+  setBusy(button, true, 'Changing');
+  try {
+    await request(`${API.accounts}/profile/password`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword: $('#current-password').value, newPassword: next })
+    });
+    form.reset();
+    feedback('password-feedback', 'Password changed. Other remembered sessions were signed out.', 'success');
+  } catch (error) { feedback('password-feedback', error.message, 'error'); }
+  finally { setBusy(button, false); }
+});
+
 const themePresets = {
-  forest: ['#245d45', '#d69b38', '#f5f7f5', '#ffffff', '#17201d'],
-  ocean: ['#175c70', '#e09c46', '#f1f7f9', '#ffffff', '#13242b'],
-  plum: ['#694263', '#d6a34a', '#faf5f9', '#ffffff', '#291d27'],
-  ember: ['#8a3f2d', '#e0a23c', '#fbf6f2', '#ffffff', '#2b1d19']
+  forest: ['#245d45', '#d69b38', '#2a5745', '#f5f7f5', '#ffffff', '#17201d'],
+  ocean: ['#175c70', '#e09c46', '#24758a', '#f1f7f9', '#ffffff', '#13242b'],
+  plum: ['#694263', '#d6a34a', '#815777', '#faf5f9', '#ffffff', '#291d27'],
+  ember: ['#8a3f2d', '#e0a23c', '#a5523c', '#fbf6f2', '#ffffff', '#2b1d19']
 };
 
 function previewTheme() {
   applyTheme({ primaryColor: $('#theme-primary').value, accentColor: $('#theme-accent').value,
     backgroundColor: $('#theme-background').value, surfaceColor: $('#theme-surface').value,
-    textColor: $('#theme-text').value });
+    textColor: $('#theme-text').value, navigationColor: $('#theme-navigation').value });
 }
 
 $$('[data-theme-preset]').forEach(button => button.addEventListener('click', () => {
-  const [primary, accent, background, surface, text] = themePresets[button.dataset.themePreset];
+  const [primary, accent, navigation, background, surface, text] = themePresets[button.dataset.themePreset];
   $('#theme-primary').value = primary; $('#theme-accent').value = accent;
-  $('#theme-background').value = background; $('#theme-surface').value = surface; $('#theme-text').value = text;
+  $('#theme-navigation').value = navigation; $('#theme-background').value = background;
+  $('#theme-surface').value = surface; $('#theme-text').value = text;
   previewTheme();
 }));
 $$('#theme-form input[type="color"]').forEach(input => input.addEventListener('input', previewTheme));
@@ -1159,7 +1365,7 @@ $('#theme-form').addEventListener('submit', async event => {
     state.account = await request(`${API.accounts}/settings/theme`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ primaryColor: $('#theme-primary').value, accentColor: $('#theme-accent').value,
         backgroundColor: $('#theme-background').value, surfaceColor: $('#theme-surface').value,
-        textColor: $('#theme-text').value }) });
+        textColor: $('#theme-text').value, navigationColor: $('#theme-navigation').value }) });
     populateAccount(); feedback('settings-feedback', 'Theme saved to your profile.', 'success');
   } catch (error) { applyTheme(state.account); feedback('settings-feedback', error.message, 'error'); }
   finally { setBusy(button, false); }

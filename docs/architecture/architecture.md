@@ -28,7 +28,7 @@ Controllers validate transport concerns. Application services coordinate use cas
 | Activity | `study_sessions` | Subject existence through REST |
 | Planning | `study_plans`, `calendar_entries`, Kafka state stores | Assessment/subject/activity REST plus events |
 
-H2 file names are unique. There are no cross-service JPA relationships. Academic rows carry the validated account ID so two users can never retrieve or mutate one another's subjects, assessments, sessions, plans or calendar items. Profile and theme settings live only in Account Service.
+H2 file names are unique. There are no cross-service JPA relationships. Academic rows carry the validated account ID so two users can never retrieve or mutate one another's subjects, assessments, sessions, plans or calendar items. Profile images, password hashes, navigation order and theme settings live only in Account Service.
 
 ## Calendar and review scheduling
 
