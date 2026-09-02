@@ -46,7 +46,7 @@ public class Account {
         this.surfaceColor = "#ffffff";
         this.textColor = "#17201d";
         this.navigationColor = "#2a5745";
-        this.navigationOrder = "dashboard,upload,subjects,assessments,plan,calendar,week,assistant,activity";
+        this.navigationOrder = "dashboard,subjects,assessments,plan,calendar,activity";
         this.createdAt = Instant.now();
     }
 
@@ -129,7 +129,7 @@ public class Account {
     public String getTextColor() { return textColor; }
     public String getNavigationColor() { return navigationColor == null ? "#2a5745" : navigationColor; }
     public String getNavigationOrder() { return navigationOrder == null
-            ? "dashboard,upload,subjects,assessments,plan,calendar,week,assistant,activity"
+            ? "dashboard,subjects,assessments,plan,calendar,activity"
             : navigationOrder; }
     public String getProfilePicture() { return profilePicture; }
     public Instant getCreatedAt() { return createdAt; }

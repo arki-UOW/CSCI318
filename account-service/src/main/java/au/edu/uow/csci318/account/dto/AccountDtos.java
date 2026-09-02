@@ -21,7 +21,7 @@ public final class AccountDtos {
     public record ThemeUpdateRequest(@NotBlank String primaryColor, @NotBlank String accentColor,
                                      @NotBlank String backgroundColor, @NotBlank String surfaceColor,
                                      @NotBlank String textColor, String navigationColor) {}
-    public record NavigationUpdateRequest(@NotEmpty @Size(max = 9) List<@NotBlank String> navigationOrder) {}
+    public record NavigationUpdateRequest(@NotEmpty @Size(max = 6) List<@NotBlank String> navigationOrder) {}
     public record PasswordChangeRequest(@NotBlank String currentPassword,
                                         @NotBlank @Size(min = 8, max = 72) String newPassword) {}
     public record AccountResponse(UUID id, String username, String displayName, String institution,

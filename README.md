@@ -9,9 +9,9 @@ Study Leftovers is a personal academic workspace that turns subject-outline docu
 - manual subject and assessment entry when no document is available
 - five independently persisted Spring Boot services with clear data ownership
 - assessment and study-session domain events through Spring Cloud Stream and Kafka
-- live REST-backed workload, study progress, “This Week,” assessment overview, plan generation and regeneration
+- live REST-backed workload, study progress, assessment overview, plan generation and regeneration
 - conversational availability capture for time slots such as “Monday 6–8pm”
-- deterministic validation before any AI-produced plan is stored
+- deterministic deadline planning that repeats weekly availability, uses estimated minutes and spaces reviews through each due date
 - editable monthly overview and detailed weekly calendar, including manual tasks and study sessions
 - spaced repetition that creates reviews 1, 3, 7, 14 and 30 days after completed study blocks
 - Gemini/OpenAI study-assistant chat grounded in the signed-in student's subjects, assessments and schedule
@@ -35,11 +35,14 @@ Each service has its own file-backed H2 database. REST handles commands and imme
 
 ## Quick start
 
-Requirements: Docker Desktop with Compose. A Gemini key is recommended but optional.
+Requirements: Docker Desktop. A Gemini key is recommended but optional.
+
+On Windows, double-click **`Start-Study-Leftovers.cmd`**. The launcher creates the private `.env` file when needed, starts the entire application, and opens the website. Double-click **`Stop-Study-Leftovers.cmd`** when you want to stop it; account and study data remain saved.
+
+The command-line equivalent is:
 
 ```powershell
-Copy-Item .env.example .env
-docker compose up -d --build --force-recreate
+.\scripts\run-all.ps1
 ```
 
 Open <http://localhost:3000>. Create an account on the welcome screen; its login remains valid for 30 days unless you sign out. Kafka and all five services start together. On a first start, allow roughly two minutes for images, Maven dependencies and Kafka initialisation.
@@ -100,8 +103,8 @@ Serve `frontend/` with any static server. The UI expects the documented localhos
 1. Create an account or sign back in to restore your profile, data and theme.
 2. Upload or drop up to 10 PDF, DOCX, JPG or JPEG files together, or choose **Enter manually**.
 3. Review and confirm each queued subject; subjects are stored by Subject Service and assessments by Assessment Service.
-4. Tell the planning assistant your time slots and generate a seven-day plan.
-5. Open the weekly schedule to edit generated blocks, or add your own tasks and sessions.
+4. Tell the planning assistant your weekly time slots and generate a spaced plan through every assessment due date.
+5. Open Schedule and switch between the monthly overview and weekly detail to edit generated blocks or add your own tasks and sessions.
 6. Mark a spaced-repetition block complete and check the next review in the monthly overview.
 7. Ask the Study Assistant for explanations or help breaking down the nearest assessment.
 

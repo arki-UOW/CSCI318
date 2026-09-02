@@ -31,7 +31,7 @@ class AvailabilityAssistant {
         try {
             String prompt = """
                     You are a concise study-planning availability assistant. Convert the user's natural-language
-                    availability into a complete updated seven-day schedule. Return ONLY one JSON object with:
+                    availability into a complete updated weekly schedule. Return ONLY one JSON object with:
                     reply, days, readyToPlan.
 
                     days is an array containing objects with date and slots. Each slot has start and end in 24-hour

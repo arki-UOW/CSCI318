@@ -26,8 +26,7 @@ import java.util.Set;
 @Service
 public class AccountApplicationService {
     private static final Set<String> NAVIGATION_VIEWS = Set.of(
-            "dashboard", "upload", "subjects", "assessments", "plan",
-            "calendar", "week", "assistant", "activity");
+            "dashboard", "subjects", "assessments", "plan", "calendar", "activity");
     private final AccountRepository accounts;
     private final AccountSessionRepository sessions;
     private final BCryptPasswordEncoder passwords = new BCryptPasswordEncoder(10);
@@ -101,7 +100,7 @@ public class AccountApplicationService {
     public AccountResponse updateNavigation(String authorization, NavigationUpdateRequest request) {
         LinkedHashSet<String> order = new LinkedHashSet<>(request.navigationOrder());
         if (order.size() != NAVIGATION_VIEWS.size() || !order.equals(NAVIGATION_VIEWS)) {
-            throw new IllegalArgumentException("Navigation order must contain every tab exactly once");
+            throw new IllegalArgumentException("Navigation order must contain every visible tab exactly once");
         }
         Account account = requireAccount(authorization);
         account.updateNavigationOrder(String.join(",", order));

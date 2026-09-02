@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Study Leftovers</title>
+  <link rel="icon" type="image/png" href="assets/study-leftovers-logo.png">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css" integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ" crossorigin="anonymous">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js" integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3" crossorigin="anonymous"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/contrib/auto-render.min.js" integrity="sha384-bjyGPfbij8/NDKJhSGZNP/khQVgtHUE5exjm4Ydllo42FwIgYsdLO2lXGmRBf5Mz" crossorigin="anonymous"></script>
@@ -12,7 +13,7 @@
 <body>
   <section id="auth-shell" class="auth-shell" aria-labelledby="auth-title">
     <div class="auth-showcase">
-      <div class="brand auth-brand"><span>SL</span><div><strong>Study Leftovers</strong><small>One calm place for your semester</small></div></div>
+      <div class="brand auth-brand"><img src="assets/study-leftovers-logo.png" alt=""><div><strong>Study Leftovers</strong><small>One calm place for your semester</small></div></div>
       <div>
         <p class="eyebrow">YOUR STUDY WORKSPACE</p>
         <h1 id="auth-title">Plan less. Learn more.</h1>
@@ -44,10 +45,10 @@
 
   <aside>
     <div class="sidebar-account">
-      <div class="account-summary">
+      <button class="account-summary" type="button" data-view="profile" aria-label="Open your profile">
         <span id="account-avatar"><img id="account-avatar-image" alt="" hidden><span id="account-avatar-initials">SL</span></span>
         <div><strong id="account-name">My workspace</strong><small id="account-username"></small></div>
-      </div>
+      </button>
       <div class="account-shortcuts" aria-label="Account pages">
         <button type="button" data-view="profile" aria-label="Profile" title="Profile"><span aria-hidden="true">◉</span></button>
         <button type="button" data-view="settings" aria-label="Settings" title="Settings"><span aria-hidden="true">⚙</span></button>
@@ -55,43 +56,68 @@
     </div>
     <nav id="main-navigation" aria-label="Main navigation">
       <button type="button" data-view="dashboard" class="active" draggable="true"><span class="nav-icon" aria-hidden="true">⌂</span><span class="nav-label">Dashboard</span><span class="drag-handle" aria-hidden="true">⋮⋮</span></button>
-      <button type="button" data-view="upload" draggable="true"><span class="nav-icon" aria-hidden="true">⇧</span><span class="nav-label">Upload outline</span><span class="drag-handle" aria-hidden="true">⋮⋮</span></button>
       <button type="button" data-view="subjects" draggable="true"><span class="nav-icon" aria-hidden="true">▣</span><span class="nav-label">Subjects</span><span class="drag-handle" aria-hidden="true">⋮⋮</span></button>
       <button type="button" data-view="assessments" draggable="true"><span class="nav-icon" aria-hidden="true">✓</span><span class="nav-label">Assessments</span><span class="drag-handle" aria-hidden="true">⋮⋮</span></button>
       <button type="button" data-view="plan" draggable="true"><span class="nav-icon" aria-hidden="true">✦</span><span class="nav-label">Study plan</span><span class="drag-handle" aria-hidden="true">⋮⋮</span></button>
-      <button type="button" data-view="calendar" draggable="true"><span class="nav-icon" aria-hidden="true">▦</span><span class="nav-label">Monthly calendar</span><span class="drag-handle" aria-hidden="true">⋮⋮</span></button>
-      <button type="button" data-view="week" draggable="true"><span class="nav-icon" aria-hidden="true">☷</span><span class="nav-label">Weekly schedule</span><span class="drag-handle" aria-hidden="true">⋮⋮</span></button>
-      <button type="button" data-view="assistant" draggable="true"><span class="nav-icon" aria-hidden="true">✧</span><span class="nav-label">Study assistant</span><span class="drag-handle" aria-hidden="true">⋮⋮</span></button>
+      <button type="button" data-view="calendar" draggable="true"><span class="nav-icon" aria-hidden="true">▦</span><span class="nav-label">Schedule</span><span class="drag-handle" aria-hidden="true">⋮⋮</span></button>
       <button type="button" data-view="activity" draggable="true"><span class="nav-icon" aria-hidden="true">◷</span><span class="nav-label">Record activity</span><span class="drag-handle" aria-hidden="true">⋮⋮</span></button>
     </nav>
-    <div class="brand sidebar-brand">
-      <span>SL</span>
-      <div><strong>Study Leftovers</strong><small>Academic planning, simplified</small></div>
-    </div>
+    <a class="brand sidebar-brand" href="about.html" target="_blank" rel="noopener" aria-label="About Study Leftovers and its contributors">
+      <img src="assets/study-leftovers-logo.png" alt="">
+      <div><strong>Study Leftovers</strong><small>Team &amp; acknowledgements ↗</small></div>
+    </a>
   </aside>
 
   <main>
     <header>
       <div>
-        <h1 id="page-title">Good morning</h1>
+        <h1 id="page-title">Welcome</h1>
+        <p id="live-time" class="live-time" aria-live="off"></p>
       </div>
       <div class="header-actions">
         <div id="system-status" class="system-status" aria-live="polite"></div>
-        <button class="primary" data-view="upload">＋ Add subject</button>
       </div>
     </header>
     <div id="app-announcer" class="sr-only" aria-live="assertive"></div>
 
     <section id="dashboard" class="view active">
       <div id="dashboard-feedback" class="feedback" aria-live="polite"></div>
-      <div class="hero">
+      <div class="hero dashboard-welcome">
         <div>
-          <p class="eyebrow">THIS WEEK</p>
-          <h2>Know what matters next.</h2>
-          <p>Your deadlines, study progress, and practical next actions in one place.</p>
+          <p id="live-date" class="eyebrow">YOUR STUDY WORKSPACE</p>
+          <h2>Welcome to Study Leftovers</h2>
+          <p>Upload your subject outlines and we’ll build your semester automatically.</p>
         </div>
         <div id="load-badge" class="load low">LOW WORKLOAD</div>
       </div>
+      <section id="upload" class="dashboard-upload panel" aria-labelledby="upload-heading">
+        <div class="upload-intro">
+          <div><p class="eyebrow">BUILD YOUR SEMESTER</p><h2 id="upload-heading">Add subjects</h2><p>Import subject outlines or enter a subject yourself. You always review extracted information before it is saved.</p></div>
+          <div class="segmented" role="tablist" aria-label="Add subject method">
+            <button id="upload-tab" class="active" type="button" role="tab" aria-selected="true">Upload outlines</button>
+            <button id="manual-tab" type="button" role="tab" aria-selected="false">Enter manually</button>
+          </div>
+        </div>
+        <div id="upload-panel" class="method-panel">
+          <div class="method-heading"><div><h3>Import up to 10 outlines together</h3><p>Text is extracted locally first, then Gemini identifies each subject and its genuine assessment rows.</p></div><span class="format-list">PDF · DOCX · JPG · JPEG</span></div>
+          <label id="outline-drop" class="drop" tabindex="0" role="button" aria-controls="outline-file" aria-describedby="drop-help">
+            <input id="outline-file" type="file" multiple accept=".pdf,.docx,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg">
+            <span class="drop-icon" aria-hidden="true">⇧</span><strong>Drop your outlines here</strong><span>or browse your device to select several</span><small id="drop-help">Up to 10 files · maximum 15 MB each · PDF, DOCX, JPG or JPEG</small>
+          </label>
+          <div id="file-summary" class="file-summary-list" hidden></div>
+          <div class="actions"><button id="extract-btn" class="primary" disabled>Analyse with Gemini</button><button id="clear-file-btn" class="secondary" type="button" hidden>Clear files</button></div>
+          <div id="upload-progress" class="processing" hidden aria-live="polite"><span class="spinner" aria-hidden="true"></span><div><strong>Extracting text, then asking Gemini</strong><small id="upload-progress-detail">Tables, OCR and assessment details can take a moment.</small></div></div>
+          <div id="upload-feedback" class="feedback" aria-live="polite"></div><div id="review"></div>
+        </div>
+        <div id="manual-panel" class="method-panel" hidden>
+          <div class="method-heading"><div><h3>Enter subject details</h3><p>Add only the fields you know. Assessments are optional and can be added later.</p></div></div>
+          <form id="manual-subject-form">
+            <div class="review-grid manual-grid"><label>Subject code<input id="m-code" required placeholder="e.g. CSCI318"></label><label>Subject name<input id="m-name" required placeholder="Software Engineering Practices"></label><label>Credit points<input id="m-cp" type="number" min="1" value="6" required></label><label>Weekly study target<input id="m-target" type="number" min="0" max="10080" value="240" required></label></div>
+            <div class="review-section-head"><h3>Assessments <small>(optional)</small></h3><button id="manual-add-assessment" class="secondary" type="button">＋ Add assessment</button></div>
+            <div id="manual-assessments"></div><div id="manual-feedback" class="feedback" aria-live="polite"></div><button class="primary" type="submit">Save subject</button>
+          </form>
+        </div>
+      </section>
       <div class="metrics">
         <article><small>Due this week</small><strong id="due-count">0</strong></article>
         <article><small>Upcoming</small><strong id="upcoming-count">0</strong></article>
@@ -112,7 +138,7 @@
         </article>
         <article class="panel wide">
           <div class="panel-head">
-            <h3>Seven-day plan</h3>
+            <h3>Deadline study plan</h3>
             <button class="link" data-view="plan">Open plan</button>
           </div>
           <div id="dashboard-plan" class="list empty">Generate a plan after adding assessments.</div>
@@ -121,59 +147,6 @@
           <div class="panel-head"><h3>Next calendar items</h3><button class="link" data-view="calendar">Open calendar</button></div>
           <div id="dashboard-calendar" class="list empty">Nothing scheduled yet.</div>
         </article>
-      </div>
-    </section>
-
-    <section id="upload" class="view">
-      <p class="eyebrow">GET STARTED</p>
-      <h2>Add a subject</h2>
-      <p class="lede">Import a subject outline or enter the subject yourself. Extracted information is always shown for review before it is saved.</p>
-
-      <div class="segmented" role="tablist" aria-label="Add subject method">
-        <button id="upload-tab" class="active" type="button" role="tab" aria-selected="true">Upload document</button>
-        <button id="manual-tab" type="button" role="tab" aria-selected="false">Enter manually</button>
-      </div>
-
-      <div id="upload-panel" class="method-panel">
-        <div class="method-heading">
-          <div><h3>Import subject outlines</h3><p>Add several files at once. Text is extracted locally first, then Gemini identifies each subject and its genuine assessment rows.</p></div>
-          <span class="format-list">PDF · DOCX · JPG · JPEG</span>
-        </div>
-        <label id="outline-drop" class="drop" tabindex="0" role="button" aria-controls="outline-file" aria-describedby="drop-help">
-          <input id="outline-file" type="file" multiple accept=".pdf,.docx,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg">
-          <span class="drop-icon" aria-hidden="true">⇧</span>
-          <strong>Drop your outlines here</strong>
-          <span>or browse your device to select several</span>
-          <small id="drop-help">Up to 10 files · maximum 15 MB each · PDF, DOCX, JPG or JPEG</small>
-        </label>
-
-        <div id="file-summary" class="file-summary-list" hidden></div>
-        <div class="actions">
-          <button id="extract-btn" class="primary" disabled>Analyse with Gemini</button>
-          <button id="clear-file-btn" class="secondary" type="button" hidden>Clear files</button>
-        </div>
-        <div id="upload-progress" class="processing" hidden aria-live="polite">
-          <span class="spinner" aria-hidden="true"></span>
-          <div><strong>Extracting text, then asking Gemini</strong><small id="upload-progress-detail">Tables, OCR and assessment details can take a moment.</small></div>
-        </div>
-        <div id="upload-feedback" class="feedback" aria-live="polite"></div>
-        <div id="review"></div>
-      </div>
-
-      <div id="manual-panel" class="method-panel" hidden>
-        <div class="method-heading"><div><h3>Enter subject details</h3><p>Add only the fields you know. Assessments are optional and can be added later.</p></div></div>
-        <form id="manual-subject-form">
-          <div class="review-grid manual-grid">
-            <label>Subject code<input id="m-code" required placeholder="e.g. CSCI318"></label>
-            <label>Subject name<input id="m-name" required placeholder="Software Engineering Practices"></label>
-            <label>Credit points<input id="m-cp" type="number" min="1" value="6" required></label>
-            <label>Weekly study target<input id="m-target" type="number" min="0" max="10080" value="240" required></label>
-          </div>
-          <div class="review-section-head"><h3>Assessments <small>(optional)</small></h3><button id="manual-add-assessment" class="secondary" type="button">＋ Add assessment</button></div>
-          <div id="manual-assessments"></div>
-          <div id="manual-feedback" class="feedback" aria-live="polite"></div>
-          <button class="primary" type="submit">Save subject</button>
-        </form>
       </div>
     </section>
 
@@ -199,9 +172,9 @@
     </section>
 
     <section id="plan" class="view">
-      <p class="eyebrow">AI-ASSISTED PLANNING</p>
-      <h2>Plan your week together</h2>
-      <p class="lede">Tell the planning assistant when you are free in normal language, check the interpreted time slots, then generate a validated plan.</p>
+      <p class="eyebrow">DEADLINE PLANNING</p>
+      <h2>Plan through every due date</h2>
+      <p class="lede">Tell the availability assistant when you are normally free. The scheduler repeats that weekly pattern and spreads each assessment’s estimated minutes into spaced study and review sessions up to its due date.</p>
       <div class="planner-layout">
         <article class="panel chat-card">
           <div class="panel-head"><div><p class="eyebrow">AVAILABILITY ASSISTANT</p><h3>When can you study?</h3></div><span id="planner-ai-badge" class="status-chip">Checking AI…</span></div>
@@ -223,9 +196,9 @@
         </article>
         <article class="panel availability-card">
           <p class="eyebrow">INTERPRETED SCHEDULE</p>
-          <h3>Your available slots</h3>
+          <h3>Your weekly availability template</h3>
           <div id="availability-summary" class="availability-summary empty">No times added yet.</div>
-          <button id="generate-chat-plan" class="primary full" disabled>Generate my study plan</button>
+          <button id="generate-chat-plan" class="primary full" disabled>Build my deadline plan</button>
           <details class="quick-setup"><summary>Prefer a simple daily amount?</summary>
             <form id="plan-form" class="compact-form">
               <label>Minutes each day<input id="plan-minutes" type="number" min="0" max="1440" value="120" required></label>
@@ -240,8 +213,8 @@
 
     <section id="calendar" class="view">
       <div class="panel-head calendar-heading">
-        <div><p class="eyebrow">MONTHLY OVERVIEW</p><h2 id="month-title">Your calendar</h2></div>
-        <div class="calendar-actions"><button id="month-prev" class="secondary" aria-label="Previous month">←</button><button id="month-today" class="secondary">Today</button><button id="month-next" class="secondary" aria-label="Next month">→</button><button id="new-calendar-entry" class="primary">＋ New item</button></div>
+        <div><p class="eyebrow">SCHEDULE</p><h2 id="month-title">Monthly overview</h2></div>
+        <div class="calendar-actions"><button class="secondary" data-view="week">Week view</button><button id="month-prev" class="secondary" aria-label="Previous month">←</button><button id="month-today" class="secondary">Today</button><button id="month-next" class="secondary" aria-label="Next month">→</button><button id="new-calendar-entry" class="primary">＋ New item</button></div>
       </div>
       <p class="lede">See deadlines, study blocks and spaced reviews together. Select a day to add something yourself.</p>
       <div id="calendar-feedback" class="feedback" aria-live="polite"></div>
@@ -251,27 +224,12 @@
 
     <section id="week" class="view">
       <div class="panel-head calendar-heading">
-        <div><p class="eyebrow">DETAILED SCHEDULE</p><h2 id="week-title">This week</h2></div>
-        <div class="calendar-actions"><button id="week-prev" class="secondary" aria-label="Previous week">←</button><button id="week-today" class="secondary">This week</button><button id="week-next" class="secondary" aria-label="Next week">→</button><button class="primary" id="week-new-entry">＋ Add session</button></div>
+        <div><p class="eyebrow">SCHEDULE</p><h2 id="week-title">Weekly detail</h2></div>
+        <div class="calendar-actions"><button class="secondary" data-view="calendar">Month view</button><button id="week-prev" class="secondary" aria-label="Previous week">←</button><button id="week-today" class="secondary">Current week</button><button id="week-next" class="secondary" aria-label="Next week">→</button><button class="primary" id="week-new-entry">＋ Add session</button></div>
       </div>
       <p class="lede">Edit any block, mark it complete, or let spaced repetition place the next review automatically.</p>
       <div id="week-feedback" class="feedback" aria-live="polite"></div>
       <div id="week-grid" class="week-grid"></div>
-    </section>
-
-    <section id="assistant" class="view">
-      <p class="eyebrow">PERSONAL STUDY ASSISTANT</p>
-      <h2>Ask about your homework</h2>
-      <p class="lede">Get explanations, worked examples and practical next steps using your current subjects, assessments and schedule as context.</p>
-      <div class="assistant-layout">
-        <article class="panel assistant-chat-card">
-          <div id="study-chat-messages" class="study-chat-messages" aria-live="polite"><div class="chat-bubble assistant">Hi! Ask me to explain a concept, break down an assignment, or help decide what to study next.</div></div>
-          <div class="prompt-chips"><button type="button" data-study-prompt="What should I focus on today?">What should I study?</button><button type="button" data-study-prompt="Help me break my nearest assessment into smaller steps.">Break down my assessment</button><button type="button" data-study-prompt="Quiz me on a concept from one of my subjects.">Quiz me</button></div>
-          <form id="study-chat-form" class="chat-form"><label class="sr-only" for="study-chat-message">Question</label><input id="study-chat-message" maxlength="4000" required placeholder="Ask a homework or study question…"><button class="primary">Send</button></form>
-          <div id="assistant-feedback" class="feedback" aria-live="polite"></div>
-        </article>
-        <div class="assistant-context panel"><p class="eyebrow">WHAT I CAN USE</p><h3>Your study context</h3><p>Current subjects</p><strong id="assistant-subject-count">0</strong><p>Incomplete assessments</p><strong id="assistant-assessment-count">0</strong><p>Upcoming calendar blocks</p><strong id="assistant-calendar-count">0</strong><small>I only use data from your signed-in account.</small></div>
-      </div>
     </section>
 
     <section id="activity" class="view">
@@ -300,7 +258,7 @@
           <label>Institution<input id="profile-institution" placeholder="University of Wollongong"></label>
           <label>Course<input id="profile-course" placeholder="Bachelor of Computer Science"></label>
           <label>Study goal<textarea id="profile-goal" rows="4" placeholder="What are you working towards?"></textarea></label>
-          <label>Timezone<input id="profile-timezone" required value="Australia/Sydney"></label>
+          <label>Timezone<input id="profile-timezone" list="timezone-options" required value="Australia/Sydney"><datalist id="timezone-options"></datalist></label>
           <button class="primary">Save profile</button><div id="profile-feedback" class="feedback" aria-live="polite"></div>
         </form>
         <article class="panel"><div class="panel-head"><h3>Recent sessions</h3><button class="link" data-view="activity">Record one</button></div><div id="session-history" class="list empty">No study sessions recorded yet.</div></article>
@@ -326,6 +284,18 @@
       </form>
     </section>
   </main>
+
+  <button id="assistant-fab" class="assistant-fab" type="button" aria-controls="assistant-drawer" aria-expanded="false"><span aria-hidden="true">✦</span> Ask Study Assistant</button>
+  <div id="assistant-backdrop" class="assistant-backdrop" hidden></div>
+  <section id="assistant-drawer" class="assistant-drawer" aria-labelledby="assistant-title" aria-hidden="true">
+    <div class="assistant-drawer-head"><div><p class="eyebrow">PERSONAL STUDY ASSISTANT</p><h2 id="assistant-title">Ask about your homework</h2></div><button id="close-assistant" class="icon-button" type="button" aria-label="Close study assistant">×</button></div>
+    <p class="assistant-drawer-intro">Get explanations and practical next steps using your subjects, assessments and schedule as context.</p>
+    <div class="assistant-context-strip"><span><strong id="assistant-subject-count">0</strong> subjects</span><span><strong id="assistant-assessment-count">0</strong> assessments</span><span><strong id="assistant-calendar-count">0</strong> scheduled</span></div>
+    <div id="study-chat-messages" class="study-chat-messages" aria-live="polite"><div class="chat-bubble assistant">Hi! Ask me to explain a concept, break down an assignment, or help decide what to study next.</div></div>
+    <div class="prompt-chips"><button type="button" data-study-prompt="What should I focus on today?">What should I study?</button><button type="button" data-study-prompt="Help me break my nearest assessment into smaller steps.">Break down my assessment</button><button type="button" data-study-prompt="Quiz me on a concept from one of my subjects.">Quiz me</button></div>
+    <form id="study-chat-form" class="chat-form"><label class="sr-only" for="study-chat-message">Question</label><input id="study-chat-message" maxlength="4000" required placeholder="Ask a homework or study question…"><button class="primary">Send</button></form>
+    <div id="assistant-feedback" class="feedback" aria-live="polite"></div>
+  </section>
 
   <dialog id="assessment-dialog" class="calendar-dialog">
     <form id="assessment-form" method="dialog">

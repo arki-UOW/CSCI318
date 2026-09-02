@@ -25,8 +25,8 @@ public class StudyPlan {
     public StudyPlan(UUID ownerId, LocalDate start, LocalDate end, int version, String json,
                      String explanation) {
         if (start == null || end == null || end.isBefore(start)
-                || ChronoUnit.DAYS.between(start, end) != 6) {
-            throw new IllegalArgumentException("Planning period must contain exactly seven days");
+                || ChronoUnit.DAYS.between(start, end) > 370) {
+            throw new IllegalArgumentException("Planning period must be between one day and 371 days");
         }
         id = UUID.randomUUID();
         this.ownerId = Objects.requireNonNull(ownerId);
