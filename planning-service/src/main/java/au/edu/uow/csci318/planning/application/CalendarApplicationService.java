@@ -58,17 +58,20 @@ public class CalendarApplicationService {
     }
 
     @Transactional
-    public void replaceAiPlan(UUID ownerId, UUID planId, LocalDate start, List<PlanItem> items) {
-        entries.deleteByOwnerIdAndOriginAndStartAtBetween(ownerId, Origin.AI_PLAN,
-                start.atStartOfDay(), start.plusDays(7).atStartOfDay().minusNanos(1));
+    public void replaceAiPlan(UUID ownerId, UUID planId, List<PlanItem> items) {
+        entries.deleteByOwnerIdAndOriginAndStatus(ownerId, Origin.AI_PLAN, EntryStatus.PLANNED);
         Map<LocalDate, Integer> usedMinutes = new HashMap<>();
         for (PlanItem item : items) {
             int offset = usedMinutes.getOrDefault(item.date(), 0);
             LocalDateTime startAt = LocalDateTime.of(item.date(), LocalTime.of(18, 0)).plusMinutes(offset);
             LocalDateTime endAt = startAt.plusMinutes(item.allocatedMinutes());
+            EntryType type = item.repetitionStage() > 0 ? EntryType.REVIEW : EntryType.STUDY_SESSION;
+            String description = item.repetitionStage() > 0
+                    ? "Pre-planned spaced review " + item.repetitionStage() + " before the assessment due date"
+                    : "Deadline-planned study block based on estimated workload";
             entries.save(new CalendarEntry(ownerId, item.subjectId(), item.assessmentId(), planId, null,
-                    item.title(), "AI-planned study block", EntryType.STUDY_SESSION, startAt, endAt,
-                    Origin.AI_PLAN, true, 0));
+                    item.title(), description, type, startAt, endAt,
+                    Origin.AI_PLAN, false, item.repetitionStage()));
             usedMinutes.merge(item.date(), item.allocatedMinutes() + 10, Integer::sum);
         }
     }

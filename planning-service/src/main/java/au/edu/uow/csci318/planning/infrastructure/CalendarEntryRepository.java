@@ -1,6 +1,7 @@
 package au.edu.uow.csci318.planning.infrastructure;
 
 import au.edu.uow.csci318.planning.domain.CalendarEntry;
+import au.edu.uow.csci318.planning.domain.CalendarEntry.EntryStatus;
 import au.edu.uow.csci318.planning.domain.CalendarEntry.Origin;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -14,6 +15,5 @@ public interface CalendarEntryRepository extends JpaRepository<CalendarEntry, UU
                                                                     LocalDateTime from,
                                                                     LocalDateTime to);
     Optional<CalendarEntry> findByIdAndOwnerId(UUID id, UUID ownerId);
-    void deleteByOwnerIdAndOriginAndStartAtBetween(UUID ownerId, Origin origin,
-                                                   LocalDateTime from, LocalDateTime to);
+    void deleteByOwnerIdAndOriginAndStatus(UUID ownerId, Origin origin, EntryStatus status);
 }

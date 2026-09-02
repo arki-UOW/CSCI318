@@ -3,86 +3,151 @@ package au.edu.uow.csci318.planning.application;
 import au.edu.uow.csci318.planning.dto.PlanningDtos.AssessmentView;
 import au.edu.uow.csci318.planning.dto.PlanningDtos.PlanItem;
 import au.edu.uow.csci318.planning.dto.PlanningDtos.PlanRequest;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
 
+/**
+ * Builds a deterministic deadline plan. The LLM is deliberately kept out of minute allocation:
+ * availability, due dates and estimated workload are factual inputs and are easier to validate here.
+ */
 @Component
 public class StudyPlanningAgent {
+    private static final int[] REPETITION_OFFSETS = {0, 1, 3, 7, 14, 30};
+    private static final int MAX_HORIZON_DAYS = 365;
+    private static final int DEFAULT_ESTIMATED_MINUTES = 120;
+    private static final int TARGET_SESSION_MINUTES = 25;
+    private static final int MAX_SESSION_MINUTES = 90;
+
     private final PlanningTools tools;
-    private final ObjectMapper json;
-    private final ConfiguredPlanningChatModel configuredModel;
 
-    public StudyPlanningAgent(PlanningTools tools, ObjectMapper json,
-                              ConfiguredPlanningChatModel configuredModel) {
+    public StudyPlanningAgent(PlanningTools tools) {
         this.tools = tools;
-        this.json = json;
-        this.configuredModel = configuredModel;
     }
 
-    public List<PlanItem> generate(PlanRequest request, String authorization) {
-        List<AssessmentView> work = tools.getIncompleteAssessments(authorization);
-        if (work.isEmpty()) {
+    public Schedule generate(PlanRequest request, String authorization) {
+        List<AssessmentView> assessments = prioritised(
+                tools.getIncompleteAssessments(authorization), request.startDate());
+        if (assessments.isEmpty()) {
             throw new IllegalArgumentException(
-                    "No usable incomplete assessments were found. Remove incorrect rows or add an assessment first.");
+                    "No usable incomplete assessments were found. Add an assessment with a due date first.");
         }
-        var selection = configuredModel.selection();
-        if (selection.isEmpty()) {
-            return deterministic(request, work);
-        }
-        try {
-            List<PlanItem> items = sanitise(ai(request, work, selection.get()), request, work);
-            return items.isEmpty() ? deterministic(request, work) : items;
-        } catch (Exception exception) {
-            throw new IllegalStateException(
-                    ConfiguredPlanningChatModel.failureMessage(selection.get(), exception, "generate a study plan"),
-                    exception);
-        }
-    }
 
-    public String providerLabel() {
-        return configuredModel.selection().map(ConfiguredPlanningChatModel.Selection::provider)
-                .orElse("Local scheduler");
-    }
+        Map<DayOfWeek, Integer> weeklyAvailability = weeklyAvailability(request);
+        if (weeklyAvailability.values().stream().mapToInt(Integer::intValue).sum() <= 0) {
+            throw new IllegalArgumentException("Add at least one available study period before generating a plan.");
+        }
 
-    private List<PlanItem> deterministic(PlanRequest request, List<AssessmentView> work) {
-        List<AssessmentView> sorted = prioritised(work, request.startDate());
+        LocalDate maximumEnd = request.startDate().plusDays(MAX_HORIZON_DAYS);
+        LocalDate endDate = assessments.stream().map(AssessmentView::dueDate)
+                .filter(date -> date != null && !date.isBefore(request.startDate()))
+                .map(date -> date.isAfter(maximumEnd) ? maximumEnd : date)
+                .max(LocalDate::compareTo).orElse(request.startDate().plusDays(6));
+
+        Map<LocalDate, Integer> usedMinutes = new HashMap<>();
         List<PlanItem> items = new ArrayList<>();
-        Map<UUID, Integer> remaining = new HashMap<>();
-        sorted.forEach(assessment -> remaining.put(
-                assessment.id(), assessment.estimatedMinutes() == null ? 120 : assessment.estimatedMinutes()));
-        for (int day = 0; day < 7; day++) {
-            LocalDate date = request.startDate().plusDays(day);
-            int available = request.dailyAvailabilityMinutes().getOrDefault(date, 0);
-            for (AssessmentView assessment : sorted) {
-                if (available <= 0) {
-                    break;
-                }
-                if (assessment.dueDate() != null && date.isAfter(assessment.dueDate())) {
-                    continue;
-                }
-                int left = remaining.get(assessment.id());
-                if (left <= 0) {
-                    continue;
-                }
-                int minutes = Math.min(Math.min(available, left), 90);
-                items.add(new PlanItem(date, assessment.subjectId(), assessment.id(), assessment.title(), minutes));
-                remaining.put(assessment.id(), left - minutes);
-                available -= minutes;
+        int requestedMinutes = 0;
+        int scheduledMinutes = 0;
+
+        for (AssessmentView assessment : assessments) {
+            LocalDate dueDate = assessment.dueDate() == null
+                    ? request.startDate().plusDays(6)
+                    : assessment.dueDate().isAfter(maximumEnd) ? maximumEnd : assessment.dueDate();
+            if (dueDate.isBefore(request.startDate())) continue;
+
+            int totalMinutes = assessment.estimatedMinutes() == null || assessment.estimatedMinutes() <= 0
+                    ? DEFAULT_ESTIMATED_MINUTES : assessment.estimatedMinutes();
+            requestedMinutes += totalMinutes;
+            LocalDate lastStudyDate = dueDate.isAfter(request.startDate()) ? dueDate.minusDays(1) : dueDate;
+            List<LocalDate> repetitions = repetitionDates(request.startDate(), lastStudyDate, totalMinutes);
+            int remaining = totalMinutes;
+            LocalDate earliest = request.startDate();
+
+            for (int index = 0; index < repetitions.size() && remaining > 0; index++) {
+                int sessionsLeft = repetitions.size() - index;
+                int targetMinutes = (int) Math.ceil((double) remaining / sessionsLeft);
+                Allocation allocation = allocate(assessment, index, repetitions.get(index), earliest,
+                        lastStudyDate, targetMinutes, weeklyAvailability, usedMinutes);
+                items.addAll(allocation.items());
+                remaining -= allocation.minutes();
+                scheduledMinutes += allocation.minutes();
+                if (allocation.lastDate() != null) earliest = allocation.lastDate().plusDays(1);
             }
         }
-        return items;
+
+        items.sort(Comparator.comparing(PlanItem::date)
+                .thenComparing(PlanItem::repetitionStage)
+                .thenComparing(PlanItem::title));
+        return new Schedule(List.copyOf(items), endDate, requestedMinutes, scheduledMinutes);
+    }
+
+    private Allocation allocate(AssessmentView assessment, int repetitionStage, LocalDate preferred,
+                                LocalDate earliest, LocalDate latest, int targetMinutes,
+                                Map<DayOfWeek, Integer> weeklyAvailability,
+                                Map<LocalDate, Integer> usedMinutes) {
+        if (earliest.isAfter(latest) || targetMinutes <= 0) return Allocation.empty();
+        List<LocalDate> candidates = earliest.datesUntil(latest.plusDays(1))
+                .sorted(Comparator.comparingLong(date -> Math.abs(ChronoUnit.DAYS.between(preferred, date))))
+                .toList();
+        List<PlanItem> items = new ArrayList<>();
+        int allocated = 0;
+        LocalDate lastDate = null;
+
+        for (LocalDate date : candidates) {
+            if (allocated >= targetMinutes) break;
+            int capacity = weeklyAvailability.getOrDefault(date.getDayOfWeek(), 0)
+                    - usedMinutes.getOrDefault(date, 0);
+            if (capacity <= 0) continue;
+            int minutes = Math.min(Math.min(targetMinutes - allocated, capacity), MAX_SESSION_MINUTES);
+            String title = repetitionStage == 0 ? assessment.title()
+                    : "Review " + repetitionStage + ": " + assessment.title();
+            items.add(new PlanItem(date, assessment.subjectId(), assessment.id(), title,
+                    minutes, repetitionStage));
+            usedMinutes.merge(date, minutes, Integer::sum);
+            allocated += minutes;
+            if (lastDate == null || date.isAfter(lastDate)) lastDate = date;
+        }
+        return new Allocation(items, allocated, lastDate);
+    }
+
+    private List<LocalDate> repetitionDates(LocalDate start, LocalDate latest, int totalMinutes) {
+        LinkedHashSet<LocalDate> raw = new LinkedHashSet<>();
+        for (int offset : REPETITION_OFFSETS) {
+            LocalDate date = start.plusDays(offset);
+            if (!date.isAfter(latest)) raw.add(date);
+        }
+        for (LocalDate date = start.plusDays(60); !date.isAfter(latest); date = date.plusDays(30)) {
+            raw.add(date);
+        }
+        raw.add(latest);
+        List<LocalDate> dates = new ArrayList<>(raw);
+        int wanted = Math.min(dates.size(), Math.max(1,
+                (int) Math.ceil((double) totalMinutes / TARGET_SESSION_MINUTES)));
+        if (wanted == dates.size()) return dates;
+        if (wanted == 1) return List.of(dates.get(dates.size() - 1));
+
+        LinkedHashSet<LocalDate> selected = new LinkedHashSet<>();
+        for (int index = 0; index < wanted; index++) {
+            int position = (int) Math.round((double) index * (dates.size() - 1) / (wanted - 1));
+            selected.add(dates.get(position));
+        }
+        return List.copyOf(selected);
+    }
+
+    private Map<DayOfWeek, Integer> weeklyAvailability(PlanRequest request) {
+        Map<DayOfWeek, Integer> availability = new EnumMap<>(DayOfWeek.class);
+        request.dailyAvailabilityMinutes().forEach((date, minutes) ->
+                availability.merge(date.getDayOfWeek(), minutes == null ? 0 : minutes, Math::max));
+        return availability;
     }
 
     private List<AssessmentView> prioritised(List<AssessmentView> work, LocalDate startDate) {
@@ -97,61 +162,12 @@ public class StudyPlanningAgent {
                 .toList();
     }
 
-    private List<PlanItem> ai(PlanRequest request, List<AssessmentView> work,
-                              ConfiguredPlanningChatModel.Selection selection) throws Exception {
-        String prompt = """
-                You are a practical study-planning agent. Return ONLY JSON containing either an array or an
-                object with an items array. Every item has date, subjectId, assessmentId, title and allocatedMinutes.
-
-                Rules:
-                - Use only supplied assessment and subject IDs and copy their title exactly.
-                - Every date is inside the seven-day period and no later than its due date.
-                - Daily allocated minutes never exceed that date's availability.
-                - Use focused blocks of 25 to 90 minutes, except a smaller final remainder is allowed.
-                - Prioritise nearer deadlines, high priority and higher weighting.
-                - Spread substantial work across multiple days and leave zero-availability days empty.
-                """
-                + "\nPeriod: " + request.startDate() + " to " + request.startDate().plusDays(6)
-                + "\nAvailability: " + json.writeValueAsString(request.dailyAvailabilityMinutes())
-                + "\nApproved incomplete assessments: " + json.writeValueAsString(work);
-        String raw = selection.model().chat(prompt)
-                .replaceFirst("(?s)^```(?:json)?\\s*", "")
-                .replaceFirst("(?s)\\s*```$", "");
-        JsonNode root = json.readTree(raw);
-        JsonNode itemsNode = root.isArray() ? root : root.path("items");
-        if (!itemsNode.isArray()) {
-            throw new IllegalArgumentException("AI response did not contain plan items");
-        }
-        return json.convertValue(itemsNode, new TypeReference<>() {
-        });
+    public record Schedule(List<PlanItem> items, LocalDate endDate,
+                           int requestedMinutes, int scheduledMinutes) {
+        public int unscheduledMinutes() { return Math.max(0, requestedMinutes - scheduledMinutes); }
     }
 
-    private List<PlanItem> sanitise(List<PlanItem> proposed, PlanRequest request, List<AssessmentView> work) {
-        Map<UUID, AssessmentView> known = new HashMap<>();
-        work.forEach(assessment -> known.put(assessment.id(), assessment));
-        Map<LocalDate, Integer> used = new HashMap<>();
-        Set<String> duplicates = new HashSet<>();
-        List<PlanItem> safe = new ArrayList<>();
-        for (PlanItem item : proposed == null ? List.<PlanItem>of() : proposed) {
-            if (item == null || item.date() == null || item.assessmentId() == null) {
-                continue;
-            }
-            AssessmentView assessment = known.get(item.assessmentId());
-            if (assessment == null || item.date().isBefore(request.startDate())
-                    || item.date().isAfter(request.startDate().plusDays(6))
-                    || assessment.dueDate() != null && item.date().isAfter(assessment.dueDate())) {
-                continue;
-            }
-            int available = request.dailyAvailabilityMinutes().getOrDefault(item.date(), 0);
-            int remainingToday = Math.max(0, available - used.getOrDefault(item.date(), 0));
-            int minutes = Math.min(Math.min(Math.max(item.allocatedMinutes(), 0), 180), remainingToday);
-            String duplicateKey = item.date() + ":" + item.assessmentId();
-            if (minutes <= 0 || !duplicates.add(duplicateKey)) {
-                continue;
-            }
-            used.merge(item.date(), minutes, Integer::sum);
-            safe.add(new PlanItem(item.date(), assessment.subjectId(), assessment.id(), assessment.title(), minutes));
-        }
-        return safe.stream().sorted(Comparator.comparing(PlanItem::date)).toList();
+    private record Allocation(List<PlanItem> items, int minutes, LocalDate lastDate) {
+        static Allocation empty() { return new Allocation(List.of(), 0, null); }
     }
 }

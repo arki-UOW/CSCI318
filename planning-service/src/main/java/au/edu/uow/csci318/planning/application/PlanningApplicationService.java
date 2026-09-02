@@ -38,17 +38,15 @@ public class PlanningApplicationService {
     @Transactional
     public PlanResponse generate(UUID ownerId, String authorization, PlanRequest request) {
         validatePeriod(request);
-        List<PlanItem> items = agent.generate(request, authorization);
-        validateItems(authorization, request, items);
+        StudyPlanningAgent.Schedule schedule = agent.generate(request, authorization);
+        validateItems(authorization, request, schedule.endDate(), schedule.items());
         try {
             int version = plans.findTopByOwnerIdOrderByCreatedAtDesc(ownerId)
                     .map(existing -> existing.getVersion() + 1).orElse(1);
-            String explanation = "Generated with " + agent.providerLabel()
-                    + " from approved incomplete assessments and your supplied availability. "
-                    + "Study blocks were added to your calendar with spaced review enabled.";
+            String explanation = explanation(schedule, "Generated");
             StudyPlan saved = plans.save(new StudyPlan(ownerId, request.startDate(),
-                    request.startDate().plusDays(6), version, json.writeValueAsString(items), explanation));
-            calendar.replaceAiPlan(ownerId, saved.getId(), request.startDate(), items);
+                    schedule.endDate(), version, json.writeValueAsString(schedule.items()), explanation));
+            calendar.replaceAiPlan(ownerId, saved.getId(), schedule.items());
             return response(saved);
         } catch (Exception exception) {
             throw new IllegalStateException("Plan could not be stored", exception);
@@ -60,16 +58,16 @@ public class PlanningApplicationService {
         StudyPlan old = plans.findByIdAndOwnerId(previousId, ownerId)
                 .orElseThrow(() -> new NoSuchElementException("Study plan not found"));
         validatePeriod(request);
-        List<PlanItem> items = agent.generate(request, authorization);
-        validateItems(authorization, request, items);
+        StudyPlanningAgent.Schedule schedule = agent.generate(request, authorization);
+        validateItems(authorization, request, schedule.endDate(), schedule.items());
         try {
             List<PlanItem> before = json.readValue(old.getItemsJson(), new TypeReference<>() {});
-            String explanation = "Regenerated with " + agent.providerLabel()
-                    + " after live academic data was re-read: " + difference(before, items) + ".";
+            String explanation = explanation(schedule, "Regenerated") + " "
+                    + difference(before, schedule.items()) + ".";
             StudyPlan saved = plans.save(new StudyPlan(ownerId, request.startDate(),
-                    request.startDate().plusDays(6), old.getVersion() + 1,
-                    json.writeValueAsString(items), explanation));
-            calendar.replaceAiPlan(ownerId, saved.getId(), request.startDate(), items);
+                    schedule.endDate(), old.getVersion() + 1,
+                    json.writeValueAsString(schedule.items()), explanation));
+            calendar.replaceAiPlan(ownerId, saved.getId(), schedule.items());
             return response(saved);
         } catch (Exception exception) {
             throw new IllegalStateException("Plan could not be regenerated", exception);
@@ -144,15 +142,18 @@ public class PlanningApplicationService {
         for (Map.Entry<LocalDate, Integer> entry : request.dailyAvailabilityMinutes().entrySet()) {
             if (entry.getKey() == null || entry.getKey().isBefore(request.startDate())
                     || entry.getKey().isAfter(request.startDate().plusDays(6))
-                    || entry.getValue() == null || entry.getValue() < 0) {
-                throw new IllegalArgumentException("Availability must be non-negative and within the seven-day period");
+                    || entry.getValue() == null || entry.getValue() < 0 || entry.getValue() > 1440) {
+                throw new IllegalArgumentException("Availability must be 0-1440 minutes within the template week");
             }
         }
     }
 
-    private void validateItems(String authorization, PlanRequest request, List<PlanItem> items) {
+    private void validateItems(String authorization, PlanRequest request, LocalDate endDate, List<PlanItem> items) {
         Map<UUID, AssessmentView> known = new HashMap<>();
         tools.getIncompleteAssessments(authorization).forEach(a -> known.put(a.id(), a));
+        Map<DayOfWeek, Integer> weeklyAvailability = new EnumMap<>(DayOfWeek.class);
+        request.dailyAvailabilityMinutes().forEach((date, minutes) ->
+                weeklyAvailability.merge(date.getDayOfWeek(), minutes, Math::max));
         Map<LocalDate, Integer> daily = new HashMap<>();
         for (PlanItem item : items) {
             AssessmentView assessment = known.get(item.assessmentId());
@@ -161,15 +162,29 @@ public class PlanningApplicationService {
             if (!assessment.subjectId().equals(item.subjectId())) {
                 throw new IllegalArgumentException("Assessment and subject do not match");
             }
-            if (item.date().isBefore(request.startDate()) || item.date().isAfter(request.startDate().plusDays(6))) {
+            if (item.date().isBefore(request.startDate()) || item.date().isAfter(endDate)) {
                 throw new IllegalArgumentException("Plan item lies outside the requested period");
+            }
+            if (assessment.dueDate() != null && item.date().isAfter(assessment.dueDate())) {
+                throw new IllegalArgumentException("Plan item lies after its assessment due date");
             }
             if (item.allocatedMinutes() <= 0) throw new IllegalArgumentException("Allocated minutes must be positive");
             int total = daily.merge(item.date(), item.allocatedMinutes(), Integer::sum);
-            if (total > request.dailyAvailabilityMinutes().getOrDefault(item.date(), 0)) {
+            if (total > weeklyAvailability.getOrDefault(item.date().getDayOfWeek(), 0)) {
                 throw new IllegalArgumentException("Plan exceeds availability on " + item.date());
             }
         }
+    }
+
+    private String explanation(StudyPlanningAgent.Schedule schedule, String verb) {
+        String text = verb + " a deadline plan through " + schedule.endDate() + ". Scheduled "
+                + schedule.scheduledMinutes() + " of " + schedule.requestedMinutes()
+                + " estimated minutes across spaced study and review sessions. "
+                + "Your weekly availability repeats as a template until each due date.";
+        if (schedule.unscheduledMinutes() > 0) {
+            text += " Add more availability to place the remaining " + schedule.unscheduledMinutes() + " minutes.";
+        }
+        return text;
     }
 
     private boolean between(LocalDate date, LocalDate from, LocalDate to) {

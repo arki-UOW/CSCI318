@@ -2,6 +2,7 @@ package au.edu.uow.csci318.planning.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 
@@ -26,11 +27,15 @@ public final class PlanningDtos {
     }
 
     public record PlanItem(LocalDate date, UUID subjectId, UUID assessmentId, String title,
-                           int allocatedMinutes) {
+                           int allocatedMinutes, int repetitionStage) {
+        public PlanItem(LocalDate date, UUID subjectId, UUID assessmentId, String title,
+                        int allocatedMinutes) {
+            this(date, subjectId, assessmentId, title, allocatedMinutes, 0);
+        }
     }
 
     public record PlanRequest(@NotNull LocalDate startDate,
-                              @NotNull Map<LocalDate, @PositiveOrZero Integer> dailyAvailabilityMinutes) {
+                              @NotNull Map<LocalDate, @PositiveOrZero @Max(1440) Integer> dailyAvailabilityMinutes) {
     }
 
     public record PlanResponse(UUID id, LocalDate startDate, LocalDate endDate, int version,

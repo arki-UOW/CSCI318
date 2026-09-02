@@ -31,8 +31,7 @@ const state = {
   currentView: 'dashboard'
 };
 
-const NAVIGATION_VIEWS = ['dashboard', 'upload', 'subjects', 'assessments', 'plan',
-  'calendar', 'week', 'assistant', 'activity'];
+const NAVIGATION_VIEWS = ['dashboard', 'subjects', 'assessments', 'plan', 'calendar', 'activity'];
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -42,22 +41,27 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({
 const num = value => value === '' ? null : Number(value);
 
 function show(view) {
+  if (view === 'upload') {
+    show('dashboard');
+    requestAnimationFrame(() => $('#upload').scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    return;
+  }
   state.currentView = view;
   $$('.view').forEach(element => element.classList.toggle('active', element.id === view));
-  $$('aside [data-view]').forEach(element => element.classList.toggle('active', element.dataset.view === view));
-  $('#page-title').textContent = {
-    dashboard: 'Good morning',
-    upload: 'Add a subject',
+  const navigationView = view === 'week' ? 'calendar' : view;
+  $$('aside [data-view]').forEach(element => element.classList.toggle('active', element.dataset.view === navigationView));
+  const pageTitle = {
     subjects: 'Subjects',
     assessments: 'Assessments',
     plan: 'Study plan',
-    calendar: 'Monthly calendar',
-    week: 'Weekly schedule',
-    assistant: 'Study assistant',
+    calendar: 'Schedule',
+    week: 'Schedule',
     activity: 'Study activity',
     profile: 'Your profile',
     settings: 'Settings'
   }[view];
+  if (pageTitle) $('#page-title').textContent = pageTitle;
+  else updateLiveClock();
   if (view === 'calendar' || view === 'week') loadCalendar();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -207,6 +211,43 @@ function applyTheme(account) {
   root.style.background = account.backgroundColor;
 }
 
+function accountTimezone() {
+  const detected = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Australia/Sydney';
+  const requested = state.account?.timezone || detected;
+  try {
+    new Intl.DateTimeFormat('en-AU', { timeZone: requested }).format();
+    return requested;
+  } catch {
+    return detected;
+  }
+}
+
+function updateLiveClock() {
+  if (!state.account) return;
+  const now = new Date();
+  const timeZone = accountTimezone();
+  const hour = Number(new Intl.DateTimeFormat('en-AU', {
+    timeZone, hour: '2-digit', hourCycle: 'h23'
+  }).formatToParts(now).find(part => part.type === 'hour')?.value ?? 12);
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  if (state.currentView === 'dashboard') {
+    $('#page-title').textContent = `${greeting}, ${state.account.displayName || state.account.username}`;
+  }
+  $('#live-time').textContent = new Intl.DateTimeFormat('en-AU', {
+    timeZone, weekday: 'long', day: 'numeric', month: 'long',
+    hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+  }).format(now);
+  $('#live-date').textContent = new Intl.DateTimeFormat('en-AU', {
+    timeZone, weekday: 'long', day: 'numeric', month: 'long'
+  }).format(now).toUpperCase();
+}
+
+function populateTimezones() {
+  const zones = typeof Intl.supportedValuesOf === 'function'
+    ? Intl.supportedValuesOf('timeZone') : ['Australia/Sydney', 'UTC'];
+  $('#timezone-options').innerHTML = zones.map(zone => `<option value="${esc(zone)}"></option>`).join('');
+}
+
 function populateAccount() {
   const account = state.account;
   if (!account) return;
@@ -230,6 +271,7 @@ function populateAccount() {
   $('#theme-navigation').value = account.navigationColor || '#2a5745';
   applyNavigationOrder(account.navigationOrder);
   applyTheme(account);
+  updateLiveClock();
 }
 
 function renderProfilePictures(picture) {
@@ -262,6 +304,7 @@ async function signOut(callServer = true) {
   state.token = null;
   state.account = null;
   localStorage.removeItem('studyLeftoversToken');
+  setAssistantOpen(false);
   document.body.classList.add('auth-required');
   $('#auth-shell').hidden = false;
   setAuthMode('login');
@@ -442,9 +485,29 @@ function renderAssessments() {
 
 function renderPlan(target) {
   const items = state.plan?.items || [];
-  $(target).innerHTML = items.length
-    ? items.map(item => `<div class="row">${dateCard(item.date, null)}<div class="body"><strong>${esc(item.title)}</strong><br><small>${esc(subjectName(item.subjectId))} · ${item.allocatedMinutes} minutes</small></div></div>`).join('')
-    : 'No plan generated yet.';
+  if (!items.length) {
+    $(target).innerHTML = 'No plan generated yet.';
+    return;
+  }
+  const row = item => `<div class="row">${dateCard(item.date, null)}<div class="body"><strong>${esc(item.title)}</strong><br><small>${esc(subjectName(item.subjectId))} · ${item.allocatedMinutes} minutes${item.repetitionStage > 0 ? ` · spaced review ${item.repetitionStage}` : ''}</small></div></div>`;
+  if (target === '#dashboard-plan') {
+    const next = items.filter(item => new Date(`${item.date}T23:59:59`) >= new Date()).slice(0, 4);
+    $(target).innerHTML = `<p class="plan-horizon">Runs to ${esc(state.plan.endDate)} · ${items.length} sessions</p>${(next.length ? next : items.slice(0, 4)).map(row).join('')}`;
+    return;
+  }
+  const weeks = new Map();
+  items.forEach(item => {
+    const date = new Date(`${item.date}T00:00:00`);
+    const start = mondayFor(date);
+    const key = localDate(start);
+    if (!weeks.has(key)) weeks.set(key, []);
+    weeks.get(key).push(item);
+  });
+  const explanation = state.plan?.explanation ? `<div class="plan-explanation">${esc(state.plan.explanation)}</div>` : '';
+  $(target).innerHTML = explanation + [...weeks.entries()].map(([start, weekItems]) => {
+    const label = new Date(`${start}T00:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+    return `<section class="plan-week"><div class="plan-week-heading"><span>Week of ${esc(label)}</span><strong>${weekItems.reduce((sum, item) => sum + item.allocatedMinutes, 0)} min</strong></div>${weekItems.map(row).join('')}</section>`;
+  }).join('');
 }
 
 function bindComplete() {
@@ -948,14 +1011,14 @@ $('#activity-form').addEventListener('submit', async event => {
 async function generatePlan(availability, button) {
   const start = $('#plan-start').value;
   setBusy(button, true, 'Generating');
-  feedback('plan-feedback', 'Gemini is balancing approved assessments against your available time…', 'info');
+  feedback('plan-feedback', 'Building a deadline plan from estimated minutes, due dates and your weekly availability…', 'info');
   try {
     state.plan = await request(`${API.planning}/planning/plans`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ startDate: start, dailyAvailabilityMinutes: availability })
     });
-    feedback('plan-feedback', 'Your validated seven-day plan is ready.', 'success');
+    feedback('plan-feedback', `Your plan now runs through ${state.plan.endDate}.`, 'success');
     render();
   } catch (error) {
     feedback('plan-feedback', error.message, 'error');
@@ -1227,6 +1290,24 @@ $('#complete-calendar-entry').addEventListener('click', async event => {
   finally { setBusy(button, false); }
 });
 
+function setAssistantOpen(open) {
+  const drawer = $('#assistant-drawer');
+  const backdrop = $('#assistant-backdrop');
+  drawer.setAttribute('aria-hidden', String(!open));
+  $('#assistant-fab').setAttribute('aria-expanded', String(open));
+  drawer.classList.toggle('open', open);
+  backdrop.hidden = !open;
+  document.body.classList.toggle('assistant-open', open);
+  if (open) requestAnimationFrame(() => $('#study-chat-message').focus());
+}
+
+$('#assistant-fab').addEventListener('click', () => setAssistantOpen(true));
+$('#close-assistant').addEventListener('click', () => setAssistantOpen(false));
+$('#assistant-backdrop').addEventListener('click', () => setAssistantOpen(false));
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && $('#assistant-drawer').classList.contains('open')) setAssistantOpen(false);
+});
+
 function appendStudyChat(role, content) {
   state.assistantHistory.push({ role, content });
   const bubble = document.createElement('div');
@@ -1400,4 +1481,6 @@ async function bootstrap() {
   }
 }
 
+populateTimezones();
+window.setInterval(updateLiveClock, 30_000);
 bootstrap();
