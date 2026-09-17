@@ -7,14 +7,13 @@ spring:
     function:
       definition: workloadStream;studyProgressStream;workloadProjection;progressProjection
     stream:
-      default-binder: kafka
       output-bindings: planningEvents-out-0
       bindings:
-        workloadStream-in-0: {destination: assessment-events, binder: kstream}
-        workloadStream-out-0: {destination: workload-projections, binder: kstream}
-        studyProgressStream-in-0: {destination: "study-activity-events,planning-events", binder: kstream}
-        studyProgressStream-in-1: {destination: subject-events, binder: kstream}
-        studyProgressStream-out-0: {destination: progress-projections, binder: kstream}
+        workloadStream-in-0: {destination: assessment-events}
+        workloadStream-out-0: {destination: workload-projections}
+        studyProgressStream-in-0: {destination: "study-activity-events,planning-events"}
+        studyProgressStream-in-1: {destination: subject-events}
+        studyProgressStream-out-0: {destination: progress-projections}
         workloadProjection-in-0:
           destination: workload-projections
           binder: kafka
