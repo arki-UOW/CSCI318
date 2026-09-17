@@ -15,4 +15,25 @@ jobs:
           cache: maven
       - name: Verify all services
         run: mvn --batch-mode clean verify
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Verify authenticated browser stream client
+        run: node --test frontend/tests/*.test.cjs
+  kafka-integration:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start a clean system with real Kafka
+        run: docker compose -p study-leftovers-ci up -d --build
+        env: {AI_PROVIDER: none}
+      - name: Verify live workload, progress, isolation and browser push without upstream REST
+        run: python3 scripts/verify-streaming.py --isolate-upstream --compose-project study-leftovers-ci
+      - name: Capture service diagnostics
+        if: always()
+        run: docker compose -p study-leftovers-ci logs --no-color --tail 250
+      - name: Stop only the disposable CI stack
+        if: always()
+        run: docker compose -p study-leftovers-ci down
 

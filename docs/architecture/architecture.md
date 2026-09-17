@@ -1,41 +1,49 @@
 # Architecture and context map
 
-The five bounded contexts are intentionally small and independently deployable.
+Five independently deployable bounded contexts own separate databases. No cross-context JPA relationships or shared academic aggregates exist.
 
 ```text
-Browser ──authenticate──> Account Service <── token validation ── all services
-   │
-   ├──REST──> Subject Service ──REST confirm──> Assessment Service
-   ├──REST──> Study Activity Service
-   └──REST──> Planning Service ── owns plans, calendar and assistant context
-                    ▲
-                    └── subject, assessment and activity REST reads
+Browser --commands--> Account / Subject / Assessment / Activity / Planning
+Subject --confirm via REST--> Assessment
+Subject / Assessment / Activity / completed Planning blocks
+  --transactional outbox--> Kafka
+  --> workloadStream / studyProgressStream (Kafka Streams DSL)
+  --> workload-projections / progress-projections
+  --> Planning's local JPA read models --> authenticated dashboard SSE --> Browser
 ```
 
-Subject verification is synchronous because the caller needs an immediate accept/reject answer. Events are facts emitted after successful persistence. The Planning Service is the dashboard read-model owner and keeps frontend aggregation logic small.
+## Layers and inward dependencies
 
-## Layering
+Controllers handle HTTP/authentication. Application services orchestrate use cases and transactions through ports. Domain entities and immutable stream values enforce rules; DeadlineScheduler and WeeklyAvailability contain planning rules without Spring, HTTP or LLM dependencies. Infrastructure implements JPA, REST, document/LLM extraction, outbox delivery, Kafka Streams and SSE.
 
-Controllers validate transport concerns. Application services coordinate use cases, transactions, external ports and event publication. Domain entities protect invariants through named methods. Infrastructure implements JPA, REST, PDF, LLM and stream adapters.
+Subject orchestration now lives in application, with SubjectStore, OutlineImportStore, SubjectDocumentReader, SubjectAssessmentGateway, OutlineExtraction and SubjectAiConfiguration ports. Extraction adapters are separate classes rather than unrelated types hidden in OutlineExtraction.java. PlanningTools is an application port implemented by RestPlanningData; ProjectionStore is implemented by JpaProjectionStore. Existing entity JPA annotations remain a deliberate persistence coupling, not a claim of completely framework-free domain entities.
 
-## Data ownership
+The messaging-support module shares only a technical event contract and outbox machinery. Each service has its own event_outbox and event_migrations tables in its own database. It does not share domain data.
 
-| Context | Database tables | Cross-context access |
-|---|---|---|
-| Account | `accounts`, `account_sessions` | Identity validation only; no academic-domain access |
-| Subject | `subjects`, `subject_outline_imports` | Assessment creation through REST |
-| Assessment | `assessments` | Subject existence through REST |
-| Activity | `study_sessions` | Subject existence through REST |
-| Planning | `study_plans`, `calendar_entries`, Kafka state stores | Assessment/subject/activity REST plus events |
+## Two genuine stateful streaming features
 
-H2 file names are unique. There are no cross-service JPA relationships. Academic rows carry the validated account ID so two users can never retrieve or mutate one another's subjects, assessments, sessions, plans or calendar items. Profile images, password hashes, navigation order and theme settings live only in Account Service.
+RT01: workloadStream consumes assessment-events, validates version-2 facts, keys by account, and aggregates the latest assessment revisions and deletion tombstones in account-workload-v2-store. Counts, estimated outstanding minutes and high-priority counts change when facts arrive. Deadline-relative views are derived locally using the requested timezone and current date; no upstream REST lookup occurs.
 
-## Calendar and review scheduling
+RT02: studyProgressStream merges study-activity-events, planning-events and subject-events, keys by account/subject, and aggregates sessions, completed study blocks and weekly targets in subject-weekly-progress-v2-store. Corrections replace the old duration/week, deletions subtract it, and target changes update cached subject metadata. Monday-based weekly totals and total minutes are maintained as streams arrive.
 
-Generated plan items are materialised as editable calendar study blocks. Manual tasks and sessions use the same model, so the monthly overview and detailed weekly schedule cannot disagree. When a spaced-repetition item is completed, Planning Service creates the next review after 1, 3, 7, 14 and 30 days. Each review records its source and stage, making the progression inspectable rather than hidden inside the LLM.
+These are Kafka Streams groupByKey/aggregate materialized state stores, not ordinary listeners that fetch upstream REST. Output topics feed revision-checked persistent query documents in Planning. DashboardQueryService reads only these local documents and stored plans. Projection commits notify DashboardPushHub; an authenticated fetch-based SSE client updates dashboard panels without reloading forms. Heartbeats keep the connection alive and refresh date-dependent views at local midnight. Identity validation still uses Account Service.
 
-## Stream processing
+## Delivery, recovery and isolation
 
-`workloadStream` filters valid assessment envelopes, deduplicates event IDs, keys by assessment ID and reduces updates into `assessment-latest-store`. This prevents updates from being counted as new assessments.
+Events contain account ownership, aggregate identity and a monotonically increasing aggregateRevision. Producers store events in the same database transaction as the academic mutation. OutboxDelivery acknowledges synchronous Kafka publication before deleting the pending row; broker failure leaves it retryable. A crash after publish can duplicate a fact, so domain reducers reject duplicate/stale revisions. This is at-least-once outbox delivery with idempotent projection semantics, not distributed exactly-once database delivery. Kafka Streams uses exactly_once_v2 for its own state/output transaction.
 
-`studyProgressStream` filters `StudySessionRecorded`, keys by subject ID and reduces minutes into `weekly-study-minutes-store`. The query model combines current minutes with the Subject Service weekly target to produce `NO_ACTIVITY`, `BEHIND_TARGET`, `ON_TRACK`, or `TARGET_REACHED`.
+One-time startup snapshot migrations queue existing owned rows as v2 facts. Legacy owner-less records are not assigned to a guessed user. Malformed/unsupported facts produce metadata-only planning-rejected-events records; payloads, tokens and documents are not copied there. Projection sink failures use separate dead-letter topics. Account-qualified keys and repository filters isolate users.
+
+This is CQRS-style materialized read models and event-driven integration, not full event sourcing: domain state is still persisted in service databases.
+
+## Planning to deadlines
+
+Weekly availability repeats through the latest supported due date. DeadlineScheduler allocates remaining estimated minutes across spaced offsets 0, 1, 3, 7, 14, 30 days, subsequent monthly reviews and a final pre-deadline date. Linked completed calendar-block minutes are subtracted on regeneration. Individual blocks are at most 90 minutes and daily capacity is enforced; residual capacity is filled before reporting a shortfall. Review intervals are a scheduling policy, not a scientifically personalized memory model.
+
+Missing/nonpositive estimates default to 120 minutes; missing deadlines use a seven-day window. Deadlines more than one year from the start are explicitly rejected. The LLM captures availability and explains study work; it does not invent dates or allocate unvalidated minutes.
+
+Monthly and weekly views share calendar_entries. Completed history is immutable (delete/correct explicitly instead). Manual spaced-repetition chains remain separate from a generated deadline plan: generated plans already contain their reviews and do not create a second automatic chain.
+
+## Limits
+
+Projections are eventually consistent, usually within seconds; the UI shows connection state. Regeneration immediately after completing a block can race the asynchronous progress projection; wait for the live total to update first. Account authentication remains a synchronous dependency. Development uses one Planning instance; multi-instance SSE fan-out is not claimed. Large academic histories would require bounded retention/compaction or finer-grained state keys. Docker data persistence across container recreation still depends on configured storage; do not remove user data for a demonstration.

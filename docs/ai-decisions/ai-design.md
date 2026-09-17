@@ -10,9 +10,9 @@ The confirmation boundary re-validates subject code, names, weighting bounds, du
 
 ## Planning agent
 
-The plan generator remains a bounded goal-oriented component. `PlanningTools` reads approved live subject, assessment and activity REST state without requiring a Kafka Streams projection to start. A separate availability assistant converts conversational times into validated, non-overlapping slots; only the derived daily minute limits reach the plan generator.
+The plan generator is a deterministic domain scheduler orchestrated by StudyPlanningAgent. PlanningTools is an application port implemented by RestPlanningData, used for authoritative assessment verification and assistant context. Completed linked-block minutes come from local stream projections. A separate LLM availability assistant converts conversational times into validated, non-overlapping slots; only daily minute limits reach the scheduler.
 
-Validation rejects missing/completed assessments, mismatched subjects, dates outside the seven-day period, non-positive minutes and daily availability overruns. Only valid output reaches `StudyPlanRepository`. Regeneration re-runs tools and stores a new version with a concise difference summary. If an API key is configured but the provider call fails, Planning Service returns a meaningful error rather than silently presenting a deterministic plan as AI output.
+Validation rejects missing/completed assessments, mismatched subjects, dates outside the deadline horizon, non-positive minutes and daily availability overruns. Weekly availability repeats through each due date; estimated workload is distributed across spaced reviews without double-counting linked completed work. Only valid output reaches StudyPlanRepository. Regeneration re-runs factual inputs and stores a new version with a concise difference summary. Availability/chat provider failures are reported; the deterministic minute allocator itself does not require an API key or claim LLM-generated dates.
 
 ## Prompt safety
 
