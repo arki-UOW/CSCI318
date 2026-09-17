@@ -29,6 +29,9 @@
 | Activity | `GET /api/study-sessions/summary` | Weekly subject summary |
 | Planning | `GET /api/planning/workload` | Workload projection |
 | Planning | `GET /api/planning/this-week` | Coherent dashboard read model |
+| Planning | `GET /api/planning/dashboard/stream` | Authenticated SSE dashboard snapshots; token stays in Authorization header |
+| Planning | `GET /api/planning/stream-status` | Projection revision, initialization and latest update |
+| Planning | `GET /api/planning/progress/{subjectId}?weekOf=` | Locally projected weekly target, minutes and history totals |
 | Planning | `POST /api/planning/plans` | Generate and validate a plan |
 | Planning | `POST /api/planning/plans/{id}/regenerate` | Re-read state and version a plan |
 | Planning | `POST /api/planning/availability/chat` | Convert natural-language availability into time slots |
@@ -47,11 +50,17 @@ Subject confirmation uses a committed `CONFIRMING` import state before calling A
 
 ## Events
 
-All envelopes contain UUID `eventId`, `eventType`, integer `eventVersion`, UTC `eventTimestamp`, `sourceService`, and structured `payload`.
+Version-2 envelopes contain UUID `eventId`, `eventType`, integer `eventVersion=2`, UTC `eventTimestamp`, `sourceService`, UUID `ownerId`, UUID `aggregateId`, positive monotonically increasing `aggregateRevision`, and structured `payload`. Kafka message keys are owner/aggregate. Snapshots contain the full current aggregate view; delete facts carry the final view with a newer revision. Passwords, tokens, files and raw outline text do not enter events.
 
 | Topic | Events |
 |---|---|
-| `assessment-events` | `AssessmentCreated`, `AssessmentUpdated`, `AssessmentDeadlineChanged`, `AssessmentWorkloadChanged`, `AssessmentPriorityChanged`, `AssessmentCompleted` |
-| `study-activity-events` | `StudySessionRecorded`, `StudySessionUpdated`, `StudySessionDeleted` |
+| `subject-events` | `SubjectCreated`, `SubjectTargetChanged`, `SubjectSnapshot` |
+| `assessment-events` | `AssessmentCreated`, `AssessmentUpdated`, `AssessmentDeadlineChanged`, `AssessmentWorkloadChanged`, `AssessmentPriorityChanged`, `AssessmentCompleted`, `AssessmentDeleted`, `AssessmentSnapshot` |
+| `study-activity-events` | `StudySessionRecorded`, `StudySessionUpdated`, `StudySessionDeleted`, `StudySessionSnapshot` |
+| `planning-events` | `StudyBlockCompleted`, `StudyBlockDeleted`, `StudyBlockSnapshot` |
+| `workload-projections` | Current per-account WorkloadState JSON from workloadStream |
+| `progress-projections` | Current per-account/subject ProgressState JSON from studyProgressStream |
+| `planning-rejected-events` | Metadata-only decoder rejection; no original payload |
+| `planning-workload-dlq`, `planning-progress-dlq` | Failed query-model sink delivery |
 
-Malformed envelopes are ignored by projection adapters and never enter query state.
+Malformed, legacy owner-less and unsupported envelopes never enter query state. Duplicate/stale aggregate revisions are ignored. Projections are eventually consistent; query endpoints do not call upstream academic services. `X-Study-Timezone` supplies an IANA timezone (default UTC) for dashboard dates and completed-block history. SSE emits `event: dashboard` with `{week,stream}` JSON, heartbeats and periodic reconnection; the browser uses a bearer-authenticated fetch stream rather than URL tokens.

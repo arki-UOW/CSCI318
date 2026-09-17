@@ -9,7 +9,7 @@ Study Leftovers is a personal academic workspace that turns subject-outline docu
 - manual subject and assessment entry when no document is available
 - five independently persisted Spring Boot services with clear data ownership
 - assessment and study-session domain events through Spring Cloud Stream and Kafka
-- live REST-backed workload, study progress, assessment overview, plan generation and regeneration
+- two stateful Kafka Streams features: account workload and weekly subject progress, served from local read models and pushed live to the dashboard
 - conversational availability capture for time slots such as “Monday 6–8pm”
 - deterministic deadline planning that repeats weekly availability, uses estimated minutes and spaces reviews through each due date
 - editable monthly overview and detailed weekly calendar, including manual tasks and study sessions
@@ -88,7 +88,7 @@ $env:GEMINI_MODEL = "gemini-3.6-flash"
 Requirements: JDK 21, Maven 3.9+, Kafka on port 9092 for domain-event services.
 
 ```powershell
-mvn test
+mvn clean install
 mvn -pl account-service spring-boot:run
 mvn -pl subject-service spring-boot:run
 mvn -pl assessment-service spring-boot:run
@@ -112,7 +112,11 @@ The Postman collection in `postman/` includes query and command examples. IDs re
 
 ## Tests and evidence
 
-Run `mvn clean verify`. Domain tests cover core invariants. API/application boundaries are designed for stubbed `RestClient`, `StreamBridge`, and extraction ports so tests never need an LLM key. See [testing strategy](docs/testing/testing-strategy.md) and [traceability matrix](docs/traceability.md).
+Run `mvn clean verify` and `node --test frontend/tests/*.test.cjs`. Tests cover domain rules, outbox rollback/retry, Kafka Streams replay/corrections/account isolation, persistent projections and authenticated dashboard push parsing. No LLM key is required.
+
+CI starts a real Kafka broker, executes `python3 scripts/verify-streaming.py`, checks both live calculations and SSE, then stops Assessment/Activity to verify dashboard query independence from upstream REST. Run the script against a demo system; it creates two demo accounts. See [testing strategy](docs/testing/testing-strategy.md) and [traceability matrix](docs/traceability.md).
+
+Existing academic rows are republished once as owner-scoped version-2 snapshots at startup. The dashboard may briefly show “Waiting for events” while Kafka catches up. Do not delete databases or Kafka state for an ordinary upgrade.
 
 ## Configuration and secrets
 

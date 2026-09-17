@@ -161,6 +161,7 @@ async function request(url, options) {
   const requestOptions = { ...(options || {}) };
   const headers = new Headers(requestOptions.headers || {});
   if (state.token) headers.set('Authorization', `Bearer ${state.token}`);
+  headers.set('X-Study-Timezone', state.account?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
   requestOptions.headers = headers;
   let response;
   try {
@@ -286,6 +287,22 @@ function renderProfilePictures(picture) {
   $('#remove-profile-picture').hidden = !picture;
 }
 
+const dashboardStream = new DashboardStreamClient({
+  endpoint: `${API.planning}/planning/dashboard/stream`,
+  getToken: () => state.token,
+  getTimezone: () => state.account?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+  onSnapshot: snapshot => {
+    state.week = snapshot.week;
+    state.streamStatus = snapshot.stream;
+    state.serviceFailures = state.serviceFailures.filter(name => name !== 'week');
+    // Only redraw summary panels. Live messages must not reset an in-progress upload/editor/form.
+    renderDashboard();
+    renderSystemStatus();
+  },
+  onStatus: status => { state.streamConnection = status; renderSystemStatus(); },
+  onUnauthorized: () => signOut(false)
+});
+
 async function establishSession(session) {
   state.token = session.token;
   state.account = session.account;
@@ -294,9 +311,11 @@ async function establishSession(session) {
   $('#auth-shell').hidden = true;
   populateAccount();
   await load();
+  dashboardStream.start();
 }
 
 async function signOut(callServer = true) {
+  dashboardStream.stop();
   const token = state.token;
   if (callServer && token) {
     try { await request(`${API.accounts}/auth/logout`, { method: 'POST' }); } catch { /* local sign-out still succeeds */ }
@@ -400,26 +419,7 @@ async function load() {
 
 function render() {
   renderSystemStatus();
-  const week = state.week;
-  $('#due-count').textContent = week?.dueThisWeek?.length ?? 0;
-  $('#upcoming-count').textContent = week?.upcoming?.length ?? 0;
-  $('#study-count').textContent = week?.studyProgress?.reduce((total, progress) => total + progress.studiedMinutes, 0) ?? 0;
-  $('#incomplete-count').textContent = week?.workload?.incompleteAssessments
-    ?? state.assessments.filter(assessment => assessment.status === 'INCOMPLETE').length;
-
-  const status = week?.workload?.status ?? 'LOW';
-  const badge = $('#load-badge');
-  badge.textContent = `${status} WORKLOAD`;
-  badge.className = `load ${status.toLowerCase()}`;
-
-  const attention = [...(week?.dueThisWeek || []), ...(week?.upcoming || [])].slice(0, 5);
-  $('#dashboard-assessments').innerHTML = attention.length
-    ? attention.map(assessmentRow).join('')
-    : 'No upcoming assessments yet.';
-  $('#dashboard-progress').innerHTML = week?.studyProgress?.length
-    ? week.studyProgress.map(progress => `<div class="row"><div class="body"><strong>${esc(subjectName(progress.subjectId))}</strong><br><small>${progress.studiedMinutes} / ${progress.targetMinutes} minutes</small></div><span class="pill">${esc(progress.state.replaceAll('_', ' '))}</span></div>`).join('')
-    : 'Record a session to see progress.';
-
+  renderDashboard();
   $('#subject-list').innerHTML = state.subjects.length
     ? state.subjects.map(subject => `<article><p class="eyebrow">${esc(subject.code)}</p><h3>${esc(subject.name)}</h3><p>${subject.creditPoints ?? '—'} credit points</p><small>${subject.weeklyStudyTargetMinutes} min weekly target</small></article>`).join('')
     : '<p>No subjects yet. Upload an outline to begin.</p>';
@@ -454,6 +454,32 @@ function render() {
   bindCalendarItems();
 }
 
+function renderDashboard() {
+  const week = state.week;
+  $('#due-count').textContent = week?.dueThisWeek?.length ?? 0;
+  $('#upcoming-count').textContent = week?.upcoming?.length ?? 0;
+  $('#study-count').textContent = week?.studyProgress?.reduce((total, progress) => total + progress.studiedMinutes, 0) ?? 0;
+  $('#incomplete-count').textContent = week?.workload?.incompleteAssessments
+    ?? state.assessments.filter(assessment => assessment.status === 'INCOMPLETE').length;
+
+  const status = week?.workload?.status ?? 'LOW';
+  const badge = $('#load-badge');
+  badge.textContent = `${status} WORKLOAD`;
+  badge.className = `load ${status.toLowerCase()}`;
+
+  const attention = [...(week?.dueThisWeek || []), ...(week?.upcoming || [])].slice(0, 5);
+  $('#dashboard-assessments').innerHTML = attention.length
+    ? attention.map(assessmentRow).join('')
+    : 'No upcoming assessments yet.';
+  $('#dashboard-progress').innerHTML = week?.studyProgress?.length
+    ? week.studyProgress.map(progress => `<div class="row"><div class="body"><strong>${esc(subjectName(progress.subjectId))}</strong><br><small>${progress.studiedMinutes} / ${progress.targetMinutes} minutes</small></div><span class="pill">${esc(progress.state.replaceAll('_', ' '))}</span></div>`).join('')
+    : 'Record a session to see progress.';
+
+  bindComplete();
+  bindDeleteAssessments();
+  bindEditAssessments();
+}
+
 function renderSystemStatus() {
   const status = $('#system-status');
   const subjectReady = state.subjectAi?.configured;
@@ -464,7 +490,8 @@ function renderSystemStatus() {
     : subjectStatusUnavailable ? '○ Gemini status unavailable' : '○ Gemini not loaded';
   status.innerHTML = `
     <span class="status-chip ${subjectReady ? 'ready' : subjectStatusUnavailable ? 'offline' : 'warning'}" title="${esc(state.subjectAi?.message || 'Subject AI status unavailable')}">${subjectLabel}</span>
-    <span class="status-chip ${planningOffline ? 'offline' : 'ready'}">${planningOffline ? '○ Planner offline' : '● Planner online'}</span>`;
+    <span class="status-chip ${planningOffline ? 'offline' : 'ready'}">${planningOffline ? '○ Planner offline' : '● Planner online'}</span>
+    <span class="status-chip ${state.streamConnection === 'live' ? 'ready' : 'warning'}" title="${esc(state.streamStatus?.updatedAt ? `Kafka projection updated ${state.streamStatus.updatedAt}` : 'Waiting for Kafka-derived projections')}">${state.streamConnection === 'live' ? (state.streamStatus?.initialized ? '● Live dashboard' : '○ Waiting for events') : state.streamConnection === 'offline' ? '○ Live updates reconnecting' : '○ Connecting live updates'}</span>`;
   const plannerBadge = $('#planner-ai-badge');
   if (plannerBadge) {
     plannerBadge.textContent = planningReady ? `${state.planningAi.provider} ready` : planningOffline ? 'Planner offline' : 'AI key not loaded';
@@ -1390,6 +1417,7 @@ $('#profile-form').addEventListener('submit', async event => {
         course: $('#profile-course').value.trim(), studyGoal: $('#profile-goal').value.trim(),
         timezone: $('#profile-timezone').value.trim(), profilePicture: state.profilePictureDraft ?? null }) });
     populateAccount();
+    dashboardStream.start();
     feedback('profile-feedback', 'Profile saved.', 'success');
   } catch (error) { feedback('profile-feedback', error.message, 'error'); }
   finally { setBusy(button, false); }
@@ -1475,6 +1503,7 @@ async function bootstrap() {
     $('#auth-shell').hidden = true;
     populateAccount();
     await load();
+    dashboardStream.start();
   } catch (error) {
     signOut(false);
     feedback('auth-feedback', 'Your remembered session expired. Sign in again.', 'info');

@@ -7,6 +7,9 @@
   </parent>
   <artifactId>planning-service</artifactId>
   <dependencies>
+    <dependency><groupId>au.edu.uow.csci318</groupId><artifactId>messaging-support</artifactId><version>${project.version}</version></dependency>
+    <dependency><groupId>org.springframework.cloud</groupId><artifactId>spring-cloud-stream-binder-kafka-streams</artifactId></dependency>
+    <dependency><groupId>org.apache.kafka</groupId><artifactId>kafka-streams-test-utils</artifactId><scope>test</scope></dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>

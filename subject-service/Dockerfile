@@ -1,6 +1,8 @@
 FROM maven:3.9.11-eclipse-temurin-21 AS build
 WORKDIR /workspace
 COPY pom.xml ./
+COPY messaging-support/pom.xml messaging-support/pom.xml
+COPY messaging-support/src messaging-support/src
 COPY account-service/pom.xml account-service/pom.xml
 COPY subject-service/pom.xml subject-service/pom.xml
 COPY assessment-service/pom.xml assessment-service/pom.xml

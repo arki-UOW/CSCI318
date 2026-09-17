@@ -3,6 +3,59 @@ spring:
   application: {name: planning-service}
   datasource: {url: "jdbc:h2:file:./data/planning-db;AUTO_SERVER=TRUE", username: sa, password: ""}
   jpa: {hibernate: {ddl-auto: update}, open-in-view: false}
+  cloud:
+    function:
+      definition: workloadStream;studyProgressStream;workloadProjection;progressProjection
+    stream:
+      default-binder: events
+      output-bindings: planningEvents-out-0
+      binders:
+        streams: {type: kstream}
+        events: {type: kafka}
+      bindings:
+        workloadStream-in-0: {destination: assessment-events, binder: streams}
+        workloadStream-out-0: {destination: workload-projections, binder: streams}
+        studyProgressStream-in-0: {destination: "study-activity-events,planning-events", binder: streams}
+        studyProgressStream-in-1: {destination: subject-events, binder: streams}
+        studyProgressStream-out-0: {destination: progress-projections, binder: streams}
+        workloadProjection-in-0:
+          destination: workload-projections
+          binder: events
+          group: planning-workload-query-v2
+          content-type: application/json
+        progressProjection-in-0:
+          destination: progress-projections
+          binder: events
+          group: planning-progress-query-v2
+          content-type: application/json
+        planningEvents-out-0: {destination: planning-events, binder: events, content-type: application/json}
+      kafka:
+        binder: {brokers: "${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}"}
+        bindings:
+          planningEvents-out-0:
+            producer:
+              sync: true
+              messageKeyExpression: headers['eventKey']
+              configuration: {acks: all, enable.idempotence: true}
+          workloadProjection-in-0:
+            consumer: {startOffset: earliest, enableDlq: true, dlqName: planning-workload-dlq}
+          progressProjection-in-0:
+            consumer: {startOffset: earliest, enableDlq: true, dlqName: planning-progress-dlq}
+        streams:
+          binder:
+            brokers: "${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}"
+            functions:
+              workloadStream: {applicationId: study-leftovers-workload-v2}
+              studyProgressStream: {applicationId: study-leftovers-progress-v2}
+            configuration:
+              processing.guarantee: exactly_once_v2
+              auto.offset.reset: earliest
+              replication.factor: 1
+              state.dir: ./data/kafka-streams
+              default.key.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+              default.value.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+              commit.interval.ms: 100
+              statestore.cache.max.bytes: 0
 services:
   assessment-url: "${ASSESSMENT_SERVICE_URL:http://localhost:8082}"
   subject-url: "${SUBJECT_SERVICE_URL:http://localhost:8081}"

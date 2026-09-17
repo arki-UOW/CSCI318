@@ -17,6 +17,8 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:29092 --list >/dev/null 2>&1"]
       interval: 5s
@@ -59,6 +61,7 @@ services:
     build: {context: ., dockerfile: planning-service/Dockerfile}
     ports: ["8084:8084"]
     environment:
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
       ASSESSMENT_SERVICE_URL: "http://assessment-service:8082"
       SUBJECT_SERVICE_URL: "http://subject-service:8081"
       STUDY_ACTIVITY_SERVICE_URL: "http://study-activity-service:8083"
@@ -69,6 +72,7 @@ services:
       OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4.1-mini}"
       ACCOUNT_SERVICE_URL: "http://account-service:8085"
     depends_on:
+      kafka: {condition: service_healthy}
       account-service: {condition: service_started}
       assessment-service: {condition: service_started}
       subject-service: {condition: service_started}

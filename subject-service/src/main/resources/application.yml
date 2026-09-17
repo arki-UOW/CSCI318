@@ -4,7 +4,19 @@ spring:
   datasource: {url: "jdbc:h2:file:./data/subject-db;AUTO_SERVER=TRUE", username: sa, password: ""}
   jpa: {hibernate: {ddl-auto: update}, open-in-view: false}
   servlet: {multipart: {max-file-size: 15MB, max-request-size: 15MB}}
-  cloud: {stream: {kafka: {binder: {brokers: "${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}"}}}}
+  cloud:
+    stream:
+      output-bindings: subjectEvents-out-0
+      bindings:
+        subjectEvents-out-0: {destination: subject-events, content-type: application/json}
+      kafka:
+        binder: {brokers: "${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}"}
+        bindings:
+          subjectEvents-out-0:
+            producer:
+              sync: true
+              messageKeyExpression: headers['eventKey']
+              configuration: {acks: all, enable.idempotence: true}
 services:
   assessment-url: "${ASSESSMENT_SERVICE_URL:http://localhost:8082}"
   account-url: "${ACCOUNT_SERVICE_URL:http://localhost:8085}"
