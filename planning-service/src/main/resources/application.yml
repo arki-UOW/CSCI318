@@ -7,28 +7,25 @@ spring:
     function:
       definition: workloadStream;studyProgressStream;workloadProjection;progressProjection
     stream:
-      default-binder: events
+      default-binder: kafka
       output-bindings: planningEvents-out-0
-      binders:
-        streams: {type: kstream}
-        events: {type: kafka}
       bindings:
-        workloadStream-in-0: {destination: assessment-events, binder: streams}
-        workloadStream-out-0: {destination: workload-projections, binder: streams}
-        studyProgressStream-in-0: {destination: "study-activity-events,planning-events", binder: streams}
-        studyProgressStream-in-1: {destination: subject-events, binder: streams}
-        studyProgressStream-out-0: {destination: progress-projections, binder: streams}
+        workloadStream-in-0: {destination: assessment-events, binder: kstream}
+        workloadStream-out-0: {destination: workload-projections, binder: kstream}
+        studyProgressStream-in-0: {destination: "study-activity-events,planning-events", binder: kstream}
+        studyProgressStream-in-1: {destination: subject-events, binder: kstream}
+        studyProgressStream-out-0: {destination: progress-projections, binder: kstream}
         workloadProjection-in-0:
           destination: workload-projections
-          binder: events
+          binder: kafka
           group: planning-workload-query-v2
           content-type: application/json
         progressProjection-in-0:
           destination: progress-projections
-          binder: events
+          binder: kafka
           group: planning-progress-query-v2
           content-type: application/json
-        planningEvents-out-0: {destination: planning-events, binder: events, content-type: application/json}
+        planningEvents-out-0: {destination: planning-events, binder: kafka, content-type: application/json}
       kafka:
         binder: {brokers: "${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}"}
         bindings:
