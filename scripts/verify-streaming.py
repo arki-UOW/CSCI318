@@ -59,7 +59,14 @@ class DashboardObserver:
                     self.response = response
                     event, data = '', []
                     while not self.stopped.is_set():
-                        raw = response.readline()
+                        try:
+                            raw = response.readline()
+                        except (OSError, ValueError, AttributeError):
+                            # urllib's buffered reader can be invalidated by close() on shutdown.
+                            # Do not hide the same failure during an active stream.
+                            if self.stopped.is_set():
+                                return
+                            raise
                         if not raw:
                             break
                         line = raw.decode('utf-8').rstrip('\r\n')
