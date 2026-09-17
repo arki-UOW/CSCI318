@@ -15,7 +15,10 @@ spring:
             producer:
               sync: true
               messageKeyExpression: headers['eventKey']
-              configuration: {acks: all, enable.idempotence: true}
+              configuration:
+                acks: all
+                enable.idempotence: true
+                key.serializer: org.apache.kafka.common.serialization.StringSerializer
 services:
   subject-url: "${SUBJECT_SERVICE_URL:http://localhost:8081}"
   account-url: "${ACCOUNT_SERVICE_URL:http://localhost:8085}"

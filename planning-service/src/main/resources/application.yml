@@ -32,7 +32,10 @@ spring:
             producer:
               sync: true
               messageKeyExpression: headers['eventKey']
-              configuration: {acks: all, enable.idempotence: true}
+              configuration:
+                acks: all
+                enable.idempotence: true
+                key.serializer: org.apache.kafka.common.serialization.StringSerializer
           workloadProjection-in-0:
             consumer: {startOffset: earliest, enableDlq: true, dlqName: planning-workload-dlq}
           progressProjection-in-0:
