@@ -9,7 +9,7 @@ COPY assessment-service/pom.xml assessment-service/pom.xml
 COPY study-activity-service/pom.xml study-activity-service/pom.xml
 COPY planning-service/pom.xml planning-service/pom.xml
 COPY study-activity-service/src study-activity-service/src
-RUN mvn -pl study-activity-service -am package -DskipTests
+RUN mvn --batch-mode --no-transfer-progress -pl study-activity-service -am package -DskipTests
 FROM eclipse-temurin:21-jre
 COPY --from=build /workspace/study-activity-service/target/*.jar app.jar
 ENTRYPOINT ["java","-jar","/app.jar"]

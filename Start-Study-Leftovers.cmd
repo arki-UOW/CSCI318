@@ -28,7 +28,7 @@ if not exist ".env" (
 )
 
 echo Starting Study Leftovers. The first launch can take a few minutes...
-docker compose up -d --build --force-recreate
+docker compose up -d --build
 if errorlevel 1 (
   echo.
   echo Study Leftovers could not start. Recent container details follow:
@@ -41,4 +41,3 @@ echo.
 echo Study Leftovers is running at http://localhost:3000
 start "" "http://localhost:3000"
 pause
-

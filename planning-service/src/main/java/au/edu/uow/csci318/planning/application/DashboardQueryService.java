@@ -63,7 +63,9 @@ public class DashboardQueryService implements StudyHistory {
                       WorkloadClassification.progress(done, target));
                 })
             .toList();
-    List<PlanItem> planned = weekPlan(ownerId, monday, sunday);
+    Set<UUID> incompleteIds = new HashSet<>();
+    outstanding.forEach(item -> incompleteIds.add(item.id()));
+    List<PlanItem> planned = weekPlan(ownerId, monday, sunday, incompleteIds);
     WorkloadSummary summary = workload(workload, today);
     Instant updated =
         progress.stream()
@@ -155,7 +157,8 @@ public class DashboardQueryService implements StudyHistory {
         minutes);
   }
 
-  private List<PlanItem> weekPlan(UUID ownerId, LocalDate from, LocalDate to) {
+  private List<PlanItem> weekPlan(
+      UUID ownerId, LocalDate from, LocalDate to, Set<UUID> incompleteIds) {
     return plans
         .findTopByOwnerIdOrderByCreatedAtDesc(ownerId)
         .map(
@@ -163,7 +166,10 @@ public class DashboardQueryService implements StudyHistory {
               try {
                 List<PlanItem> items =
                     json.readValue(plan.getItemsJson(), new TypeReference<>() {});
-                return items.stream().filter(item -> between(item.date(), from, to)).toList();
+                return items.stream()
+                    .filter(item -> incompleteIds.contains(item.assessmentId()))
+                    .filter(item -> between(item.date(), from, to))
+                    .toList();
               } catch (Exception exception) {
                 throw new IllegalStateException("Stored plan is unreadable", exception);
               }

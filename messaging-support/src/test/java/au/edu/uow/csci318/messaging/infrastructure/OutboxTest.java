@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import au.edu.uow.csci318.messaging.application.EventPublisher;
+import au.edu.uow.csci318.messaging.application.SnapshotSource;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.*;
 import org.junit.jupiter.api.*;
@@ -39,12 +40,15 @@ class OutboxTest {
   @Autowired EventPublisher publisher;
   @Autowired OutboxRepository outbox;
   @Autowired OutboxDelivery delivery;
+  @Autowired SnapshotMigration migration;
+  @Autowired EventMigrationRepository migrations;
   @Autowired PlatformTransactionManager transactions;
   @MockitoBean StreamBridge kafka;
 
   @BeforeEach
   void clear() {
     outbox.deleteAll();
+    migrations.deleteAll();
   }
 
   private void enqueue(UUID owner, UUID id) {
@@ -72,7 +76,7 @@ class OutboxTest {
         .thenThrow(new IllegalStateException("broker offline"));
     assertThrows(IllegalStateException.class, delivery::deliverBatch);
     assertEquals(1, outbox.count());
-    when(kafka.send(anyString(), any(Object.class))).thenReturn(true);
+    doReturn(true).when(kafka).send(anyString(), any(Object.class));
     delivery.deliverBatch();
     assertEquals(0, outbox.count());
     verify(kafka, times(2))
@@ -85,6 +89,36 @@ class OutboxTest {
                       && message.getPayload().toString().contains("\"eventVersion\":2")
                       && message.getPayload().toString().contains(owner.toString());
                 }));
+  }
+
+  @Test
+  void snapshotMigrationQueuesOnceAndRollsBackItsMarkerOnFailure() {
+    SnapshotSource source = mock(SnapshotSource.class);
+    when(source.migrationKey()).thenReturn("test-v2-snapshot");
+    UUID owner = UUID.randomUUID();
+    UUID id = UUID.randomUUID();
+    doAnswer(
+            invocation -> {
+              enqueue(owner, id);
+              throw new IllegalStateException("Snapshot generation failed");
+            })
+        .when(source)
+        .enqueueSnapshots();
+    assertThrows(IllegalStateException.class, () -> migration.runOnce(source));
+    assertEquals(0, outbox.count());
+    assertFalse(migrations.existsById(source.migrationKey()));
+    doAnswer(
+            invocation -> {
+              enqueue(owner, id);
+              return null;
+            })
+        .when(source)
+        .enqueueSnapshots();
+    migration.runOnce(source);
+    migration.runOnce(source);
+    assertEquals(1, outbox.count());
+    assertTrue(migrations.existsById(source.migrationKey()));
+    verify(source, times(2)).enqueueSnapshots();
   }
 
   @Test

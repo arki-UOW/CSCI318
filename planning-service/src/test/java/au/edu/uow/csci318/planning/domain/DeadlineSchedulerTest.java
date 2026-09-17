@@ -13,8 +13,12 @@ class DeadlineSchedulerTest {
   private final DeadlineScheduler scheduler = new DeadlineScheduler();
 
   private AssessmentSnapshot work(int minutes, int days) {
+    return work(assessment, minutes, days);
+  }
+
+  private AssessmentSnapshot work(UUID id, int minutes, int days) {
     return new AssessmentSnapshot(
-        assessment,
+        id,
         UUID.randomUUID(),
         "Exam",
         "Exam",
@@ -57,7 +61,11 @@ class DeadlineSchedulerTest {
   @Test
   void longPlansNeverExceedDailyCapacityOrAnyDeadline() {
     var result =
-        scheduler.schedule(start, capacity(60), List.of(work(600, 90), work(300, 14)), Map.of());
+        scheduler.schedule(
+            start,
+            capacity(60),
+            List.of(work(600, 90), work(UUID.randomUUID(), 300, 14)),
+            Map.of());
     Map<LocalDate, Integer> days = new HashMap<>();
     result.items().forEach(item -> days.merge(item.date(), item.allocatedMinutes(), Integer::sum));
     assertTrue(days.values().stream().allMatch(minutes -> minutes <= 60));

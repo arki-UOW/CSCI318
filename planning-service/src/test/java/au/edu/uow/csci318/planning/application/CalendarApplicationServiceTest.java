@@ -52,7 +52,9 @@ class CalendarApplicationServiceTest {
     verify(events).publish(original, false, java.time.ZoneId.of("UTC"));
 
     assertNotNull(result.nextReview());
-    assertEquals(LocalDate.now().plusDays(1), result.nextReview().startAt().toLocalDate());
+    assertEquals(
+        LocalDate.now(java.time.ZoneId.of("UTC")).plusDays(1),
+        result.nextReview().startAt().toLocalDate());
     assertEquals(1, result.nextReview().repetitionStage());
     assertEquals(
         45,

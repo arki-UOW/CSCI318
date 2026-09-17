@@ -92,7 +92,7 @@ public class CalendarApplicationService {
     CalendarEntry completed = find(ownerId, id);
     completed.complete();
     events.publish(completed, false, zone);
-    CalendarEntry next = createNextReview(completed);
+    CalendarEntry next = createNextReview(completed, zone);
     return new CompletionResponse(response(completed), next == null ? null : response(next));
   }
 
@@ -143,7 +143,7 @@ public class CalendarApplicationService {
     }
   }
 
-  private CalendarEntry createNextReview(CalendarEntry completed) {
+  private CalendarEntry createNextReview(CalendarEntry completed, ZoneId zone) {
     if (!completed.isSpacedRepetition()
         || completed.getRepetitionStage() >= REVIEW_INTERVAL_DAYS.length) {
       return null;
@@ -152,7 +152,7 @@ public class CalendarApplicationService {
     int delay = REVIEW_INTERVAL_DAYS[stage];
     Duration duration = Duration.between(completed.getStartAt(), completed.getEndAt());
     LocalDateTime nextStart =
-        LocalDate.now().plusDays(delay).atTime(completed.getStartAt().toLocalTime());
+        LocalDate.now(zone).plusDays(delay).atTime(completed.getStartAt().toLocalTime());
     String baseTitle = completed.getTitle().replaceFirst("^Review: ", "");
     return entries.save(
         new CalendarEntry(

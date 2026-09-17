@@ -66,10 +66,9 @@ To enable Gemini-backed extraction and planning, set `GEMINI_API_KEY` in the pri
    GEMINI_MODEL=gemini-3.6-flash
    ```
 
-4. Rebuild and recreate the containers after changing the key. A browser refresh alone does not reload environment variables:
+4. Back up existing container databases before an upgrade or recreation: the development Compose file does not mount persistent service database volumes. Ordinary Stop now stops containers without deleting them. A rebuild/configuration change can still recreate them. A browser refresh alone does not reload environment variables.
 
    ```powershell
-   docker compose down
    docker compose up -d --build --force-recreate
    ```
 
