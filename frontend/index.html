@@ -90,34 +90,6 @@
         </div>
         <div id="load-badge" class="load low">LOW WORKLOAD</div>
       </div>
-      <section id="upload" class="dashboard-upload panel" aria-labelledby="upload-heading">
-        <div class="upload-intro">
-          <div><p class="eyebrow">BUILD YOUR SEMESTER</p><h2 id="upload-heading">Add subjects</h2><p>Import subject outlines or enter a subject yourself. You always review extracted information before it is saved.</p></div>
-          <div class="segmented" role="tablist" aria-label="Add subject method">
-            <button id="upload-tab" class="active" type="button" role="tab" aria-selected="true">Upload outlines</button>
-            <button id="manual-tab" type="button" role="tab" aria-selected="false">Enter manually</button>
-          </div>
-        </div>
-        <div id="upload-panel" class="method-panel">
-          <div class="method-heading"><div><h3>Import up to 10 outlines together</h3><p>Text is extracted locally first, then Gemini identifies each subject and its genuine assessment rows.</p></div><span class="format-list">PDF · DOCX · JPG · JPEG</span></div>
-          <label id="outline-drop" class="drop" tabindex="0" role="button" aria-controls="outline-file" aria-describedby="drop-help">
-            <input id="outline-file" type="file" multiple accept=".pdf,.docx,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg">
-            <span class="drop-icon" aria-hidden="true">⇧</span><strong>Drop your outlines here</strong><span>or browse your device to select several</span><small id="drop-help">Up to 10 files · maximum 15 MB each · PDF, DOCX, JPG or JPEG</small>
-          </label>
-          <div id="file-summary" class="file-summary-list" hidden></div>
-          <div class="actions"><button id="extract-btn" class="primary" disabled>Analyse with Gemini</button><button id="clear-file-btn" class="secondary" type="button" hidden>Clear files</button></div>
-          <div id="upload-progress" class="processing" hidden aria-live="polite"><span class="spinner" aria-hidden="true"></span><div><strong>Extracting text, then asking Gemini</strong><small id="upload-progress-detail">Tables, OCR and assessment details can take a moment.</small></div></div>
-          <div id="upload-feedback" class="feedback" aria-live="polite"></div><div id="review"></div>
-        </div>
-        <div id="manual-panel" class="method-panel" hidden>
-          <div class="method-heading"><div><h3>Enter subject details</h3><p>Add only the fields you know. Assessments are optional and can be added later.</p></div></div>
-          <form id="manual-subject-form">
-            <div class="review-grid manual-grid"><label>Subject code<input id="m-code" required placeholder="e.g. CSCI318"></label><label>Subject name<input id="m-name" required placeholder="Software Engineering Practices"></label><label>Credit points<input id="m-cp" type="number" min="1" value="6" required></label><label>Weekly study target<input id="m-target" type="number" min="0" max="10080" value="240" required></label></div>
-            <div class="review-section-head"><h3>Assessments <small>(optional)</small></h3><button id="manual-add-assessment" class="secondary" type="button">＋ Add assessment</button></div>
-            <div id="manual-assessments"></div><div id="manual-feedback" class="feedback" aria-live="polite"></div><button class="primary" type="submit">Save subject</button>
-          </form>
-        </div>
-      </section>
       <div class="metrics">
         <article><small>Due this week</small><strong id="due-count">0</strong></article>
         <article><small>Upcoming</small><strong id="upcoming-count">0</strong></article>
@@ -151,6 +123,34 @@
     </section>
 
     <section id="subjects" class="view">
+      <section id="upload" class="subject-add panel" aria-labelledby="upload-heading">
+        <div class="upload-intro">
+          <div><p class="eyebrow">BUILD YOUR SEMESTER</p><h2 id="upload-heading">Add subjects</h2><p>Import subject outlines or enter a subject yourself. You always review extracted information before it is saved.</p></div>
+          <div class="segmented" role="tablist" aria-label="Add subject method">
+            <button id="upload-tab" class="active" type="button" role="tab" aria-selected="true">Upload outlines</button>
+            <button id="manual-tab" type="button" role="tab" aria-selected="false">Enter manually</button>
+          </div>
+        </div>
+        <div id="upload-panel" class="method-panel">
+          <div class="method-heading"><div><h3>Import up to 10 outlines together</h3><p>Text is extracted locally first, then Gemini identifies each subject and its genuine assessment rows.</p></div><span class="format-list">PDF · DOCX · JPG · JPEG</span></div>
+          <label id="outline-drop" class="drop" tabindex="0" role="button" aria-controls="outline-file" aria-describedby="drop-help">
+            <input id="outline-file" type="file" multiple accept=".pdf,.docx,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg">
+            <span class="drop-icon" aria-hidden="true">⇧</span><strong>Drop your outlines here</strong><span>or browse your device to select several</span><small id="drop-help">Up to 10 files · maximum 15 MB each · PDF, DOCX, JPG or JPEG</small>
+          </label>
+          <div id="file-summary" class="file-summary-list" hidden></div>
+          <div class="actions"><button id="extract-btn" class="primary" disabled>Analyse with Gemini</button><button id="clear-file-btn" class="secondary" type="button" hidden>Clear files</button></div>
+          <div id="upload-progress" class="processing" hidden aria-live="polite"><span class="spinner" aria-hidden="true"></span><div><strong>Extracting text, then asking Gemini</strong><small id="upload-progress-detail">Tables, OCR and assessment details can take a moment.</small></div></div>
+          <div id="upload-feedback" class="feedback" aria-live="polite"></div><div id="review"></div>
+        </div>
+        <div id="manual-panel" class="method-panel" hidden>
+          <div class="method-heading"><div><h3>Enter subject details</h3><p>Add only the fields you know. Assessments are optional and can be added later.</p></div></div>
+          <form id="manual-subject-form">
+            <div class="review-grid manual-grid"><label>Subject code<input id="m-code" required placeholder="e.g. CSCI318"></label><label>Subject name<input id="m-name" required placeholder="Software Engineering Practices"></label><label>Credit points<input id="m-cp" type="number" min="1" value="6" required></label><label>Weekly study target<input id="m-target" type="number" min="0" max="10080" value="240" required></label></div>
+            <div class="review-section-head"><h3>Assessments <small>(optional)</small></h3><button id="manual-add-assessment" class="secondary" type="button">＋ Add assessment</button></div>
+            <div id="manual-assessments"></div><div id="manual-feedback" class="feedback" aria-live="polite"></div><button class="primary" type="submit">Save subject</button>
+          </form>
+        </div>
+      </section>
       <p class="eyebrow">SUBJECT OVERVIEW</p>
       <h2>Your subjects</h2>
       <div id="subject-feedback" class="feedback" aria-live="polite"></div>
@@ -252,7 +252,7 @@
           <h3>About you</h3>
           <div class="profile-picture-editor">
             <span class="profile-picture-preview"><img id="profile-picture-preview" alt="Profile picture preview" hidden><span id="profile-picture-initials">SL</span></span>
-            <div><strong>Profile picture</strong><small>PNG, JPEG or WebP · up to 1 MB</small><div class="profile-picture-actions"><label class="secondary" for="profile-picture-input">Choose image</label><input id="profile-picture-input" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp"><button id="remove-profile-picture" class="link danger" type="button">Remove</button></div></div>
+            <div><strong>Profile picture</strong><small>PNG, JPEG or WebP · up to 10 MB</small><div class="profile-picture-actions"><label class="secondary" for="profile-picture-input">Choose image</label><input id="profile-picture-input" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp"><button id="remove-profile-picture" class="link danger" type="button">Remove</button></div></div>
           </div>
           <label>Display name<input id="profile-name" required></label>
           <label>Institution<input id="profile-institution" placeholder="University of Wollongong"></label>
@@ -326,6 +326,7 @@
     </form>
   </dialog>
 
+  <script src="browser-timezone.js"></script>
   <script src="dashboard-stream.js"></script>
   <script type="module" src="app.js"></script>
 </body>

@@ -15,9 +15,14 @@
       <div><p class="eyebrow">CSCI318 · SPRING 2026</p><h1>Study Leftovers</h1><p>Turning small pockets of available time into a realistic path through the semester.</p></div>
     </header>
 
-    <section class="about-grid">
+    <section class="about-content">
       <article class="panel"><p class="eyebrow">THE PROJECT</p><h2>Built for clearer study decisions</h2><p>Study Leftovers combines subject outlines, assessments, recorded activity, deadline-aware scheduling, spaced repetition and an AI study assistant in one student workspace.</p><a class="secondary logo-download" href="assets/study-leftovers-logo.png" download>Download presentation logo</a></article>
-      <article class="panel"><p class="eyebrow">CONTRIBUTORS</p><h2>The people behind it</h2><div class="contributor"><strong>Arkajit Goswami</strong><span>Architecture, integration and repository implementation</span></div><div class="contributor"><strong>Mathew</strong><span>Scheduling requirements and product feedback</span></div><p class="about-note">Created as a collaborative University of Wollongong CSCI318 group project.</p></article>
+      <article class="panel contributors"><p class="eyebrow">CONTRIBUTORS</p><h2>The people behind it</h2>
+        <div class="contributor"><strong>Arkajit Goswami</strong><small>Role: Subject Service + Assessment Service</small><span>Delivered the Subject and Assessment core services, subject-outline extraction workflow, independent H2 persistence, and Kafka event publishing for assessment lifecycle changes.</span></div>
+        <div class="contributor"><strong>Zarif Abrar Islam</strong><small>Role: Planning Service + Streaming + Integration</small><span>Developed the Planning Service, calendar/planning workflow, availability handling and system integration, with Kafka consumer projections remaining in progress.</span></div>
+        <div class="contributor"><strong>Mathew Clephas</strong><small>Role: Study Activity Service + Agentic AI</small><span>Delivered the Study Activity Service and Kafka study-session events, and contributed to LangChain4j/Gemini-backed study-assistant and conversational availability features.</span></div>
+        <p class="about-note">Created as a collaborative University of Wollongong CSCI318 group project.</p>
+      </article>
     </section>
 
     <section class="panel acknowledgements"><p class="eyebrow">ACKNOWLEDGEMENTS</p><h2>With thanks</h2><p>We acknowledge the University of Wollongong School of Computing and Information Technology and the CSCI318 teaching team for the project framework, guidance and assessment criteria.</p><p>The system also builds on the work of the open-source Spring, Apache Kafka, H2, LangChain4j and KaTeX communities, with Google Gemini used for supported AI workflows.</p></section>
