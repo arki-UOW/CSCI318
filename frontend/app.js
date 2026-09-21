@@ -42,7 +42,7 @@ const num = value => value === '' ? null : Number(value);
 
 function show(view) {
   if (view === 'upload') {
-    show('dashboard');
+    show('subjects');
     requestAnimationFrame(() => $('#upload').scrollIntoView({ behavior: 'smooth', block: 'start' }));
     return;
   }
@@ -161,7 +161,7 @@ async function request(url, options) {
   const requestOptions = { ...(options || {}) };
   const headers = new Headers(requestOptions.headers || {});
   if (state.token) headers.set('Authorization', `Bearer ${state.token}`);
-  headers.set('X-Study-Timezone', state.account?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+  headers.set('X-Study-Timezone', accountTimezone());
   requestOptions.headers = headers;
   let response;
   try {
@@ -213,14 +213,7 @@ function applyTheme(account) {
 }
 
 function accountTimezone() {
-  const detected = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Australia/Sydney';
-  const requested = state.account?.timezone || detected;
-  try {
-    new Intl.DateTimeFormat('en-AU', { timeZone: requested }).format();
-    return requested;
-  } catch {
-    return detected;
-  }
+  return BrowserTimezone.effective(state.account);
 }
 
 function updateLiveClock() {
@@ -290,7 +283,7 @@ function renderProfilePictures(picture) {
 const dashboardStream = new DashboardStreamClient({
   endpoint: `${API.planning}/planning/dashboard/stream`,
   getToken: () => state.token,
-  getTimezone: () => state.account?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+  getTimezone: accountTimezone,
   onSnapshot: snapshot => {
     state.week = snapshot.week;
     state.streamStatus = snapshot.stream;
@@ -307,6 +300,19 @@ async function establishSession(session) {
   state.token = session.token;
   state.account = session.account;
   localStorage.setItem('studyLeftoversToken', state.token);
+  if (state.account.timezoneAutomatic !== false) {
+    const detected = BrowserTimezone.detected();
+    state.account = { ...state.account, timezone: detected, timezoneAutomatic: true };
+    try {
+      state.account = await request(`${API.accounts}/profile/timezone/detected`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timezone: detected })
+      });
+    } catch {
+      // The detected browser timezone still applies locally if persistence is temporarily unavailable.
+    }
+  }
   document.body.classList.remove('auth-required');
   $('#auth-shell').hidden = true;
   populateAccount();
@@ -342,7 +348,8 @@ $('#signup-form').addEventListener('submit', async event => {
     const session = await request(`${API.accounts}/auth/register`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: $('#signup-username').value.trim(),
-        password: $('#signup-password').value, displayName: $('#signup-name').value.trim() })
+        password: $('#signup-password').value, displayName: $('#signup-name').value.trim(),
+        timezone: BrowserTimezone.detected() })
     });
     await establishSession(session);
   } catch (error) { feedback('auth-feedback', error.message, 'error'); }
@@ -1385,9 +1392,9 @@ $$('[data-study-prompt]').forEach(button => button.addEventListener('click', () 
 $('#profile-picture-input').addEventListener('change', event => {
   const file = event.target.files?.[0];
   if (!file) return;
-  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 1024 * 1024) {
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024) {
     event.target.value = '';
-    feedback('profile-feedback', 'Choose a PNG, JPEG or WebP image no larger than 1 MB.', 'error');
+    feedback('profile-feedback', 'Choose a PNG, JPEG or WebP image no larger than 10 MB.', 'error');
     return;
   }
   const reader = new FileReader();
