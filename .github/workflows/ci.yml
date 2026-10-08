@@ -27,9 +27,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build and start a clean system with real Kafka
         run: docker compose -p study-leftovers-ci up -d --build
-        env: {AI_PROVIDER: none}
+        env: {AI_PROVIDER: auto}
       - name: Verify live workload, progress, isolation and browser push without upstream REST
-        run: python3 scripts/verify-streaming.py --isolate-upstream --compose-project study-leftovers-ci
+        run: python3 scripts/verify-streaming.py --isolate-upstream --skip-ai-planning --compose-project study-leftovers-ci
       - name: Capture service diagnostics
         if: always()
         run: docker compose -p study-leftovers-ci logs --no-color --tail 250

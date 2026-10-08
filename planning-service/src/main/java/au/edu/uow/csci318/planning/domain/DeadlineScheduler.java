@@ -49,8 +49,7 @@ public class DeadlineScheduler {
     }
     LocalDate endDate =
         assessments.stream()
-            .map(AssessmentSnapshot::dueDate)
-            .filter(date -> date != null && !date.isBefore(startDate))
+            .map(assessment -> effectiveDeadline(assessment, startDate))
             .map(date -> date.isAfter(maximumEnd) ? maximumEnd : date)
             .max(LocalDate::compareTo)
             .orElse(startDate.plusDays(6));
@@ -61,10 +60,7 @@ public class DeadlineScheduler {
     int scheduledMinutes = 0;
 
     for (AssessmentSnapshot assessment : assessments) {
-      LocalDate dueDate =
-          assessment.dueDate() == null
-              ? startDate.plusDays(6)
-              : assessment.dueDate().isAfter(maximumEnd) ? maximumEnd : assessment.dueDate();
+      LocalDate dueDate = effectiveDeadline(assessment, startDate);
       if (dueDate.isBefore(startDate)) continue;
 
       int totalMinutes =
@@ -193,14 +189,17 @@ public class DeadlineScheduler {
     return List.copyOf(selected);
   }
 
+  private LocalDate effectiveDeadline(AssessmentSnapshot assessment, LocalDate startDate) {
+    return assessment.dueDate() == null ? startDate.plusDays(6) : assessment.dueDate();
+  }
+
   private List<AssessmentSnapshot> prioritised(List<AssessmentSnapshot> work, LocalDate startDate) {
     return work.stream()
         .filter(
             assessment -> assessment.dueDate() == null || !assessment.dueDate().isBefore(startDate))
         .sorted(
             Comparator.comparing(
-                    (AssessmentSnapshot assessment) ->
-                        assessment.dueDate() == null ? LocalDate.MAX : assessment.dueDate())
+                    (AssessmentSnapshot assessment) -> effectiveDeadline(assessment, startDate))
                 .thenComparing(assessment -> "HIGH".equals(assessment.priority()) ? 0 : 1)
                 .thenComparingDouble(
                     assessment -> assessment.weighting() == null ? 0 : -assessment.weighting()))

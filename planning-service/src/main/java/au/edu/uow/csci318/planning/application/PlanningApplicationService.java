@@ -1,6 +1,7 @@
 package au.edu.uow.csci318.planning.application;
 
 import au.edu.uow.csci318.planning.domain.StudyPlan;
+import au.edu.uow.csci318.planning.domain.WeeklyTimeSlots;
 import au.edu.uow.csci318.planning.dto.PlanningDtos.*;
 import au.edu.uow.csci318.planning.infrastructure.StudyPlanRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -45,7 +46,7 @@ public class PlanningApplicationService {
   @Transactional
   public PlanResponse generate(
       UUID ownerId, String authorization, ZoneId timezone, PlanRequest request) {
-    validatePeriod(request);
+    WeeklyTimeSlots slots = validatePeriod(request);
     AgenticPlanningAdvisor.Advice advice =
         advisor.adviseGenerate(ownerId, authorization, timezone, request);
     StudyPlanningAgent.Schedule schedule = agent.generate(ownerId, request, authorization);
@@ -66,8 +67,10 @@ public class PlanningApplicationService {
                   version,
                   json.writeValueAsString(schedule.items()),
                   explanation));
-      calendar.replaceAiPlan(ownerId, saved.getId(), schedule.items());
+      calendar.replaceAiPlan(ownerId, saved.getId(), schedule.items(), slots);
       return response(saved);
+    } catch (IllegalArgumentException exception) {
+      throw exception;
     } catch (Exception exception) {
       throw new IllegalStateException("Plan could not be stored", exception);
     }
@@ -75,16 +78,12 @@ public class PlanningApplicationService {
 
   @Transactional
   public PlanResponse regenerate(
-      UUID ownerId,
-      String authorization,
-      ZoneId timezone,
-      UUID previousId,
-      PlanRequest request) {
+      UUID ownerId, String authorization, ZoneId timezone, UUID previousId, PlanRequest request) {
     StudyPlan old =
         plans
             .findByIdAndOwnerId(previousId, ownerId)
             .orElseThrow(() -> new NoSuchElementException("Study plan not found"));
-    validatePeriod(request);
+    WeeklyTimeSlots slots = validatePeriod(request);
     AgenticPlanningAdvisor.Advice advice =
         advisor.adviseRegenerate(ownerId, authorization, timezone, request, previousId);
     StudyPlanningAgent.Schedule schedule = agent.generate(ownerId, request, authorization);
@@ -105,8 +104,10 @@ public class PlanningApplicationService {
                   old.getVersion() + 1,
                   json.writeValueAsString(schedule.items()),
                   explanation));
-      calendar.replaceAiPlan(ownerId, saved.getId(), schedule.items());
+      calendar.replaceAiPlan(ownerId, saved.getId(), schedule.items(), slots);
       return response(saved);
+    } catch (IllegalArgumentException exception) {
+      throw exception;
     } catch (Exception exception) {
       throw new IllegalStateException("Plan could not be regenerated", exception);
     }
@@ -124,7 +125,7 @@ public class PlanningApplicationService {
     return plans.findTopByOwnerIdOrderByCreatedAtDesc(ownerId).map(this::response);
   }
 
-  private void validatePeriod(PlanRequest request) {
+  private WeeklyTimeSlots validatePeriod(PlanRequest request) {
     if (request.startDate() == null || request.dailyAvailabilityMinutes() == null) {
       throw new IllegalArgumentException("Start date and daily availability are required");
     }
@@ -139,6 +140,31 @@ public class PlanningApplicationService {
             "Availability must be 0-1440 minutes within the template week");
       }
     }
+    if (request.availabilitySlots() == null) return null;
+    Map<LocalDate, List<WeeklyTimeSlots.Window>> windows = new HashMap<>();
+    request
+        .availabilitySlots()
+        .forEach(
+            (date, values) -> {
+              if (values == null || values.stream().anyMatch(Objects::isNull)) {
+                throw new IllegalArgumentException("Availability time slots cannot be null");
+              }
+              windows.put(
+                  date,
+                  values.stream()
+                      .map(value -> new WeeklyTimeSlots.Window(value.start(), value.end()))
+                      .toList());
+            });
+    WeeklyTimeSlots slots = WeeklyTimeSlots.from(request.startDate(), windows);
+    for (int day = 0; day < 7; day++) {
+      LocalDate date = request.startDate().plusDays(day);
+      if (slots.minutes(date.getDayOfWeek())
+          != request.dailyAvailabilityMinutes().getOrDefault(date, 0)) {
+        throw new IllegalArgumentException(
+            "Daily minutes must match the supplied availability slots");
+      }
+    }
+    return slots;
   }
 
   private void validateItems(
@@ -175,9 +201,7 @@ public class PlanningApplicationService {
   }
 
   private String explanation(
-      StudyPlanningAgent.Schedule schedule,
-      String verb,
-      AgenticPlanningAdvisor.Advice advice) {
+      StudyPlanningAgent.Schedule schedule, String verb, AgenticPlanningAdvisor.Advice advice) {
     String text =
         advice.provider()
             + " agent used "

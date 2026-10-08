@@ -2,6 +2,7 @@ package au.edu.uow.csci318.planning.application;
 
 import au.edu.uow.csci318.planning.domain.CalendarEntry;
 import au.edu.uow.csci318.planning.domain.CalendarEntry.*;
+import au.edu.uow.csci318.planning.domain.WeeklyTimeSlots;
 import au.edu.uow.csci318.planning.dto.CalendarDtos.*;
 import au.edu.uow.csci318.planning.dto.PlanningDtos.PlanItem;
 import au.edu.uow.csci318.planning.infrastructure.CalendarEntryRepository;
@@ -98,6 +99,16 @@ public class CalendarApplicationService {
 
   @Transactional
   public void replaceAiPlan(UUID ownerId, UUID planId, List<PlanItem> items) {
+    replaceAiPlan(ownerId, planId, items, null);
+  }
+
+  @Transactional
+  public void replaceAiPlan(
+      UUID ownerId, UUID planId, List<PlanItem> items, WeeklyTimeSlots slots) {
+    if (slots != null) {
+      replaceWithinSlots(ownerId, planId, items, slots);
+      return;
+    }
     entries.deleteByOwnerIdAndOriginAndStatus(ownerId, Origin.AI_PLAN, EntryStatus.PLANNED);
     Map<LocalDate, Integer> dayMinutes = new HashMap<>();
     Map<LocalDate, Integer> dayCount = new HashMap<>();
@@ -131,7 +142,7 @@ public class CalendarApplicationService {
               item.assessmentId(),
               planId,
               null,
-              item.title(),
+              calendarTitle(item.title()),
               description,
               type,
               startAt,
@@ -141,6 +152,70 @@ public class CalendarApplicationService {
               item.repetitionStage()));
       usedMinutes.merge(item.date(), item.allocatedMinutes() + gap, Integer::sum);
     }
+  }
+
+  private void replaceWithinSlots(
+      UUID ownerId, UUID planId, List<PlanItem> items, WeeklyTimeSlots slots) {
+    if (items.isEmpty()) {
+      entries.deleteByOwnerIdAndOriginAndStatus(ownerId, Origin.AI_PLAN, EntryStatus.PLANNED);
+      return;
+    }
+    LocalDate first = items.stream().map(PlanItem::date).min(LocalDate::compareTo).orElseThrow();
+    LocalDate last = items.stream().map(PlanItem::date).max(LocalDate::compareTo).orElseThrow();
+    List<WeeklyTimeSlots.Interval> occupied =
+        entries
+            .findOverlapping(ownerId, first.atStartOfDay(), last.plusDays(1).atStartOfDay())
+            .stream()
+            .filter(
+                entry ->
+                    entry.getOrigin() != Origin.AI_PLAN || entry.getStatus() != EntryStatus.PLANNED)
+            .map(entry -> new WeeklyTimeSlots.Interval(entry.getStartAt(), entry.getEndAt()))
+            .toList();
+    Map<LocalDate, Deque<WeeklyTimeSlots.Interval>> free = new HashMap<>();
+    List<CalendarEntry> replacement = new ArrayList<>();
+    for (PlanItem item : items) {
+      Deque<WeeklyTimeSlots.Interval> windows =
+          free.computeIfAbsent(item.date(), date -> new ArrayDeque<>(slots.free(date, occupied)));
+      int remaining = item.allocatedMinutes();
+      while (remaining > 0 && !windows.isEmpty()) {
+        WeeklyTimeSlots.Interval window = windows.removeFirst();
+        int minutes =
+            Math.min(remaining, (int) Duration.between(window.start(), window.end()).toMinutes());
+        if (minutes == 0) continue;
+        LocalDateTime end = window.start().plusMinutes(minutes);
+        replacement.add(
+            new CalendarEntry(
+                ownerId,
+                item.subjectId(),
+                item.assessmentId(),
+                planId,
+                null,
+                calendarTitle(item.title()),
+                "Study scheduled within your availability",
+                item.repetitionStage() > 0 ? EntryType.REVIEW : EntryType.STUDY_SESSION,
+                window.start(),
+                end,
+                Origin.AI_PLAN,
+                false,
+                item.repetitionStage()));
+        remaining -= minutes;
+        if (end.isBefore(window.end()))
+          windows.addFirst(new WeeklyTimeSlots.Interval(end, window.end()));
+      }
+      if (remaining > 0) {
+        throw new IllegalArgumentException(
+            "Existing calendar commitments leave insufficient availability on "
+                + item.date()
+                + ". Adjust your availability or calendar and try again.");
+      }
+    }
+    // Validate all placements first so a conflict never destroys the previous calendar plan.
+    entries.deleteByOwnerIdAndOriginAndStatus(ownerId, Origin.AI_PLAN, EntryStatus.PLANNED);
+    replacement.forEach(entries::save);
+  }
+
+  private String calendarTitle(String title) {
+    return title.length() <= 160 ? title : title.substring(0, 157) + "...";
   }
 
   private CalendarEntry createNextReview(CalendarEntry completed, ZoneId zone) {

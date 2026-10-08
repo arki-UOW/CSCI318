@@ -31,7 +31,6 @@ public class RestPlanningData implements PlanningTools {
   public List<AssessmentView> getIncompleteAssessments(String authorization) {
     return getAssessments(authorization).stream()
         .filter(assessment -> "INCOMPLETE".equals(assessment.status()))
-        .filter(this::plausibleAssessment)
         .toList();
   }
 
@@ -92,15 +91,6 @@ public class RestPlanningData implements PlanningTools {
             .retrieve()
             .body(new ParameterizedTypeReference<>() {});
     return response == null ? List.of() : response;
-  }
-
-  private boolean plausibleAssessment(AssessmentView assessment) {
-    String title = assessment.title() == null ? "" : assessment.title().toLowerCase();
-    return title.length() >= 3
-        && title.length() <= 120
-        && !title.matches(
-            ".*(learning outcome|eligible for a pass|submitted late|late submission|"
-                + "academic integrity|marking criteria|name type|student must|policy).*?");
   }
 
   private record StudySummary(
