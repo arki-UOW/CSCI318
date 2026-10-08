@@ -47,7 +47,12 @@ public final class PlanningDtos {
 
   public record PlanRequest(
       @NotNull LocalDate startDate,
-      @NotNull Map<LocalDate, @PositiveOrZero @Max(1440) Integer> dailyAvailabilityMinutes) {}
+      @NotNull Map<LocalDate, @PositiveOrZero @Max(1440) Integer> dailyAvailabilityMinutes,
+      Map<LocalDate, List<@Valid TimeSlot>> availabilitySlots) {
+    public PlanRequest(LocalDate startDate, Map<LocalDate, Integer> dailyAvailabilityMinutes) {
+      this(startDate, dailyAvailabilityMinutes, null);
+    }
+  }
 
   public record PlanResponse(
       UUID id,

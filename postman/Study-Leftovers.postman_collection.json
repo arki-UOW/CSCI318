@@ -4,25 +4,85 @@
     "description": "Run in order. The collection creates an account, subject, assessment and study session, then verifies the two Kafka-derived projections and both agentic planning workflows.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
-  "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{token}}", "type": "string"}]},
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
   "variable": [
-    {"key": "accountBase", "value": "http://localhost:8085/api"},
-    {"key": "subjectBase", "value": "http://localhost:8081/api"},
-    {"key": "assessmentBase", "value": "http://localhost:8082/api"},
-    {"key": "activityBase", "value": "http://localhost:8083/api"},
-    {"key": "planningBase", "value": "http://localhost:8084/api/planning"},
-    {"key": "timezone", "value": "Australia/Sydney"},
-    {"key": "username", "value": ""},
-    {"key": "password", "value": "StudyDemo2026!"},
-    {"key": "token", "value": ""},
-    {"key": "subjectId", "value": ""},
-    {"key": "assessmentId", "value": ""},
-    {"key": "sessionId", "value": ""},
-    {"key": "planId", "value": ""},
-    {"key": "today", "value": ""},
-    {"key": "dueDate", "value": ""},
-    {"key": "weekStart", "value": ""},
-    {"key": "planBody", "value": ""}
+    {
+      "key": "accountBase",
+      "value": "http://localhost:8085/api"
+    },
+    {
+      "key": "subjectBase",
+      "value": "http://localhost:8081/api"
+    },
+    {
+      "key": "assessmentBase",
+      "value": "http://localhost:8082/api"
+    },
+    {
+      "key": "activityBase",
+      "value": "http://localhost:8083/api"
+    },
+    {
+      "key": "planningBase",
+      "value": "http://localhost:8084/api/planning"
+    },
+    {
+      "key": "timezone",
+      "value": "Australia/Sydney"
+    },
+    {
+      "key": "username",
+      "value": ""
+    },
+    {
+      "key": "password",
+      "value": "StudyDemo2026!"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "subjectId",
+      "value": ""
+    },
+    {
+      "key": "assessmentId",
+      "value": ""
+    },
+    {
+      "key": "sessionId",
+      "value": ""
+    },
+    {
+      "key": "planId",
+      "value": ""
+    },
+    {
+      "key": "today",
+      "value": ""
+    },
+    {
+      "key": "dueDate",
+      "value": ""
+    },
+    {
+      "key": "weekStart",
+      "value": ""
+    },
+    {
+      "key": "planBody",
+      "value": ""
+    }
   ],
   "event": [
     {
@@ -30,11 +90,12 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "if (!pm.collectionVariables.get('username')) pm.collectionVariables.set('username', `postman_${Date.now()}`);",
+          "if (pm.info.requestName === 'Register and remember token') { pm.collectionVariables.set('username', `postman_${Date.now()}`); pm.collectionVariables.set('token', ''); ['workloadPoll','progressPoll','completePoll'].forEach(key => pm.collectionVariables.set(key, 0)); }",
           "const now = new Date();",
           "const local = value => `${value.getFullYear()}-${String(value.getMonth()+1).padStart(2,'0')}-${String(value.getDate()).padStart(2,'0')}`;",
           "const due = new Date(now); due.setDate(due.getDate() + 21);",
           "const monday = new Date(now); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));",
+          "const changedDue = new Date(now); changedDue.setDate(changedDue.getDate() + 7); pm.collectionVariables.set('changedDueDate', local(changedDue));",
           "pm.collectionVariables.set('today', local(now));",
           "pm.collectionVariables.set('dueDate', local(due));",
           "pm.collectionVariables.set('weekStart', local(monday));",
@@ -51,18 +112,52 @@
         {
           "name": "Register and remember token",
           "request": {
-            "auth": {"type": "noauth"},
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {"mode": "raw", "raw": "{\"username\":\"{{username}}\",\"password\":\"{{password}}\",\"displayName\":\"Postman Demo\",\"timezone\":\"{{timezone}}\"}"},
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"username\":\"{{username}}\",\"password\":\"{{password}}\",\"displayName\":\"Postman Demo\",\"timezone\":\"{{timezone}}\"}"
+            },
             "url": "{{accountBase}}/auth/register"
           },
-          "event": [{"listen": "test", "script": {"exec": ["pm.test('account created', () => pm.response.to.have.status(201));", "const body=pm.response.json(); pm.collectionVariables.set('token', body.token); pm.expect(body.account.username).to.eql(pm.collectionVariables.get('username'));"], "type": "text/javascript"}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('account created', () => pm.response.to.have.status(201));",
+                  "const body=pm.response.json(); pm.collectionVariables.set('token', body.token); pm.expect(body.account.username).to.eql(pm.collectionVariables.get('username'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Read remembered profile",
-          "request": {"method": "GET", "url": "{{accountBase}}/auth/session"},
-          "event": [{"listen": "test", "script": {"exec": ["pm.test('profile belongs to demo account', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().username).to.eql(pm.collectionVariables.get('username')); });"], "type": "text/javascript"}}]
+          "request": {
+            "method": "GET",
+            "url": "{{accountBase}}/auth/session"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('profile belongs to demo account', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().username).to.eql(pm.collectionVariables.get('username')); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     },
@@ -73,37 +168,100 @@
           "name": "Create subject manually",
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {"mode": "raw", "raw": "{\"code\":\"CSCI318\",\"name\":\"Software Engineering Practices\",\"creditPoints\":6,\"weeklyStudyTargetMinutes\":240,\"assessments\":[]}"},
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"code\":\"CSCI318\",\"name\":\"Software Engineering Practices\",\"creditPoints\":6,\"weeklyStudyTargetMinutes\":240,\"assessments\":[]}"
+            },
             "url": "{{subjectBase}}/subjects"
           },
-          "event": [{"listen": "test", "script": {"exec": ["pm.test('subject created', () => pm.response.to.have.status(201)); pm.collectionVariables.set('subjectId', pm.response.json().id);"], "type": "text/javascript"}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('subject created', () => pm.response.to.have.status(201)); pm.collectionVariables.set('subjectId', pm.response.json().id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Edit subject details",
           "request": {
             "method": "PATCH",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {"mode": "raw", "raw": "{\"code\":\"CSCI318\",\"name\":\"Software Engineering Practices and Principles\",\"creditPoints\":6,\"weeklyStudyTargetMinutes\":300}"},
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"code\":\"CSCI318\",\"name\":\"Software Engineering Practices and Principles\",\"creditPoints\":6,\"weeklyStudyTargetMinutes\":300}"
+            },
             "url": "{{subjectBase}}/subjects/{{subjectId}}"
           },
-          "event": [{"listen": "test", "script": {"exec": ["pm.test('subject update is returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().weeklyStudyTargetMinutes).to.eql(300); });"], "type": "text/javascript"}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('subject update is returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().weeklyStudyTargetMinutes).to.eql(300); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Create assessment",
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {"mode": "raw", "raw": "{\"subjectId\":\"{{subjectId}}\",\"title\":\"Architecture Report\",\"type\":\"Report\",\"weighting\":40,\"dueDate\":\"{{dueDate}}\",\"estimatedMinutes\":420,\"priority\":\"HIGH\",\"description\":\"Demonstrate DDD, Kafka Streams and agentic AI\"}"},
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"subjectId\":\"{{subjectId}}\",\"title\":\"Architecture Report\",\"type\":\"Report\",\"weighting\":40,\"dueDate\":\"{{dueDate}}\",\"estimatedMinutes\":420,\"priority\":\"HIGH\",\"description\":\"Demonstrate DDD, Kafka Streams and agentic AI\"}"
+            },
             "url": "{{assessmentBase}}/assessments"
           },
-          "event": [{"listen": "test", "script": {"exec": ["pm.test('assessment created', () => pm.response.to.have.status(201)); pm.collectionVariables.set('assessmentId', pm.response.json().id);"], "type": "text/javascript"}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('assessment created', () => pm.response.to.have.status(201)); pm.collectionVariables.set('assessmentId', pm.response.json().id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Upload outline (choose a local file before sending)",
           "request": {
             "method": "POST",
-            "body": {"mode": "formdata", "formdata": [{"key": "file", "type": "file", "src": []}]},
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
             "url": "{{subjectBase}}/subject-outlines"
           }
         }
@@ -116,26 +274,108 @@
           "name": "Record study session",
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Study-Timezone", "value": "{{timezone}}"}],
-            "body": {"mode": "raw", "raw": "{\"subjectId\":\"{{subjectId}}\",\"durationMinutes\":45,\"studyDate\":\"{{today}}\",\"description\":\"Reviewed event-driven architecture\"}"},
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Study-Timezone",
+                "value": "{{timezone}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"subjectId\":\"{{subjectId}}\",\"durationMinutes\":45,\"studyDate\":\"{{today}}\",\"description\":\"Reviewed event-driven architecture\"}"
+            },
             "url": "{{activityBase}}/study-sessions"
           },
-          "event": [{"listen": "test", "script": {"exec": ["pm.test('session created', () => pm.response.to.have.status(201)); pm.collectionVariables.set('sessionId', pm.response.json().id);"], "type": "text/javascript"}}]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('session created', () => pm.response.to.have.status(201)); pm.collectionVariables.set('sessionId', pm.response.json().id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Wait for Kafka projections",
-          "request": {"method": "GET", "header": [{"key": "X-Study-Timezone", "value": "{{timezone}}"}], "url": "{{planningBase}}/stream-status"},
-          "event": [{"listen": "test", "script": {"exec": ["pm.test('stream state is queryable', () => pm.response.to.have.status(200));", "if (!pm.response.json().initialized) console.warn('Kafka is still catching up; repeat the streaming requests in a moment.');"], "type": "text/javascript"}}]
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Study-Timezone",
+                "value": "{{timezone}}"
+              }
+            ],
+            "url": "{{planningBase}}/stream-status"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('stream state is queryable', () => pm.response.to.have.status(200));",
+                  "if (!pm.response.json().initialized) console.warn('Kafka is still catching up; repeat the streaming requests in a moment.');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "RT-01 workload projection",
-          "request": {"method": "GET", "header": [{"key": "X-Study-Timezone", "value": "{{timezone}}"}], "url": "{{planningBase}}/workload"},
-          "event": [{"listen": "test", "script": {"exec": ["pm.test('workload came from projection', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().incompleteAssessments).to.be.at.least(1); });"], "type": "text/javascript"}}]
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Study-Timezone",
+                "value": "{{timezone}}"
+              }
+            ],
+            "url": "{{planningBase}}/workload"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(200); const body = pm.response.json();",
+                  "if (!(body.incompleteAssessments === 1) && Number(pm.collectionVariables.get('workloadPoll') || 0) < 30) { pm.collectionVariables.set('workloadPoll', Number(pm.collectionVariables.get('workloadPoll') || 0) + 1); setTimeout(() => pm.execution.setNextRequest(pm.info.requestName), 500); } else { pm.collectionVariables.set('workloadPoll', 0); pm.test('projection reached expected state', () => { pm.expect(body.incompleteAssessments).to.eql(1); }); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "RT-02 progress projection",
-          "request": {"method": "GET", "header": [{"key": "X-Study-Timezone", "value": "{{timezone}}"}], "url": "{{planningBase}}/progress/{{subjectId}}?weekOf={{weekStart}}"},
-          "event": [{"listen": "test", "script": {"exec": ["pm.test('progress includes the session', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().studiedMinutes).to.be.at.least(45); });"], "type": "text/javascript"}}]
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Study-Timezone",
+                "value": "{{timezone}}"
+              }
+            ],
+            "url": "{{planningBase}}/progress/{{subjectId}}?weekOf={{weekStart}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(200); const body = pm.response.json();",
+                  "if (!(body.studiedMinutes === 45 && body.targetMinutes === 300) && Number(pm.collectionVariables.get('progressPoll') || 0) < 30) { pm.collectionVariables.set('progressPoll', Number(pm.collectionVariables.get('progressPoll') || 0) + 1); setTimeout(() => pm.execution.setNextRequest(pm.info.requestName), 500); } else { pm.collectionVariables.set('progressPoll', 0); pm.test('projection reached expected state', () => { pm.expect(body.studiedMinutes).to.eql(45); pm.expect(body.targetMinutes).to.eql(300); }); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     },
@@ -144,13 +384,95 @@
       "item": [
         {
           "name": "AI-01 generate validated deadline plan",
-          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Study-Timezone", "value": "{{timezone}}"}], "body": {"mode": "raw", "raw": "{{planBody}}"}, "url": "{{planningBase}}/plans"},
-          "event": [{"listen": "test", "script": {"exec": ["pm.test('agentic plan created', () => pm.response.to.have.status(201)); const body=pm.response.json(); pm.collectionVariables.set('planId', body.id); pm.expect(body.items.length).to.be.above(0); pm.expect(body.explanation).to.include('agent used');"], "type": "text/javascript"}}]
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Study-Timezone",
+                "value": "{{timezone}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{{planBody}}"
+            },
+            "url": "{{planningBase}}/plans"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('agentic plan created', () => pm.response.to.have.status(201)); const body=pm.response.json(); pm.collectionVariables.set('planId', body.id); pm.expect(body.items.length).to.be.above(0); pm.expect(body.explanation).to.include('agent used');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Change deadline before regeneration",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\": \"Architecture Report\", \"type\": \"Report\", \"weighting\": 40, \"dueDate\": \"{{changedDueDate}}\", \"estimatedMinutes\": 180, \"priority\": \"HIGH\", \"description\": \"Revised deadline and workload\"}"
+            },
+            "url": "{{assessmentBase}}/assessments/{{assessmentId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('deadline changed', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().dueDate).to.eql(pm.collectionVariables.get('changedDueDate')); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "AI-02 regenerate after current-state retrieval",
-          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Study-Timezone", "value": "{{timezone}}"}], "body": {"mode": "raw", "raw": "{{planBody}}"}, "url": "{{planningBase}}/plans/{{planId}}/regenerate"},
-          "event": [{"listen": "test", "script": {"exec": ["pm.test('new plan version created', () => { pm.response.to.have.status(201); pm.expect(pm.response.json().version).to.be.above(1); });"], "type": "text/javascript"}}]
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Study-Timezone",
+                "value": "{{timezone}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{{planBody}}"
+            },
+            "url": "{{planningBase}}/plans/{{planId}}/regenerate"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('regenerated plan reflects changed deadline and workload', () => { pm.response.to.have.status(201); const plan=pm.response.json(); pm.expect(plan.version).to.be.above(1); pm.expect(plan.endDate).to.eql(pm.collectionVariables.get('changedDueDate')); pm.expect(plan.items.reduce((total,item) => total+item.allocatedMinutes, 0)).to.eql(180); pm.expect(plan.explanation).to.include('getExistingStudyPlan'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     },
@@ -159,13 +481,46 @@
       "item": [
         {
           "name": "Complete assessment",
-          "request": {"method": "POST", "url": "{{assessmentBase}}/assessments/{{assessmentId}}/complete"},
-          "event": [{"listen": "test", "script": {"exec": ["pm.test('assessment completed', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('COMPLETED'); });"], "type": "text/javascript"}}]
+          "request": {
+            "method": "POST",
+            "url": "{{assessmentBase}}/assessments/{{assessmentId}}/complete"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('assessment completed', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('COMPLETED'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Verify workload correction after Kafka catches up",
-          "request": {"method": "GET", "header": [{"key": "X-Study-Timezone", "value": "{{timezone}}"}], "url": "{{planningBase}}/workload"},
-          "event": [{"listen": "test", "script": {"exec": ["pm.test('workload remains queryable after completion', () => pm.response.to.have.status(200));"], "type": "text/javascript"}}]
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Study-Timezone",
+                "value": "{{timezone}}"
+              }
+            ],
+            "url": "{{planningBase}}/workload"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(200); const body = pm.response.json();",
+                  "if (!(body.incompleteAssessments === 0) && Number(pm.collectionVariables.get('completePoll') || 0) < 30) { pm.collectionVariables.set('completePoll', Number(pm.collectionVariables.get('completePoll') || 0) + 1); setTimeout(() => pm.execution.setNextRequest(pm.info.requestName), 500); } else { pm.collectionVariables.set('completePoll', 0); pm.test('projection reached expected state', () => { pm.expect(body.incompleteAssessments).to.eql(0); }); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     }

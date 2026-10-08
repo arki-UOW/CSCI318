@@ -47,6 +47,18 @@
 
 Errors contain `timestamp`, `status`, `error`, `message`, `path`, and optional `validationErrors`.
 
+Generation and regeneration accept `startDate`, `dailyAvailabilityMinutes` and optional `availabilitySlots`:
+
+```json
+{
+  "startDate": "2026-10-12",
+  "dailyAvailabilityMinutes": {"2026-10-12": 60},
+  "availabilitySlots": {"2026-10-12": [{"start": "09:00", "end": "10:00"}]}
+}
+```
+
+Slots must use whole-minute, non-overlapping times within the seven-day template and agree with each day's minute total. They repeat by weekday through assessment deadlines. Calendar blocks stay within the slots and avoid existing commitments. If a scheduled day has insufficient free time, the request fails and the previous plan remains intact. Clients omitting slots retain daily-capacity planning with automatic calendar times. Undated assessments use the same start-plus-six-day fallback for task scheduling and the plan's overall end date.
+
 All subject, assessment, activity, planning and calendar calls require the opaque bearer token returned by Account Service. Services validate the token with Account Service and scope every query and mutation to its account ID. Raw tokens and passwords are never stored: session tokens are SHA-256 hashed and passwords use BCrypt.
 
 Subject confirmation uses a committed `CONFIRMING` import state before calling Assessment Service. Assessment Service can therefore verify the subject through REST, and repeated imports return existing same-title assessments instead of duplicating them. Subject Service marks the import `CONFIRMED` only after that call succeeds.

@@ -77,6 +77,32 @@ class DeadlineSchedulerTest {
   }
 
   @Test
+  void mixedDatedAndUndatedWorkUsesOneConsistentPlanningHorizon() {
+    AssessmentSnapshot undated =
+        new AssessmentSnapshot(
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            "AI",
+            "Report",
+            20.0,
+            null,
+            null,
+            null,
+            120,
+            "MEDIUM",
+            "INCOMPLETE",
+            Instant.EPOCH);
+    var result = scheduler.schedule(start, capacity(60), List.of(work(30, 1), undated), Map.of());
+    assertEquals(start.plusDays(6), result.endDate());
+    assertEquals(150, result.scheduledMinutes());
+    assertTrue(result.items().stream().allMatch(item -> !item.date().isAfter(result.endDate())));
+    assertTrue(
+        result.items().stream()
+            .filter(item -> item.assessmentId().equals(assessment))
+            .allMatch(item -> item.date().isBefore(start.plusDays(1))));
+  }
+
+  @Test
   void unsupportedHorizonIsExplicitRatherThanSilentlyTruncated() {
     assertThrows(
         IllegalArgumentException.class,

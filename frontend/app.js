@@ -1089,7 +1089,7 @@ $('#activity-form').addEventListener('submit', async event => {
   }
 });
 
-async function generatePlan(availability, button) {
+async function generatePlan(availability, button, availabilitySlots) {
   const start = $('#plan-start').value;
   setBusy(button, true, 'Generating');
   feedback('plan-feedback', 'Building a deadline plan from estimated minutes, due dates and your weekly availability…', 'info');
@@ -1097,7 +1097,7 @@ async function generatePlan(availability, button) {
     state.plan = await request(`${API.planning}/planning/plans`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ startDate: start, dailyAvailabilityMinutes: availability })
+      body: JSON.stringify({ startDate: start, dailyAvailabilityMinutes: availability, availabilitySlots })
     });
     feedback('plan-feedback', `Your plan now runs through ${state.plan.endDate}.`, 'success');
     render();
@@ -1190,7 +1190,7 @@ $('#plan-start').addEventListener('change', () => {
 });
 
 $('#generate-chat-plan').addEventListener('click', async event => {
-  await generatePlan(state.availabilityMinutes, event.currentTarget);
+  await generatePlan(state.availabilityMinutes, event.currentTarget, state.availability);
 });
 
 function mondayFor(date) {
