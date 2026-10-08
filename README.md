@@ -113,7 +113,7 @@ The Postman collection in `postman/` is an ordered authenticated demonstration. 
 
 Run `mvn clean verify` and `node --test frontend/tests/*.test.cjs`. Tests cover domain rules, outbox rollback/retry, Kafka Streams replay/corrections/account isolation, persistent projections and authenticated dashboard push parsing. No LLM key is required.
 
-CI starts a real Kafka broker, executes `python3 scripts/verify-streaming.py`, checks both live calculations and SSE, then stops Assessment/Activity to verify dashboard query independence from upstream REST. Run the script against a demo system; it creates two demo accounts. See [testing strategy](docs/testing/testing-strategy.md) and [traceability matrix](docs/traceability.md).
+CI starts a real Kafka broker, executes `python3 scripts/verify-streaming.py --skip-ai-planning`, checks both live calculations and SSE, then stops Assessment/Activity to verify dashboard query independence from upstream REST. The flag keeps CI secret-free; running the script without it also verifies live agentic plan generation and therefore requires a configured provider key. The script creates two demo accounts. See [testing strategy](docs/testing/testing-strategy.md) and [traceability matrix](docs/traceability.md).
 
 Existing academic rows are republished once as owner-scoped version-2 snapshots at startup. The dashboard may briefly show “Waiting for events” while Kafka catches up. Do not delete databases or Kafka state for an ordinary upgrade.
 

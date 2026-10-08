@@ -105,6 +105,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--isolate-upstream', action='store_true',
                         help='Stop Assessment/Activity temporarily to prove query independence (CI only).')
+    parser.add_argument('--skip-ai-planning', action='store_true',
+                        help='Skip the live-provider planning call when CI intentionally has no AI key.')
     parser.add_argument('--compose-project', default='study-leftovers-ci')
     options = parser.parse_args()
     if options.isolate_upstream and options.compose_project != 'study-leftovers-ci':
@@ -150,13 +152,16 @@ def main():
         api(8084, f"calendar/{block['id']}/complete", token, method='POST')
         eventually('Completed calendar blocks also update progress exactly once',
                    lambda: api(8084, progress_path, token)['studiedMinutes'] == 75)
-        plan = api(8084, 'planning/plans', token, {'startDate': today.isoformat(), 'dailyAvailabilityMinutes': {
-            (today + dt.timedelta(days=day)).isoformat(): 120 for day in range(7)}})
-        assert plan['endDate'] == due.isoformat()
-        assert sum(item['allocatedMinutes'] for item in plan['items']) == 150
-        assert any(item['repetitionStage'] > 0 for item in plan['items'])
-        assert all(item['date'] < due.isoformat() for item in plan['items'])
-        print('PASS: deadline schedule contains 150 remaining minutes and spaced reviews through the due date', flush=True)
+        if options.skip_ai_planning:
+            print('SKIP: live AI planning requires a provider key; deterministic scheduling and the agent tool loop are covered by unit tests', flush=True)
+        else:
+            plan = api(8084, 'planning/plans', token, {'startDate': today.isoformat(), 'dailyAvailabilityMinutes': {
+                (today + dt.timedelta(days=day)).isoformat(): 120 for day in range(7)}})
+            assert plan['endDate'] == due.isoformat()
+            assert sum(item['allocatedMinutes'] for item in plan['items']) == 150
+            assert any(item['repetitionStage'] > 0 for item in plan['items'])
+            assert all(item['date'] < due.isoformat() for item in plan['items'])
+            print('PASS: deadline schedule contains 150 remaining minutes and spaced reviews through the due date', flush=True)
         api(8082, f"assessments/{assessment['id']}/complete", token, method='POST')
         observer.wait('Completing the assessment pushes a reduced workload',
                       lambda data: data['week']['workload']['incompleteAssessments'] == 0)
