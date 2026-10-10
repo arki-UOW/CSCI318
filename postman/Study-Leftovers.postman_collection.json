@@ -383,7 +383,7 @@
       "name": "4 - Agentic planning",
       "item": [
         {
-          "name": "AI-01 generate validated deadline plan",
+          "name": "AI-01 generate validated seven-day plan",
           "request": {
             "method": "POST",
             "header": [
@@ -467,7 +467,7 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('regenerated plan reflects changed deadline and workload', () => { pm.response.to.have.status(201); const plan=pm.response.json(); pm.expect(plan.version).to.be.above(1); pm.expect(plan.endDate).to.eql(pm.collectionVariables.get('changedDueDate')); pm.expect(plan.items.reduce((total,item) => total+item.allocatedMinutes, 0)).to.eql(180); pm.expect(plan.explanation).to.include('getExistingStudyPlan'); });"
+                  "pm.test('regenerated plan reflects changed deadline and workload', () => { pm.response.to.have.status(201); const plan=pm.response.json(); pm.expect(plan.version).to.be.above(1); const start=new Date(JSON.parse(pm.collectionVariables.get('planBody')).startDate+'T00:00:00Z'); start.setUTCDate(start.getUTCDate()+6); pm.expect(plan.endDate).to.eql(start.toISOString().slice(0,10)); pm.expect(plan.items.every(item=>item.date<=pm.collectionVariables.get('changedDueDate'))).to.eql(true); pm.expect(plan.items.reduce((total,item) => total+item.allocatedMinutes, 0)).to.eql(180); pm.expect(plan.explanation).to.include('getExistingStudyPlan'); });"
                 ],
                 "type": "text/javascript"
               }

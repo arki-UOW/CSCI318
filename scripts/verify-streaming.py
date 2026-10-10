@@ -157,11 +157,11 @@ def main():
         else:
             plan = api(8084, 'planning/plans', token, {'startDate': today.isoformat(), 'dailyAvailabilityMinutes': {
                 (today + dt.timedelta(days=day)).isoformat(): 120 for day in range(7)}}, timeout=120)
-            assert plan['endDate'] == due.isoformat()
+            assert plan['endDate'] == (today + dt.timedelta(days=6)).isoformat()
             assert sum(item['allocatedMinutes'] for item in plan['items']) == 150
             assert any(item['repetitionStage'] > 0 for item in plan['items'])
             assert all(item['date'] < due.isoformat() for item in plan['items'])
-            print('PASS: deadline schedule contains 150 remaining minutes and spaced reviews through the due date', flush=True)
+            print('PASS: seven-day schedule contains 150 remaining minutes and spaced reviews', flush=True)
         api(8082, f"assessments/{assessment['id']}/complete", token, method='POST')
         observer.wait('Completing the assessment pushes a reduced workload',
                       lambda data: data['week']['workload']['incompleteAssessments'] == 0)

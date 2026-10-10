@@ -4,8 +4,8 @@ import au.edu.uow.csci318.planning.application.PlanningApplicationService;
 import au.edu.uow.csci318.planning.dto.PlanningDtos.*;
 import au.edu.uow.csci318.planning.infrastructure.IdentityClient;
 import jakarta.validation.Valid;
-import java.util.UUID;
 import java.time.ZoneId;
+import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -34,6 +34,18 @@ public class PlanningController {
       @Valid @RequestBody AvailabilityChatRequest request) {
     identity.require(authorization);
     return service.updateAvailability(request);
+  }
+
+  @GetMapping("/plans")
+  public java.util.List<PlanResponse> history(
+      @RequestHeader("Authorization") String authorization) {
+    return service.history(identity.require(authorization));
+  }
+
+  @GetMapping("/plans/{id}")
+  public PlanResponse get(
+      @RequestHeader("Authorization") String authorization, @PathVariable("id") UUID id) {
+    return service.get(identity.require(authorization), id);
   }
 
   @GetMapping("/plans/latest")

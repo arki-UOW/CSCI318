@@ -172,9 +172,9 @@
     </section>
 
     <section id="plan" class="view">
-      <p class="eyebrow">DEADLINE PLANNING</p>
-      <h2>Plan through every due date</h2>
-      <p class="lede">Tell the availability assistant when you are normally free. The scheduler repeats that weekly pattern and spreads each assessment’s estimated minutes into spaced study and review sessions up to its due date.</p>
+      <p class="eyebrow">WEEKLY PLANNING</p>
+      <h2>Plan your next seven days</h2>
+      <p class="lede">Tell the availability assistant when you are free this week. Your plan uses deadlines, remaining work and progress to organise study and review sessions within seven days.</p>
       <div class="planner-layout">
         <article class="panel chat-card">
           <div class="panel-head"><div><p class="eyebrow">AVAILABILITY ASSISTANT</p><h3>When can you study?</h3></div><span id="planner-ai-badge" class="status-chip">Checking AI…</span></div>
@@ -196,9 +196,9 @@
         </article>
         <article class="panel availability-card">
           <p class="eyebrow">INTERPRETED SCHEDULE</p>
-          <h3>Your weekly availability template</h3>
+          <h3>Your availability this week</h3>
           <div id="availability-summary" class="availability-summary empty">No times added yet.</div>
-          <button id="generate-chat-plan" class="primary full" disabled>Build my deadline plan</button>
+          <button id="generate-chat-plan" class="primary full" disabled>Build my weekly plan</button>
           <details class="quick-setup"><summary>Prefer a simple daily amount?</summary>
             <form id="plan-form" class="compact-form">
               <label>Minutes each day<input id="plan-minutes" type="number" min="0" max="1440" value="120" required></label>
@@ -208,6 +208,11 @@
         </article>
       </div>
       <div id="plan-feedback" class="feedback" aria-live="polite"></div>
+      <div class="panel-head">
+        <label>Saved plan versions<select id="plan-history" aria-label="Saved plan versions" disabled></select></label>
+        <button id="regenerate-plan" class="secondary" type="button" disabled>Regenerate selected plan</button>
+      </div>
+      <p class="hint">Regeneration rechecks assessments and progress using the start date and availability above. If no time slots are entered, it uses the quick setup daily minutes. Older versions remain available here.</p>
       <div id="plan-list" class="plan-board"></div>
     </section>
 
@@ -239,7 +244,7 @@
         <label>Subject<select id="activity-subject" required></select></label>
         <label>Date<input id="activity-date" type="date" required></label>
         <label>Minutes<input id="activity-minutes" type="number" min="1" max="1440" value="45" required></label>
-        <label class="grow">What did you work on?<input id="activity-description" required placeholder="e.g. Drafted report introduction"></label>
+        <label class="grow">What did you work on?<input id="activity-description" maxlength="2000" required placeholder="e.g. Drafted report introduction"></label>
         <button class="primary">Record session</button>
       </form>
       <div id="activity-feedback" class="feedback" aria-live="polite"></div>

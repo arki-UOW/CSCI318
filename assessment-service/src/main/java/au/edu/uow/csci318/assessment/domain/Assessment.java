@@ -35,7 +35,11 @@ public class Assessment {
   private Double weighting;
   private LocalDate dueDate;
   private Integer dueWeek;
+
+  @jakarta.persistence.Lob
+  @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.CLOB)
   private String description;
+
   private Integer estimatedMinutes;
 
   @Enumerated(EnumType.STRING)
@@ -70,10 +74,10 @@ public class Assessment {
     this.ownerId = Objects.requireNonNull(ownerId);
     this.subjectId = Objects.requireNonNull(subjectId);
     this.title = require(title);
-    this.type = type;
+    this.type = limited(type, 255, "Assessment type");
     changeWeighting(weighting);
     changeDeadline(dueDate, dueWeek);
-    this.description = description;
+    this.description = limited(description, 2000, "Description");
     changeEstimatedWorkload(estimatedMinutes);
     this.priority = priority == null ? Priority.MEDIUM : priority;
     status = Status.INCOMPLETE;
@@ -90,8 +94,8 @@ public class Assessment {
       Integer estimatedMinutes,
       Priority priority) {
     this.title = require(title);
-    this.type = clean(type);
-    this.description = clean(description);
+    this.type = limited(type, 255, "Assessment type");
+    this.description = limited(description, 2000, "Description");
     changeWeighting(weighting);
     changeDeadline(dueDate, dueWeek);
     changeEstimatedWorkload(estimatedMinutes);
@@ -140,6 +144,12 @@ public class Assessment {
     eventRevision = Math.max(1, eventRevision) + 1;
   }
 
+  private static String limited(String v, int max, String field) {
+    if (v != null && v.length() > max)
+      throw new IllegalArgumentException(field + " must be at most " + max + " characters");
+    return clean(v);
+  }
+
   private static String clean(String v) {
     return v == null || v.isBlank() ? null : v.trim();
   }
@@ -147,7 +157,7 @@ public class Assessment {
   private static String require(String v) {
     if (v == null || v.isBlank())
       throw new IllegalArgumentException("Assessment title is required");
-    return v.trim();
+    return limited(v, 255, "Assessment title");
   }
 
   public long getEventRevision() {

@@ -13,13 +13,11 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Builds a deterministic deadline plan. The LLM is deliberately kept out of minute allocation:
- * availability, due dates and estimated workload are factual inputs and are easier to validate
- * here.
+ * Builds a feasible seven-day candidate using deadlines, remaining work and spaced practice. The
+ * planning agent can adapt this candidate; application validation guards its submitted plan.
  */
 public class DeadlineScheduler {
   private static final int[] REPETITION_OFFSETS = {0, 1, 3, 7, 14, 30};
-  private static final int MAX_HORIZON_DAYS = 365;
   private static final int DEFAULT_ESTIMATED_MINUTES = 120;
   private static final int TARGET_SESSION_MINUTES = 25;
   private static final int MAX_SESSION_MINUTES = 90;
@@ -41,18 +39,7 @@ public class DeadlineScheduler {
           "Add at least one available study period before generating a plan.");
     }
 
-    LocalDate maximumEnd = startDate.plusDays(MAX_HORIZON_DAYS);
-    if (assessments.stream()
-        .anyMatch(item -> item.dueDate() != null && item.dueDate().isAfter(maximumEnd))) {
-      throw new IllegalArgumentException(
-          "Due dates more than one year away are not supported. Choose a later start date.");
-    }
-    LocalDate endDate =
-        assessments.stream()
-            .map(assessment -> effectiveDeadline(assessment, startDate))
-            .map(date -> date.isAfter(maximumEnd) ? maximumEnd : date)
-            .max(LocalDate::compareTo)
-            .orElse(startDate.plusDays(6));
+    LocalDate endDate = startDate.plusDays(6);
 
     Map<LocalDate, Integer> usedMinutes = new HashMap<>();
     List<ScheduledSession> items = new ArrayList<>();
@@ -64,13 +51,14 @@ public class DeadlineScheduler {
       if (dueDate.isBefore(startDate)) continue;
 
       int totalMinutes =
-          assessment.estimatedMinutes() == null || assessment.estimatedMinutes() <= 0
+          assessment.estimatedMinutes() == null
               ? DEFAULT_ESTIMATED_MINUTES
               : assessment.estimatedMinutes();
       totalMinutes = Math.max(0, totalMinutes - completedMinutes.getOrDefault(assessment.id(), 0));
       if (totalMinutes == 0) continue;
       requestedMinutes += totalMinutes;
       LocalDate lastStudyDate = dueDate.isAfter(startDate) ? dueDate.minusDays(1) : dueDate;
+      if (lastStudyDate.isAfter(endDate)) lastStudyDate = endDate;
       List<LocalDate> repetitions = repetitionDates(startDate, lastStudyDate, totalMinutes);
       int remaining = totalMinutes;
       LocalDate earliest = startDate;

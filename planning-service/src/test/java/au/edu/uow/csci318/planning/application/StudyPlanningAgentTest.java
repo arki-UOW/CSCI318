@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 
 class StudyPlanningAgentTest {
   @Test
-  void plansEstimatedMinutesAcrossSpacedSessionsUntilTheDueDate() {
+  void plansEstimatedMinutesAcrossSpacedSessionsWithinSevenDays() {
     PlanningTools tools = mock(PlanningTools.class);
     StudyPlanningAgent agent = new StudyPlanningAgent(tools, mock(StudyHistory.class));
     LocalDate start = LocalDate.of(2026, 9, 7);
@@ -43,18 +43,18 @@ class StudyPlanningAgentTest {
         agent.generate(
             UUID.randomUUID(), new PlanRequest(start, availableWeek(start, 60)), "Bearer test");
 
-    assertEquals(due, result.endDate());
+    assertEquals(start.plusDays(6), result.endDate());
     assertEquals(180, result.requestedMinutes());
     assertEquals(180, result.scheduledMinutes());
     assertEquals(0, result.unscheduledMinutes());
-    assertTrue(result.items().size() >= 5);
+    assertTrue(result.items().size() >= 4);
     assertTrue(result.items().stream().anyMatch(item -> item.repetitionStage() > 0));
     assertTrue(
         result.items().stream()
             .map(item -> item.date())
             .max(LocalDate::compareTo)
             .orElseThrow()
-            .isAfter(start.plusDays(30)));
+            .isBefore(start.plusDays(7)));
     assertTrue(result.items().stream().allMatch(item -> item.date().isBefore(due)));
   }
 

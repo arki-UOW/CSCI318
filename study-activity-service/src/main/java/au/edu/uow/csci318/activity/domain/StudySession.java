@@ -27,6 +27,8 @@ public class StudySession {
   private LocalDate studyDate;
 
   @Column(nullable = false)
+  @jakarta.persistence.Lob
+  @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.CLOB)
   private String description;
 
   @Column(nullable = false)
@@ -66,11 +68,14 @@ public class StudySession {
   public void edit(int minutes, LocalDate date, String description, LocalDate today) {
     if (minutes <= 0 || minutes > 1440)
       throw new IllegalArgumentException("Study duration must be between 1 and 1440 minutes");
-    LocalDate checkedDate = Objects.requireNonNull(date);
+    if (date == null) throw new IllegalArgumentException("Study date is required");
+    LocalDate checkedDate = date;
     if (checkedDate.isAfter(Objects.requireNonNull(today)))
       throw new IllegalArgumentException("Study date cannot be in the future");
     if (description == null || description.isBlank())
       throw new IllegalArgumentException("Activity description is required");
+    if (description.length() > 2000)
+      throw new IllegalArgumentException("Activity description must be at most 2000 characters");
     this.durationMinutes = minutes;
     this.studyDate = checkedDate;
     this.description = description.trim();

@@ -43,12 +43,19 @@ class PlanningValidationTest {
         new PlanItem(START.plusDays(8), SUBJECT, ASSESSMENT, "After period", 30),
         new PlanItem(START.plusDays(3), SUBJECT, ASSESSMENT, "After deadline", 30),
         new PlanItem(START, SUBJECT, ASSESSMENT, "Zero duration", 0),
-        new PlanItem(START, SUBJECT, ASSESSMENT, "Over daily capacity", 61));
+        new PlanItem(START, SUBJECT, ASSESSMENT, "Over daily capacity", 61),
+        new PlanItem(null, SUBJECT, ASSESSMENT, "Null date", 30),
+        new PlanItem(START, SUBJECT, ASSESSMENT, " ", 30),
+        new PlanItem(START, SUBJECT, ASSESSMENT, "Overflow", Integer.MAX_VALUE),
+        new PlanItem(START, SUBJECT, ASSESSMENT, "Invalid stage", 30, -1));
   }
 
   @ParameterizedTest
   @MethodSource("invalidItems")
   void invalidCandidateNeverReachesPersistence(PlanItem item) {
+    when(advisor.adviseGenerate(any(), any(), any(), any(), any()))
+        .thenReturn(
+            new AgenticPlanningAdvisor.Advice("test", "test", "test", List.of(), List.of(item)));
     when(scheduler.generate(any(), any(), any()))
         .thenReturn(new StudyPlanningAgent.Schedule(List.of(item), START.plusDays(6), 60, 60));
     when(tools.getIncompleteAssessments(any()))
@@ -79,6 +86,44 @@ class PlanningValidationTest {
   }
 
   @Test
+  void allocationCannotExceedRemainingWorkEvenWhenDailyCapacityAllowsIt() {
+    var item = new PlanItem(START, SUBJECT, ASSESSMENT, "Remaining work", 45);
+    when(scheduler.generate(any(), any(), any()))
+        .thenReturn(new StudyPlanningAgent.Schedule(List.of(), START.plusDays(6), 30, 30));
+    when(scheduler.completedMinutes(OWNER)).thenReturn(Map.of(ASSESSMENT, 30));
+    when(advisor.adviseGenerate(any(), any(), any(), any(), any()))
+        .thenReturn(
+            new AgenticPlanningAdvisor.Advice("test", "test", "test", List.of(), List.of(item)));
+    when(tools.getIncompleteAssessments(any()))
+        .thenReturn(
+            List.of(
+                new AssessmentView(
+                    ASSESSMENT,
+                    SUBJECT,
+                    "Report",
+                    "Report",
+                    30.0,
+                    START.plusDays(5),
+                    null,
+                    null,
+                    60,
+                    "HIGH",
+                    "INCOMPLETE",
+                    Instant.EPOCH)));
+    var failure =
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                service.generate(
+                    OWNER,
+                    "Bearer test",
+                    ZoneId.of("UTC"),
+                    new PlanRequest(START, Map.of(START, 120))));
+    assertEquals("Plan exceeds remaining assessment workload", failure.getMessage());
+    verifyNoInteractions(plans, calendar);
+  }
+
+  @Test
   void inconsistentSlotCapacityIsRejectedBeforeUsingTheProvider() {
     var request =
         new PlanRequest(
@@ -93,13 +138,13 @@ class PlanningValidationTest {
 
   @Test
   void providerFailureCannotWriteAPlanOrChangeCalendar() {
-    when(advisor.adviseGenerate(any(), any(), any(), any()))
+    when(advisor.adviseGenerate(any(), any(), any(), any(), any()))
         .thenThrow(new IllegalStateException("Provider unavailable"));
     assertThrows(
         IllegalStateException.class,
         () ->
             service.generate(
                 OWNER, "Bearer test", ZoneId.of("UTC"), new PlanRequest(START, Map.of(START, 60))));
-    verifyNoInteractions(scheduler, plans, calendar);
+    verifyNoInteractions(plans, calendar);
   }
 }

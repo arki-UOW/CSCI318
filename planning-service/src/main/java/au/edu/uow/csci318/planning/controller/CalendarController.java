@@ -36,7 +36,7 @@ public class CalendarController {
   public EntryResponse create(
       @RequestHeader("Authorization") String authorization,
       @Valid @RequestBody SaveRequest request) {
-    return service.create(identity.require(authorization), request);
+    return service.create(identity.require(authorization), authorization, request);
   }
 
   @PatchMapping("/{id}")
@@ -44,7 +44,7 @@ public class CalendarController {
       @RequestHeader("Authorization") String authorization,
       @PathVariable("id") UUID id,
       @Valid @RequestBody SaveRequest request) {
-    return service.update(identity.require(authorization), id, request);
+    return service.update(identity.require(authorization), authorization, id, request);
   }
 
   @DeleteMapping("/{id}")

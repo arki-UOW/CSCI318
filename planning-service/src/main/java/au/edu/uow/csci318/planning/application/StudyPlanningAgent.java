@@ -62,6 +62,10 @@ public class StudyPlanningAgent {
         items, result.endDate(), result.requestedMinutes(), result.scheduledMinutes());
   }
 
+  public java.util.Map<UUID, Integer> completedMinutes(UUID ownerId) {
+    return history.completedAssessmentMinutes(ownerId);
+  }
+
   public record Schedule(
       List<PlanItem> items, LocalDate endDate, int requestedMinutes, int scheduledMinutes) {
     public int unscheduledMinutes() {

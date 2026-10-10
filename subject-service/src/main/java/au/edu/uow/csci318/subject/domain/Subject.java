@@ -51,6 +51,8 @@ public class Subject {
   private static String requireText(String value, String label) {
     if (value == null || value.isBlank())
       throw new IllegalArgumentException(label + " is required");
+    if (value.length() > 255)
+      throw new IllegalArgumentException(label + " must be at most 255 characters");
     return value.trim();
   }
 

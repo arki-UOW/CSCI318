@@ -36,14 +36,10 @@ One-time startup snapshot migrations queue existing owned rows as v2 facts. Lega
 
 This is CQRS-style materialized read models and event-driven integration, not full event sourcing: domain state is still persisted in service databases.
 
-## Planning to deadlines
+## Seven-day planning
 
-Weekly availability repeats through the latest supported due date. DeadlineScheduler allocates remaining estimated minutes across spaced offsets 0, 1, 3, 7, 14, 30 days, subsequent monthly reviews and a final pre-deadline date. Linked completed calendar-block minutes are subtracted on regeneration. Individual blocks are at most 90 minutes and daily capacity is enforced; residual capacity is filled before reporting a shortfall. Review intervals are a scheduling policy, not a scientifically personalized memory model.
+The pure DeadlineScheduler builds a feasible candidate for start through start+6, prioritising deadlines and using spaced review dates. It subtracts assessment-linked completed minutes, defaults only unknown estimates to 120 minutes and respects explicit zero. It never allocates after a deadline or beyond the requested week; unscheduled remaining work is reported.
 
-Missing/nonpositive estimates default to 120 minutes; missing deadlines use a seven-day window. Deadlines more than one year from the start are explicitly rejected. The LangChain4j planning agent selects account-scoped read tools, inspects live application and stream-projection state, and submits a structured planning decision. DeadlineScheduler owns minute allocation so an LLM cannot bypass date, identity or capacity constraints. Every candidate item is revalidated before persistence. The conversational assistant captures availability and explains study work; neither path may store unvalidated dates or minutes.
+The LLM reads required assessment, workload and progress tools (plus the previous plan for regeneration), then submits structured items through saveStudyPlan. The application validates ownership, dates, fields, remaining workload and daily capacity before atomic plan/calendar persistence. Exact time slots additionally constrain calendar placement around commitments. Saved versions are available through owner-scoped list/detail endpoints and the frontend history/regeneration controls.
 
-Monthly and weekly views share calendar_entries. Completed history is immutable (delete/correct explicitly instead). Manual spaced-repetition chains remain separate from a generated deadline plan: generated plans already contain their reviews and do not create a second automatic chain.
-
-## Limits
-
-Projections are eventually consistent, usually within seconds; the UI shows connection state. Regeneration immediately after completing a block can race the asynchronous progress projection; wait for the live total to update first. Account authentication remains a synchronous dependency. Development uses one Planning instance; multi-instance SSE fan-out is not claimed. Large academic histories would require bounded retention/compaction or finer-grained state keys. Docker Compose uses named volumes for every H2 database and Kafka log, so ordinary restarts and container recreation retain data; `docker compose down -v` deliberately removes it.
+Monthly and weekly views share calendar_entries. Completed history is immutable (delete/correct explicitly instead). Manual spaced-repetition chains remain separate from generated plans. Supplied academic references are verified through the CalendarReferences port and REST adapter before create/update; full-length valid titles can complete safely because generated review titles respect the domain limit.

@@ -13,6 +13,7 @@ const state = {
   assessments: [],
   week: null,
   plan: null,
+  planHistory: [],
   review: null,
   uploadItems: [],
   reviewQueue: [],
@@ -328,6 +329,9 @@ async function signOut(callServer = true) {
   }
   state.token = null;
   state.account = null;
+  Object.assign(state, { subjects: [], assessments: [], sessions: [], calendarEntries: [],
+    plan: null, planHistory: [], week: null, review: null, reviewQueue: [], uploadItems: [],
+    availability: {}, availabilityMinutes: {}, assistantHistory: [] });
   localStorage.removeItem('studyLeftoversToken');
   setAssistantOpen(false);
   document.body.classList.add('auth-required');
@@ -397,16 +401,19 @@ function assessmentRow(assessment) {
 }
 
 async function load() {
+  const accountToken = state.token;
   const calls = [
     ['subjects', request(`${API.subjects}/subjects`)],
     ['assessments', request(`${API.assessments}/assessments`)],
     ['week', request(`${API.planning}/planning/this-week`)],
     ['plan', request(`${API.planning}/planning/plans/latest`)],
+    ['planHistory', request(`${API.planning}/planning/plans`)],
     ['subjectAi', request(`${API.subjects}/ai/status`)],
     ['planningAi', request(`${API.planning}/planning/ai/status`)]
     ,['sessions', request(`${API.activity}/study-sessions`)]
   ];
   const results = await Promise.allSettled(calls.map(([, promise]) => promise));
+  if (state.token !== accountToken) return;
   results.forEach((result, index) => {
     if (result.status === 'fulfilled') state[calls[index][0]] = result.value;
   });
@@ -455,6 +462,7 @@ function render() {
   renderAssessments();
   renderPlan('#dashboard-plan');
   renderPlan('#plan-list');
+  renderPlanHistory();
   bindComplete();
   bindDeleteAssessments();
   bindEditAssessments();
@@ -539,7 +547,7 @@ function renderAssessments() {
 function renderPlan(target) {
   const items = state.plan?.items || [];
   if (!items.length) {
-    $(target).innerHTML = 'No plan generated yet.';
+    $(target).innerHTML = state.plan ? `<div class="plan-explanation">${esc(state.plan.explanation)}</div><p>No remaining study blocks for this plan.</p>` : 'No plan generated yet.';
     return;
   }
   const row = item => `<div class="row">${dateCard(item.date, null)}<div class="body"><strong>${esc(item.title)}</strong><br><small>${esc(subjectName(item.subjectId))} · ${item.allocatedMinutes} minutes${item.repetitionStage > 0 ? ` · spaced review ${item.repetitionStage}` : ''}</small></div></div>`;
@@ -1089,17 +1097,21 @@ $('#activity-form').addEventListener('submit', async event => {
   }
 });
 
-async function generatePlan(availability, button, availabilitySlots) {
+async function generatePlan(availability, button, availabilitySlots, previousId = null) {
+  const accountToken = state.token;
   const start = $('#plan-start').value;
-  setBusy(button, true, 'Generating');
-  feedback('plan-feedback', 'Building a deadline plan from estimated minutes, due dates and your weekly availability…', 'info');
+  setBusy(button, true, previousId ? 'Regenerating' : 'Generating');
+  feedback('plan-feedback', 'Building a seven-day plan from remaining work, due dates and your availability…', 'info');
   try {
-    state.plan = await request(`${API.planning}/planning/plans`, {
+    const generated = await request(`${API.planning}/planning/plans${previousId ? `/${encodeURIComponent(previousId)}/regenerate` : ''}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ startDate: start, dailyAvailabilityMinutes: availability, availabilitySlots })
     });
-    feedback('plan-feedback', `Your plan now runs through ${state.plan.endDate}.`, 'success');
+    if (state.token !== accountToken) return;
+    state.plan = generated;
+    state.planHistory = [state.plan, ...(state.planHistory || []).filter(plan => plan.id !== state.plan.id)];
+    feedback('plan-feedback', `Version ${state.plan.version} covers seven days through ${state.plan.endDate}.`, 'success');
     render();
   } catch (error) {
     feedback('plan-feedback', error.message, 'error');
@@ -1121,6 +1133,48 @@ $('#plan-form').addEventListener('submit', async event => {
   }
   await generatePlan(availability, button);
 });
+
+function renderPlanHistory() {
+  const select = $('#plan-history');
+  if (!select) return;
+  select.innerHTML = (state.planHistory || []).map(plan =>
+    `<option value="${esc(plan.id)}" ${plan.id === state.plan?.id ? 'selected' : ''}>Version ${plan.version} · ${esc(plan.startDate)} to ${esc(plan.endDate)}</option>`).join('');
+  select.disabled = !(state.planHistory || []).length;
+  $('#regenerate-plan').disabled = !state.plan?.id;
+}
+
+async function selectPlan(id) {
+  const accountToken = state.token;
+  try {
+    const selected = await request(`${API.planning}/planning/plans/${encodeURIComponent(id)}`);
+    if (state.token !== accountToken) return;
+    state.plan = selected;
+    render();
+  } catch (error) {
+    feedback('plan-feedback', error.message, 'error');
+    renderPlanHistory();
+  }
+}
+
+async function regenerateSelectedPlan(button) {
+  if (!state.plan?.id) return;
+  let minutes = state.availabilityMinutes;
+  let slots = state.availability;
+  if (!Object.values(minutes || {}).some(value => value > 0)) {
+    minutes = {};
+    slots = undefined;
+    const start = $('#plan-start').value;
+    for (let day = 0; day < 7; day++) {
+      const date = new Date(`${start}T00:00:00`);
+      date.setDate(date.getDate() + day);
+      minutes[localDate(date)] = Number($('#plan-minutes').value);
+    }
+  }
+  await generatePlan(minutes, button, slots, state.plan.id);
+}
+
+$('#plan-history').addEventListener('change', event => selectPlan(event.target.value));
+$('#regenerate-plan').addEventListener('click', event => regenerateSelectedPlan(event.currentTarget));
 
 function appendChatMessage(role, message) {
   const bubble = document.createElement('div');

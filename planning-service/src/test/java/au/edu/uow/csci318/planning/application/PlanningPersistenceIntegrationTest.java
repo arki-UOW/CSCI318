@@ -45,6 +45,7 @@ class PlanningPersistenceIntegrationTest {
     }
   }
 
+  @MockitoBean CalendarReferences references;
   @MockitoBean PlanningTools tools;
   @MockitoBean DashboardQueryService dashboard;
   @MockitoBean ConfiguredPlanningChatModel configured;
@@ -67,13 +68,18 @@ class PlanningPersistenceIntegrationTest {
         .thenReturn(new WorkloadSummary(1, 1, 1, 120, 1, "MEDIUM"));
     when(model.chat(any(ChatRequest.class)))
         .thenReturn(
-            response(call("getIncompleteAssessments", "{}"), call("getCurrentWorkload", "{}")),
-            response(call("submitPlanDecision", decision("GENERATE"))),
             response(
                 call("getIncompleteAssessments", "{}"),
                 call("getCurrentWorkload", "{}"),
+                call("getStudyProgress", "{}")),
+            response(call("saveStudyPlan", decision("GENERATE", start, subject, assessment, 60))),
+            response(
+                call("getIncompleteAssessments", "{}"),
+                call("getCurrentWorkload", "{}"),
+                call("getStudyProgress", "{}"),
                 call("getExistingStudyPlan", "{}")),
-            response(call("submitPlanDecision", decision("REGENERATE"))));
+            response(
+                call("saveStudyPlan", decision("REGENERATE", start, subject, assessment, 30))));
     when(tools.getIncompleteAssessments("Bearer test"))
         .thenReturn(List.of(assessment(assessment, subject, start.plusDays(1), 120)));
     PlanRequest request =
@@ -88,7 +94,7 @@ class PlanningPersistenceIntegrationTest {
     entityManager.clear();
     StudyPlan saved = plans.findById(first.id()).orElseThrow();
     assertTrue(saved.getExplanation().length() > 750);
-    assertTrue(saved.getExplanation().contains("remaining 60 minutes"));
+    assertTrue(saved.getExplanation().contains("beyond this plan: 60 minutes"));
     assertEquals(first.explanation(), saved.getExplanation());
     assertEquals(60, first.items().stream().mapToInt(PlanItem::allocatedMinutes).sum());
     assertEquals(LocalTime.of(9, 0), calendar.findAll().getFirst().getStartAt().toLocalTime());
@@ -104,9 +110,17 @@ class PlanningPersistenceIntegrationTest {
     entityManager.clear();
     assertEquals(2, second.version());
     assertNotEquals(first.id(), second.id());
-    assertEquals(start.plusDays(3), second.endDate());
+    assertEquals(start.plusDays(6), second.endDate());
     assertEquals(30, second.items().stream().mapToInt(PlanItem::allocatedMinutes).sum());
     assertEquals(2, plans.count());
+    assertEquals("Model submitted task", second.items().getFirst().title());
+    assertEquals(
+        List.of(second.id(), first.id()),
+        service.history(owner).stream().map(PlanResponse::id).toList());
+    assertEquals(first.items(), service.get(owner, first.id()).items());
+    assertEquals(first.explanation(), service.get(owner, first.id()).explanation());
+    assertTrue(service.history(UUID.randomUUID()).isEmpty());
+    assertThrows(NoSuchElementException.class, () -> service.get(UUID.randomUUID(), first.id()));
     assertEquals(second.explanation(), plans.findById(second.id()).orElseThrow().getExplanation());
     assertTrue(second.explanation().contains("getExistingStudyPlan"));
     assertTrue(
@@ -135,8 +149,23 @@ class PlanningPersistenceIntegrationTest {
         Instant.now());
   }
 
-  private String decision(String action) {
-    return "{\"action\":\"" + action + "\",\"summary\":\"" + "x".repeat(500) + "\"}";
+  private String decision(
+      String action, LocalDate date, UUID subject, UUID assessment, int minutes) {
+    try {
+      return new ObjectMapper()
+          .findAndRegisterModules()
+          .writeValueAsString(
+              Map.of(
+                  "action",
+                  action,
+                  "summary",
+                  "x".repeat(500),
+                  "items",
+                  List.of(
+                      new PlanItem(date, subject, assessment, "Model submitted task", minutes))));
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 
   private ToolExecutionRequest call(String name, String args) {

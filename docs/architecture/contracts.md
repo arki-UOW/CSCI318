@@ -35,6 +35,9 @@
 | Planning | `GET /api/planning/dashboard/stream` | Authenticated SSE dashboard snapshots; token stays in Authorization header |
 | Planning | `GET /api/planning/stream-status` | Projection revision, initialization and latest update |
 | Planning | `GET /api/planning/progress/{subjectId}?weekOf=` | Locally projected weekly target, minutes and history totals |
+| Planning | `GET /api/planning/plans` | List owned plan versions, newest version first |
+| Planning | `GET /api/planning/plans/{id}` | Retrieve one owned saved version |
+| Planning | `GET /api/planning/plans/latest` | Latest owned plan or HTTP 204 |
 | Planning | `POST /api/planning/plans` | Run the LangChain4j tool loop, then generate and validate a plan |
 | Planning | `POST /api/planning/plans/{id}/regenerate` | Re-read state through tools and version a validated plan |
 | Planning | `POST /api/planning/availability/chat` | Convert natural-language availability into time slots |
@@ -45,7 +48,9 @@
 | Planning | `POST /api/calendar/{id}/complete` | Complete an item and schedule its next spaced review |
 | Planning | `POST /api/planning/assistant/chat` | Ask the LLM study assistant using profile-scoped context |
 
-Errors contain `timestamp`, `status`, `error`, `message`, `path`, and optional `validationErrors`.
+Errors contain `timestamp`, `status`, `error`, `message`, `path`, and `validationErrors` (an empty object when no field details apply). Invalid inputs return 400, missing owned records 404, conflicting records 409, unavailable dependencies/providers 503. Raw SDK responses and credentials never become provider-error messages.
+
+Assessment and study-session descriptions support up to 2,000 characters with CLOB persistence, including migration from legacy 255-character columns. Calendar academic references must belong to the account and match one another; unlinked personal entries remain allowed.
 
 Generation and regeneration accept `startDate`, `dailyAvailabilityMinutes` and optional `availabilitySlots`:
 
@@ -57,7 +62,7 @@ Generation and regeneration accept `startDate`, `dailyAvailabilityMinutes` and o
 }
 ```
 
-Slots must use whole-minute, non-overlapping times within the seven-day template and agree with each day's minute total. They repeat by weekday through assessment deadlines. Calendar blocks stay within the slots and avoid existing commitments. If a scheduled day has insufficient free time, the request fails and the previous plan remains intact. Clients omitting slots retain daily-capacity planning with automatic calendar times. Undated assessments use the same start-plus-six-day fallback for task scheduling and the plan's overall end date.
+Slots must use whole-minute, non-overlapping times within the seven-day template and agree with each day's minute total. The stored plan always ends six days after its start; slots apply only within those seven days. Calendar blocks stay within the slots and avoid existing commitments. If a scheduled day has insufficient free time, the request fails and the previous plan remains intact. Clients omitting slots retain daily-capacity planning with automatic calendar times. Undated assessments use the same start-plus-six-day fallback for task scheduling and the plan's overall end date.
 
 All subject, assessment, activity, planning and calendar calls require the opaque bearer token returned by Account Service. Services validate the token with Account Service and scope every query and mutation to its account ID. Raw tokens and passwords are never stored: session tokens are SHA-256 hashed and passwords use BCrypt.
 
