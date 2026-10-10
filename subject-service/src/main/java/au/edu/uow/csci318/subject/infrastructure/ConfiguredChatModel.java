@@ -23,6 +23,9 @@ class ConfiguredChatModel implements SubjectAiConfiguration {
   private final String openAiKey;
   private final String openAiModel;
 
+  @Value("${study.ai.openai.base-url:https://api.openai.com/v1}")
+  private String openAiBaseUrl = "https://api.openai.com/v1";
+
   ConfiguredChatModel(
       @Value("${study.ai.provider:auto}") String provider,
       @Value("${study.ai.gemini.api-key:}") String geminiKey,
@@ -58,6 +61,9 @@ class ConfiguredChatModel implements SubjectAiConfiguration {
     if ((provider.equals("auto") || provider.equals("openai")) && !openAiKey.isBlank()) {
       ChatModel model =
           OpenAiChatModel.builder()
+              .baseUrl(openAiBaseUrl)
+              .timeout(java.time.Duration.ofSeconds(60))
+              .maxRetries(1)
               .apiKey(openAiKey)
               .modelName(openAiModel)
               .temperature(0.0)

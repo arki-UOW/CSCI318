@@ -4,6 +4,7 @@ import au.edu.uow.csci318.activity.domain.StudySession;
 import au.edu.uow.csci318.activity.infrastructure.StudySessionRepository;
 import au.edu.uow.csci318.messaging.application.EventPublisher;
 import au.edu.uow.csci318.messaging.application.SnapshotSource;
+import jakarta.validation.constraints.*;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -15,6 +16,7 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 @Service
@@ -110,6 +112,8 @@ public class StudyActivityApplicationService implements SnapshotSource {
           .header("Authorization", authorization)
           .retrieve()
           .toBodilessEntity();
+    } catch (HttpClientErrorException.NotFound exception) {
+      throw new IllegalArgumentException("Referenced subject does not exist for this account");
     } catch (Exception exception) {
       throw new DependencyException(
           "Referenced subject does not exist or Subject Service is unavailable", exception);
@@ -147,9 +151,15 @@ public class StudyActivityApplicationService implements SnapshotSource {
   }
 
   public record CreateRequest(
-      UUID subjectId, int durationMinutes, LocalDate studyDate, String description) {}
+      @NotNull UUID subjectId,
+      @Min(1) @Max(1440) int durationMinutes,
+      @NotNull LocalDate studyDate,
+      @NotBlank @Size(max = 2000) String description) {}
 
-  public record UpdateRequest(int durationMinutes, LocalDate studyDate, String description) {}
+  public record UpdateRequest(
+      @Min(1) @Max(1440) int durationMinutes,
+      @NotNull LocalDate studyDate,
+      @NotBlank @Size(max = 2000) String description) {}
 
   public record Response(
       UUID id,

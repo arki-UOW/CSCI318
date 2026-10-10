@@ -54,7 +54,8 @@ class CalendarApplicationServiceTest {
                 List.of(
                     new WeeklyTimeSlots.Window(LocalTime.of(9, 0), LocalTime.of(10, 0)),
                     new WeeklyTimeSlots.Window(LocalTime.of(14, 0), LocalTime.of(15, 0)))));
-    new CalendarApplicationService(entries, mock(CompletedStudyBlockEvents.class))
+    new CalendarApplicationService(
+            entries, mock(CompletedStudyBlockEvents.class), mock(CalendarReferences.class))
         .replaceAiPlan(
             owner,
             UUID.randomUUID(),
@@ -98,7 +99,8 @@ class CalendarApplicationServiceTest {
     assertThrows(
         IllegalArgumentException.class,
         () ->
-            new CalendarApplicationService(entries, mock(CompletedStudyBlockEvents.class))
+            new CalendarApplicationService(
+                    entries, mock(CompletedStudyBlockEvents.class), mock(CalendarReferences.class))
                 .replaceAiPlan(
                     owner,
                     UUID.randomUUID(),
@@ -119,7 +121,7 @@ class CalendarApplicationServiceTest {
             null,
             null,
             null,
-            "Review lecture notes",
+            "x".repeat(160),
             "",
             STUDY_SESSION,
             start,
@@ -133,11 +135,14 @@ class CalendarApplicationServiceTest {
 
     CompletedStudyBlockEvents events = mock(CompletedStudyBlockEvents.class);
     var result =
-        new CalendarApplicationService(entries, events)
+        new CalendarApplicationService(entries, events, mock(CalendarReferences.class))
             .complete(ownerId, original.getId(), java.time.ZoneId.of("UTC"));
     verify(events).publish(original, false, java.time.ZoneId.of("UTC"));
 
     assertNotNull(result.nextReview());
+    assertEquals(160, result.nextReview().title().length());
+    assertTrue(result.nextReview().description().contains("x".repeat(160)));
+    assertEquals(CalendarEntry.EntryStatus.COMPLETED, result.completed().status());
     assertEquals(
         LocalDate.now(java.time.ZoneId.of("UTC")).plusDays(1),
         result.nextReview().startAt().toLocalDate());

@@ -20,11 +20,15 @@ public class CalendarApplicationService {
   private static final int[] REVIEW_INTERVAL_DAYS = {1, 3, 7, 14, 30};
   private final CalendarEntryRepository entries;
   private final CompletedStudyBlockEvents events;
+  private final CalendarReferences references;
 
   public CalendarApplicationService(
-      CalendarEntryRepository entries, CompletedStudyBlockEvents events) {
+      CalendarEntryRepository entries,
+      CompletedStudyBlockEvents events,
+      CalendarReferences references) {
     this.entries = entries;
     this.events = events;
+    this.references = references;
   }
 
   public List<EntryResponse> list(UUID ownerId, LocalDate from, LocalDate to) {
@@ -43,7 +47,8 @@ public class CalendarApplicationService {
   }
 
   @Transactional
-  public EntryResponse create(UUID ownerId, SaveRequest request) {
+  public EntryResponse create(UUID ownerId, String authorization, SaveRequest request) {
+    references.verify(authorization, request.subjectId(), request.assessmentId());
     return response(
         entries.save(
             new CalendarEntry(
@@ -63,12 +68,13 @@ public class CalendarApplicationService {
   }
 
   @Transactional
-  public EntryResponse update(UUID ownerId, UUID id, SaveRequest request) {
+  public EntryResponse update(UUID ownerId, String authorization, UUID id, SaveRequest request) {
     CalendarEntry entry = find(ownerId, id);
     if (entry.getStatus() == EntryStatus.COMPLETED) {
       throw new IllegalStateException(
           "Completed study history cannot be edited. Delete it and record a correction.");
     }
+    references.verify(authorization, request.subjectId(), request.assessmentId());
     entry.edit(
         request.title(),
         request.description(),
@@ -236,8 +242,13 @@ public class CalendarApplicationService {
             completed.getAssessmentId(),
             completed.getPlanId(),
             completed.getId(),
-            "Review: " + baseTitle,
-            "Spaced review " + (stage + 1) + " of " + REVIEW_INTERVAL_DAYS.length,
+            calendarTitle("Review: " + baseTitle),
+            "Spaced review "
+                + (stage + 1)
+                + " of "
+                + REVIEW_INTERVAL_DAYS.length
+                + ": "
+                + baseTitle,
             EntryType.REVIEW,
             nextStart,
             nextStart.plus(duration),

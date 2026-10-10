@@ -55,11 +55,11 @@ class DeadlineSchedulerTest {
         scheduler.schedule(start, capacity(120), List.of(work(180, 45)), Map.of(assessment, 60));
     assertEquals(120, result.requestedMinutes());
     assertEquals(120, result.scheduledMinutes());
-    assertTrue(result.items().stream().anyMatch(item -> item.date().isAfter(start.plusDays(30))));
+    assertTrue(result.items().stream().allMatch(item -> !item.date().isAfter(start.plusDays(6))));
   }
 
   @Test
-  void longPlansNeverExceedDailyCapacityOrAnyDeadline() {
+  void weeklyPlansNeverExceedDailyCapacityOrAnyDeadline() {
     var result =
         scheduler.schedule(
             start,
@@ -72,8 +72,9 @@ class DeadlineSchedulerTest {
     assertTrue(
         result.items().stream()
             .allMatch(
-                item -> !item.date().isBefore(start) && item.date().isBefore(result.endDate())));
-    assertEquals(900, result.scheduledMinutes());
+                item -> !item.date().isBefore(start) && !item.date().isAfter(result.endDate())));
+    assertEquals(420, result.scheduledMinutes());
+    assertEquals(480, result.unscheduledMinutes());
   }
 
   @Test
@@ -103,9 +104,17 @@ class DeadlineSchedulerTest {
   }
 
   @Test
-  void unsupportedHorizonIsExplicitRatherThanSilentlyTruncated() {
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> scheduler.schedule(start, capacity(60), List.of(work(180, 400)), Map.of()));
+  void distantDeadlinesStillProduceExactlySevenDays() {
+    var result = scheduler.schedule(start, capacity(60), List.of(work(180, 400)), Map.of());
+    assertEquals(start.plusDays(6), result.endDate());
+    assertEquals(180, result.scheduledMinutes());
+    assertTrue(result.items().stream().allMatch(item -> !item.date().isAfter(result.endDate())));
+  }
+
+  @Test
+  void explicitZeroMeansNoWork() {
+    var result = scheduler.schedule(start, capacity(60), List.of(work(0, 5)), Map.of());
+    assertTrue(result.items().isEmpty());
+    assertEquals(0, result.requestedMinutes());
   }
 }

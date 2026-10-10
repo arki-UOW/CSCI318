@@ -1,41 +1,117 @@
 package au.edu.uow.csci318.assessment.exception;
 
 import au.edu.uow.csci318.assessment.application.AssessmentApplicationService.DependencyException;
-import au.edu.uow.csci318.assessment.infrastructure.IdentityClient.IdentityServiceException;
-import au.edu.uow.csci318.assessment.infrastructure.IdentityClient.UnauthorizedIdentityException;
+import au.edu.uow.csci318.assessment.infrastructure.IdentityClient.*;
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.RestControllerAdvice;
-
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.NoSuchElementException;
+import java.util.*;
+import org.springframework.http.*;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.*;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 @RestControllerAdvice
-public class ApiExceptionHandler {
-    record ErrorBody(Instant timestamp, int status, String error, String message, String path,
-                     Map<String, String> validationErrors) {}
-    @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
-    ResponseEntity<ErrorBody> bad(RuntimeException exception, HttpServletRequest request) { return make(HttpStatus.BAD_REQUEST, exception, request, null); }
-    @ExceptionHandler(NoSuchElementException.class)
-    ResponseEntity<ErrorBody> missing(RuntimeException exception, HttpServletRequest request) { return make(HttpStatus.NOT_FOUND, exception, request, null); }
-    @ExceptionHandler({DependencyException.class, IdentityServiceException.class})
-    ResponseEntity<ErrorBody> unavailable(RuntimeException exception, HttpServletRequest request) { return make(HttpStatus.SERVICE_UNAVAILABLE, exception, request, null); }
-    @ExceptionHandler(UnauthorizedIdentityException.class)
-    ResponseEntity<ErrorBody> unauthorized(RuntimeException exception, HttpServletRequest request) { return make(HttpStatus.UNAUTHORIZED, exception, request, null); }
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    ResponseEntity<ErrorBody> invalid(MethodArgumentNotValidException exception, HttpServletRequest request) {
-        Map<String, String> fields = new LinkedHashMap<>();
-        exception.getBindingResult().getFieldErrors().forEach(item -> fields.put(item.getField(), item.getDefaultMessage()));
-        return make(HttpStatus.BAD_REQUEST, new IllegalArgumentException("Validation failed"), request, fields);
+public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
+  public record ErrorBody(
+      Instant timestamp,
+      int status,
+      String error,
+      String message,
+      String path,
+      Map<String, String> validationErrors) {}
+
+  @ExceptionHandler({UnauthorizedIdentityException.class})
+  ResponseEntity<Object> unauthorized(RuntimeException e, HttpServletRequest r) {
+    return response(HttpStatus.UNAUTHORIZED, e.getMessage(), r.getRequestURI(), Map.of());
+  }
+
+  @ExceptionHandler({IdentityServiceException.class, DependencyException.class})
+  ResponseEntity<Object> unavailable(RuntimeException e, HttpServletRequest r) {
+    return response(HttpStatus.SERVICE_UNAVAILABLE, e.getMessage(), r.getRequestURI(), Map.of());
+  }
+
+  @ExceptionHandler({
+    IllegalArgumentException.class,
+    IllegalStateException.class,
+    java.time.DateTimeException.class
+  })
+  ResponseEntity<Object> bad(RuntimeException e, HttpServletRequest r) {
+    return response(HttpStatus.BAD_REQUEST, e.getMessage(), r.getRequestURI(), Map.of());
+  }
+
+  @ExceptionHandler({NoSuchElementException.class})
+  ResponseEntity<Object> missing(RuntimeException e, HttpServletRequest r) {
+    return response(HttpStatus.NOT_FOUND, e.getMessage(), r.getRequestURI(), Map.of());
+  }
+
+  @ExceptionHandler({
+    org.springframework.dao.DataIntegrityViolationException.class,
+    org.springframework.dao.OptimisticLockingFailureException.class
+  })
+  ResponseEntity<Object> conflict(RuntimeException e, HttpServletRequest r) {
+    return response(
+        HttpStatus.CONFLICT,
+        "The record conflicts with an existing or concurrently changed record. Refresh and retry.",
+        r.getRequestURI(),
+        Map.of());
+  }
+
+  @ExceptionHandler({org.springframework.web.client.RestClientException.class})
+  ResponseEntity<Object> upstream(RuntimeException e, HttpServletRequest r) {
+    return response(
+        HttpStatus.SERVICE_UNAVAILABLE,
+        "A required service is unavailable. Please retry shortly.",
+        r.getRequestURI(),
+        Map.of());
+  }
+
+  @Override
+  protected ResponseEntity<Object> handleExceptionInternal(
+      Exception e, Object body, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+    Map<String, String> fields = new LinkedHashMap<>();
+    String message = "The request could not be processed. Check the input and try again.";
+    if (e instanceof MethodArgumentNotValidException invalid) {
+      invalid
+          .getBindingResult()
+          .getFieldErrors()
+          .forEach(f -> fields.put(f.getField(), f.getDefaultMessage()));
+      message = "Validation failed";
+    } else if (e instanceof org.springframework.http.converter.HttpMessageNotReadableException) {
+      message = "Malformed request body. Check required fields, dates and value types.";
+    } else if (e instanceof org.springframework.web.bind.MissingRequestHeaderException missing) {
+      message = "Required header is missing: " + missing.getHeaderName();
+    } else if (e
+        instanceof org.springframework.web.bind.MissingServletRequestParameterException missing) {
+      message = "Required parameter is missing: " + missing.getParameterName();
     }
-    private ResponseEntity<ErrorBody> make(HttpStatus status, RuntimeException exception,
-                                           HttpServletRequest request, Map<String, String> fields) {
-        return ResponseEntity.status(status).body(new ErrorBody(Instant.now(), status.value(), status.getReasonPhrase(),
-                exception.getMessage(), request.getRequestURI(), fields));
-    }
+    String path = ((ServletWebRequest) request).getRequest().getRequestURI();
+    return new ResponseEntity<>(
+        new ErrorBody(
+            Instant.now(),
+            status.value(),
+            HttpStatus.valueOf(status.value()).getReasonPhrase(),
+            message,
+            path,
+            fields),
+        headers,
+        status);
+  }
+
+  @ExceptionHandler(Exception.class)
+  ResponseEntity<Object> unexpected(Exception e, HttpServletRequest r) {
+    return response(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        "The request could not be completed. Please retry or contact the service administrator.",
+        r.getRequestURI(),
+        Map.of());
+  }
+
+  private ResponseEntity<Object> response(
+      HttpStatus status, String message, String path, Map<String, String> fields) {
+    return ResponseEntity.status(status)
+        .body(
+            new ErrorBody(
+                Instant.now(), status.value(), status.getReasonPhrase(), message, path, fields));
+  }
 }

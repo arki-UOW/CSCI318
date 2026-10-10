@@ -66,8 +66,8 @@ public class SubjectController {
   public SubjectResponse target(
       @RequestHeader("Authorization") String auth,
       @PathVariable UUID id,
-      @RequestBody Map<String, Integer> body) {
-    return service.target(identity.require(auth), id, body.getOrDefault("minutes", -1));
+      @Valid @RequestBody StudyTargetRequest body) {
+    return service.target(identity.require(auth), id, body.minutes());
   }
 
   @PatchMapping("/subjects/{id}")

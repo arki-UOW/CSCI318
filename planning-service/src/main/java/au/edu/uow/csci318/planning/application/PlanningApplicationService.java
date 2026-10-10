@@ -47,14 +47,15 @@ public class PlanningApplicationService {
   public PlanResponse generate(
       UUID ownerId, String authorization, ZoneId timezone, PlanRequest request) {
     WeeklyTimeSlots slots = validatePeriod(request);
+    StudyPlanningAgent.Schedule candidate = agent.generate(ownerId, request, authorization);
     AgenticPlanningAdvisor.Advice advice =
-        advisor.adviseGenerate(ownerId, authorization, timezone, request);
-    StudyPlanningAgent.Schedule schedule = agent.generate(ownerId, request, authorization);
-    validateItems(authorization, request, schedule.endDate(), schedule.items());
+        advisor.adviseGenerate(ownerId, authorization, timezone, request, candidate);
+    StudyPlanningAgent.Schedule schedule =
+        submittedSchedule(ownerId, authorization, request, candidate, advice);
     try {
       int version =
           plans
-              .findTopByOwnerIdOrderByCreatedAtDesc(ownerId)
+              .findTopByOwnerIdOrderByVersionDesc(ownerId)
               .map(existing -> existing.getVersion() + 1)
               .orElse(1);
       String explanation = explanation(schedule, "Generated", advice);
@@ -84,10 +85,11 @@ public class PlanningApplicationService {
             .findByIdAndOwnerId(previousId, ownerId)
             .orElseThrow(() -> new NoSuchElementException("Study plan not found"));
     WeeklyTimeSlots slots = validatePeriod(request);
+    StudyPlanningAgent.Schedule candidate = agent.generate(ownerId, request, authorization);
     AgenticPlanningAdvisor.Advice advice =
-        advisor.adviseRegenerate(ownerId, authorization, timezone, request, previousId);
-    StudyPlanningAgent.Schedule schedule = agent.generate(ownerId, request, authorization);
-    validateItems(authorization, request, schedule.endDate(), schedule.items());
+        advisor.adviseRegenerate(ownerId, authorization, timezone, request, previousId, candidate);
+    StudyPlanningAgent.Schedule schedule =
+        submittedSchedule(ownerId, authorization, request, candidate, advice);
     try {
       List<PlanItem> before = json.readValue(old.getItemsJson(), new TypeReference<>() {});
       String explanation =
@@ -101,7 +103,10 @@ public class PlanningApplicationService {
                   ownerId,
                   request.startDate(),
                   schedule.endDate(),
-                  old.getVersion() + 1,
+                  plans
+                      .findTopByOwnerIdOrderByVersionDesc(ownerId)
+                      .map(p -> p.getVersion() + 1)
+                      .orElse(1),
                   json.writeValueAsString(schedule.items()),
                   explanation));
       calendar.replaceAiPlan(ownerId, saved.getId(), schedule.items(), slots);
@@ -123,6 +128,36 @@ public class PlanningApplicationService {
 
   public Optional<PlanResponse> latest(UUID ownerId) {
     return plans.findTopByOwnerIdOrderByCreatedAtDesc(ownerId).map(this::response);
+  }
+
+  public List<PlanResponse> history(UUID ownerId) {
+    return plans.findByOwnerIdOrderByVersionDesc(ownerId).stream().map(this::response).toList();
+  }
+
+  public PlanResponse get(UUID ownerId, UUID id) {
+    return response(
+        plans
+            .findByIdAndOwnerId(id, ownerId)
+            .orElseThrow(() -> new NoSuchElementException("Study plan not found")));
+  }
+
+  private StudyPlanningAgent.Schedule submittedSchedule(
+      UUID ownerId,
+      String authorization,
+      PlanRequest request,
+      StudyPlanningAgent.Schedule candidate,
+      AgenticPlanningAdvisor.Advice advice) {
+    List<PlanItem> items = advice.items();
+    validateItems(ownerId, authorization, request, request.startDate().plusDays(6), items);
+    int scheduled = items.stream().mapToInt(PlanItem::allocatedMinutes).sum();
+    if (scheduled < candidate.scheduledMinutes())
+      throw new IllegalArgumentException(
+          "The submitted plan leaves feasible study time unused. Please retry generation.");
+    return new StudyPlanningAgent.Schedule(
+        List.copyOf(items),
+        request.startDate().plusDays(6),
+        candidate.requestedMinutes(),
+        scheduled);
   }
 
   private WeeklyTimeSlots validatePeriod(PlanRequest request) {
@@ -168,7 +203,15 @@ public class PlanningApplicationService {
   }
 
   private void validateItems(
-      String authorization, PlanRequest request, LocalDate endDate, List<PlanItem> items) {
+      UUID ownerId,
+      String authorization,
+      PlanRequest request,
+      LocalDate endDate,
+      List<PlanItem> items) {
+    if (items == null || items.size() > 1000)
+      throw new IllegalArgumentException("Plan items are required and limited to 1000 blocks");
+    Map<UUID, Integer> completed = agent.completedMinutes(ownerId);
+    Map<UUID, Integer> allocated = new HashMap<>();
     Map<UUID, AssessmentView> known = new HashMap<>();
     tools.getIncompleteAssessments(authorization).forEach(a -> known.put(a.id(), a));
     Map<DayOfWeek, Integer> weeklyAvailability = new EnumMap<>(DayOfWeek.class);
@@ -178,6 +221,16 @@ public class PlanningApplicationService {
             (date, minutes) -> weeklyAvailability.merge(date.getDayOfWeek(), minutes, Math::max));
     Map<LocalDate, Integer> daily = new HashMap<>();
     for (PlanItem item : items) {
+      if (item == null
+          || item.date() == null
+          || item.subjectId() == null
+          || item.assessmentId() == null
+          || item.title() == null
+          || item.title().isBlank()
+          || item.title().length() > 300
+          || item.repetitionStage() < 0
+          || item.repetitionStage() > 1000)
+        throw new IllegalArgumentException("Plan contains missing or invalid fields");
       AssessmentView assessment = known.get(item.assessmentId());
       if (assessment == null)
         throw new IllegalArgumentException(
@@ -193,6 +246,15 @@ public class PlanningApplicationService {
       }
       if (item.allocatedMinutes() <= 0)
         throw new IllegalArgumentException("Allocated minutes must be positive");
+      if (item.allocatedMinutes() > 1440)
+        throw new IllegalArgumentException("A study block cannot exceed 1440 minutes");
+      int remaining =
+          Math.max(
+              0,
+              (assessment.estimatedMinutes() == null ? 120 : assessment.estimatedMinutes())
+                  - completed.getOrDefault(assessment.id(), 0));
+      if (allocated.merge(assessment.id(), item.allocatedMinutes(), Integer::sum) > remaining)
+        throw new IllegalArgumentException("Plan exceeds remaining assessment workload");
       int total = daily.merge(item.date(), item.allocatedMinutes(), Integer::sum);
       if (total > weeklyAvailability.getOrDefault(item.date().getDayOfWeek(), 0)) {
         throw new IllegalArgumentException("Plan exceeds availability on " + item.date());
@@ -210,17 +272,17 @@ public class PlanningApplicationService {
             + advice.summary()
             + " "
             + verb
-            + " a deadline plan through "
+            + " a seven-day plan through "
             + schedule.endDate()
             + ". Scheduled "
             + schedule.scheduledMinutes()
             + " of "
             + schedule.requestedMinutes()
             + " estimated minutes across spaced study and review sessions. "
-            + "Your weekly availability repeats as a template until each due date.";
+            + "Only the requested seven days are scheduled.";
     if (schedule.unscheduledMinutes() > 0) {
       text +=
-          " Add more availability to place the remaining "
+          " Remaining estimated work beyond this plan: "
               + schedule.unscheduledMinutes()
               + " minutes.";
     }

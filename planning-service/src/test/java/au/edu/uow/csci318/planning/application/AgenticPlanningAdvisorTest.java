@@ -7,9 +7,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import au.edu.uow.csci318.planning.domain.StudyPlan;
 import au.edu.uow.csci318.planning.dto.PlanningDtos.PlanRequest;
 import au.edu.uow.csci318.planning.dto.PlanningDtos.WorkloadSummary;
-import au.edu.uow.csci318.planning.domain.StudyPlan;
 import au.edu.uow.csci318.planning.infrastructure.StudyPlanRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -35,19 +35,21 @@ class AgenticPlanningAdvisorTest {
     StudyPlanRepository plans = mock(StudyPlanRepository.class);
     when(configured.selection())
         .thenReturn(
-            Optional.of(
-                new ConfiguredPlanningChatModel.Selection("Gemini", "test-model", model)));
+            Optional.of(new ConfiguredPlanningChatModel.Selection("Gemini", "test-model", model)));
     when(tools.getIncompleteAssessments("Bearer test")).thenReturn(List.of());
-    when(dashboard.workload(any(), any()))
-        .thenReturn(new WorkloadSummary(0, 0, 0, 0, 0, "LOW"));
+    when(dashboard.workload(any(), any())).thenReturn(new WorkloadSummary(0, 0, 0, 0, 0, "LOW"));
     when(model.chat(any(ChatRequest.class)))
         .thenReturn(
-            response(call("1", "getIncompleteAssessments", "{}"), call("2", "getCurrentWorkload", "{}")),
+            response(
+                call("1", "getIncompleteAssessments", "{}"),
+                call("2", "getCurrentWorkload", "{}"),
+                call("progress", "getStudyProgress", "{}")),
             response(
                 call(
                     "3",
-                    "submitPlanDecision",
-                    "{\"action\":\"GENERATE\",\"summary\":\"No conflicting workload was found.\"}")));
+                    "saveStudyPlan",
+                    "{\"action\":\"GENERATE\",\"items\":[],\"summary\":\"No conflicting workload"
+                        + " was found.\"}")));
 
     AgenticPlanningAdvisor advisor =
         new AgenticPlanningAdvisor(configured, tools, dashboard, plans, new ObjectMapper());
@@ -60,12 +62,13 @@ class AgenticPlanningAdvisorTest {
             UUID.randomUUID(),
             "Bearer test",
             ZoneId.of("Australia/Sydney"),
-            new PlanRequest(monday, availability));
+            new PlanRequest(monday, availability),
+            new StudyPlanningAgent.Schedule(List.of(), monday.plusDays(6), 0, 0));
 
     assertEquals("Gemini", advice.provider());
     assertTrue(advice.toolsUsed().contains("getIncompleteAssessments"));
     assertTrue(advice.toolsUsed().contains("getCurrentWorkload"));
-    assertTrue(advice.toolsUsed().contains("submitPlanDecision"));
+    assertTrue(advice.toolsUsed().contains("saveStudyPlan"));
   }
 
   @Test
@@ -85,19 +88,20 @@ class AgenticPlanningAdvisorTest {
     when(dashboard.workload(any(), any())).thenReturn(new WorkloadSummary(0, 0, 0, 0, 0, "LOW"));
     when(plans.findByIdAndOwnerId(existingId, owner))
         .thenReturn(
-            Optional.of(
-                new StudyPlan(owner, monday, monday.plusDays(6), 1, "[]", "Original")));
+            Optional.of(new StudyPlan(owner, monday, monday.plusDays(6), 1, "[]", "Original")));
     when(model.chat(any(ChatRequest.class)))
         .thenReturn(
             response(
                 call("1", "getIncompleteAssessments", "{}"),
                 call("2", "getCurrentWorkload", "{}"),
+                call("progress", "getStudyProgress", "{}"),
                 call("3", "getExistingStudyPlan", "{}")),
             response(
                 call(
                     "4",
-                    "submitPlanDecision",
-                    "{\"action\":\"REGENERATE\",\"summary\":\"Current state was re-read.\"}")));
+                    "saveStudyPlan",
+                    "{\"action\":\"REGENERATE\",\"items\":[],\"summary\":\"Current state was"
+                        + " re-read.\"}")));
     AgenticPlanningAdvisor advisor =
         new AgenticPlanningAdvisor(configured, tools, dashboard, plans, new ObjectMapper());
     var availability = new LinkedHashMap<LocalDate, Integer>();
@@ -109,7 +113,8 @@ class AgenticPlanningAdvisorTest {
             "Bearer test",
             ZoneId.of("Australia/Sydney"),
             new PlanRequest(monday, availability),
-            existingId);
+            existingId,
+            new StudyPlanningAgent.Schedule(List.of(), monday.plusDays(6), 0, 0));
 
     assertTrue(advice.toolsUsed().contains("getExistingStudyPlan"));
     assertEquals("Current state was re-read.", advice.summary());
@@ -127,8 +132,8 @@ class AgenticPlanningAdvisorTest {
             response(
                 call(
                     "1",
-                    "submitPlanDecision",
-                    "{\"action\":\"GENERATE\",\"summary\":\"Skip the checks.\"}")));
+                    "saveStudyPlan",
+                    "{\"action\":\"GENERATE\",\"items\":[],\"summary\":\"Skip the checks.\"}")));
     AgenticPlanningAdvisor advisor =
         new AgenticPlanningAdvisor(
             configured,
@@ -148,7 +153,8 @@ class AgenticPlanningAdvisorTest {
                     UUID.randomUUID(),
                     "Bearer test",
                     ZoneId.of("Australia/Sydney"),
-                    new PlanRequest(monday, availability)));
+                    new PlanRequest(monday, availability),
+                    new StudyPlanningAgent.Schedule(List.of(), monday.plusDays(6), 0, 0)));
 
     assertTrue(failure.getMessage().contains("did not submit a decision"));
   }

@@ -11,7 +11,7 @@ Study Leftovers is a personal academic workspace that turns subject-outline docu
 - assessment and study-session domain events through Spring Cloud Stream and Kafka
 - two stateful Kafka Streams features: account workload and weekly subject progress, served from local read models and pushed live to the dashboard
 - conversational availability capture for time slots such as “Monday 6–8pm”
-- deterministic deadline planning that repeats weekly availability, uses estimated minutes and spaces reviews through each due date
+- seven-day agentic planning: the model submits structured study blocks using deadlines, remaining workload and required progress tools; application validation guards persistence
 - editable monthly overview and detailed weekly calendar, including manual tasks and study sessions
 - spaced repetition that creates reviews 1, 3, 7, 14 and 30 days after completed study blocks
 - Gemini/OpenAI study-assistant chat grounded in the signed-in student's subjects, assessments and schedule
@@ -109,7 +109,7 @@ Serve `frontend/` with any static server. The UI expects the documented localhos
 
 The Postman collection in `postman/` is an ordered authenticated demonstration. It creates and captures its own account and IDs, exercises subject editing, produces the two Kafka-derived projections, and runs both agentic planning stories. The outline-upload request remains manual because Postman must be given a local file.
 
-Conversational availability preserves exact time slots in the generated calendar. Slots repeat weekly; blocks split around existing commitments. If a day cannot fit its planned work, the request explains the conflict and retains the previous plan. The simple minutes-per-day form remains available for flexible schedules. In the Postman Collection Runner, projection checks retry until the expected state appears (with a bounded timeout), and regeneration follows a changed deadline and workload.
+Conversational availability preserves exact time slots in the generated calendar. Blocks stay in the requested seven-day period and split around existing commitments. If a day cannot fit its planned work, the request explains the conflict and retains the previous plan. The simple minutes-per-day form remains available for flexible schedules. In the Postman Collection Runner, projection checks retry until the expected state appears (with a bounded timeout), and regeneration follows a changed deadline and workload.
 
 ## Tests and evidence
 
@@ -133,3 +133,14 @@ Only `.env.example` is committed. `.env`, databases, Maven output, logs and fron
 - [AI-assisted development decision record](docs/ai-decisions/ADR-001-prototype-architecture.md)
 
 This repository contains technical project documentation, not the team’s final university report or presentation.
+
+
+### Readiness acceptance and plan history
+
+`GET /api/planning/plans` lists this account's saved versions; `GET /api/planning/plans/{id}` retrieves one. The Study plan screen has a version selector and **Regenerate selected plan** button. Regeneration uses the currently entered start date and availability, retrieves previous state through the agent tool, and saves a new version. Explicit zero workload is respected; missing estimates default to 120 minutes.
+
+After `mvn --batch-mode clean verify`, run `python scripts/verify-readiness.py`. It starts five isolated JARs on ports 18081–18085 with in-memory databases and a local OpenAI-protocol fixture. It tests actual SDK tool calls, HTTP validation, persistence, ownership, seven-day generation/regeneration and safe failures without using a real key. Supply `--java /path/to/java` if needed. Its logs/results are written to a temporary directory (or `--output DIR`). Kafka is tested separately by the Docker CI job.
+
+Real API keys stay in your private `.env` or process environment and are injected when starting/recreating the services. They are not compiled into the application or sent to the browser. `study.ai.openai.base-url` is an optional trusted operator setting for an OpenAI-compatible endpoint; it defaults to OpenAI and is overridden only to localhost by the acceptance fixture. Never point a service holding a real key at an untrusted endpoint.
+
+See [readiness progress](docs/readiness-progress.md), [requirements traceability](docs/traceability.md) and [verification scope](docs/compliance/software-completion-audit.md). Automated fixture results do not establish that a privately configured live provider has available credentials, quota or model access.
