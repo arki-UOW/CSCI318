@@ -111,6 +111,8 @@ The Postman collection in `postman/` is an ordered authenticated demonstration. 
 
 Conversational availability preserves exact time slots in the generated calendar. Blocks stay in the requested seven-day period and split around existing commitments. If a day cannot fit its planned work, the request explains the conflict and retains the previous plan. The simple minutes-per-day form remains available for flexible schedules. In the Postman Collection Runner, projection checks retry until the expected state appears (with a bounded timeout), and regeneration follows a changed deadline and workload.
 
+Minutes-only planning also avoids existing commitments. It prefers free evening time after 18:00 when the day's allocation fits; otherwise it uses free time across that day, potentially including early morning. Use explicit time slots to restrict clock times. If no placement fits, generation and regeneration preserve the previous plan and calendar.
+
 ## Tests and evidence
 
 Run `mvn clean verify` and `node --test frontend/tests/*.test.cjs`. Tests cover domain rules, outbox rollback/retry, Kafka Streams replay/corrections/account isolation, persistent projections and authenticated dashboard push parsing. No LLM key is required.
@@ -149,6 +151,8 @@ See [readiness progress](docs/readiness-progress.md), [requirements traceability
 
 See [the correction checklist](docs/readiness-progress.md), [all eighteen use cases and activity diagrams](docs/use-cases/functional-use-cases.md), [UML domain model](docs/domain-model/domain-model.md), [architecture/layer diagrams](docs/architecture/diagrams.md), [proposal reconciliation](docs/architecture/proposal-reconciliation.md), [implemented AI decisions](docs/ai-decisions/ADR-002-completion-decisions.md), and [demonstration guide](docs/testing/demonstration-guide.md).
 
-Generation with no incomplete work saves an empty seven-day version and clears obsolete planned AI blocks. Plan writes are serialized per account in the database, with a unique owner/version index. On startup, only owners with legacy duplicate plan versions are renumbered chronologically; IDs, plan content, dates and calendar links remain intact. Normal unique histories retain their numbers.
+Generation with no remaining work saves an empty seven-day version without requiring availability and clears obsolete planned AI blocks. This includes incomplete assessments whose estimates are zero or fully covered by completed study. Zero estimates are accepted through import and direct entry. Integer REST fields reject decimal JSON values with 400 before mutation. See the [four follow-up corrections and regression evidence](docs/compliance/edge-case-corrections.md).
+
+Plan writes are serialized per account in the database, with a unique owner/version index. On startup, only owners with legacy duplicate plan versions are renumbered chronologically; IDs, plan content, dates and calendar links remain intact. Normal unique histories retain their numbers.
 
 The Windows launcher checks Docker's exit code and waits for service endpoints before opening the site. The optional outline request is skipped in the ordered Postman run unless explicitly enabled. Private provider keys remain runtime configuration.

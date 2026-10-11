@@ -50,6 +50,8 @@
 
 Errors contain `timestamp`, `status`, `error`, `message`, `path`, and `validationErrors` (an empty object when no field details apply). Invalid inputs return 400, missing owned records 404, conflicting records 409, unavailable dependencies/providers 503. Raw SDK responses and credentials never become provider-error messages.
 
+Integer REST fields require integer JSON numbers: decimal numbers such as `15.5`, `-0.5` or `15.0` return 400 before they can be truncated. This applies to minute counts, integer subject fields and daily-capacity map values. Fields declared as floating point, including `estimatedHours` and assessment percentage, continue to accept valid fractions. Zero workload estimates are accepted in direct entry, direct import, nested subject creation and outline confirmation; negative estimates are rejected. Only a missing estimate receives the default workload.
+
 Assessment and study-session descriptions support up to 2,000 characters with CLOB persistence, including migration from legacy 255-character columns. Calendar academic references must belong to the account and match one another; unlinked personal entries remain allowed.
 
 Generation and regeneration accept `startDate`, `dailyAvailabilityMinutes` and optional `availabilitySlots`:
@@ -62,7 +64,9 @@ Generation and regeneration accept `startDate`, `dailyAvailabilityMinutes` and o
 }
 ```
 
-Slots must use whole-minute, non-overlapping times within the seven-day template and agree with each day's minute total. The stored plan always ends six days after its start; slots apply only within those seven days. Calendar blocks stay within the slots and avoid existing commitments. If a scheduled day has insufficient free time, the request fails and the previous plan remains intact. Clients omitting slots retain daily-capacity planning with automatic calendar times. Undated assessments use the same start-plus-six-day fallback for task scheduling and the plan's overall end date.
+Slots must use whole-minute, non-overlapping times within the seven-day template and agree with each day's minute total. The stored plan always ends six days after its start; slots apply only within those seven days. Calendar blocks stay within the slots and avoid existing commitments. If a scheduled day has insufficient free time, the request fails with 400 and the previous plan/history/calendar remain intact. Clients omitting slots also avoid existing commitments: automatic placement prefers free time from 18:00 to midnight if the day's allocation fits, otherwise it uses free intervals across the full day in chronological order. Supply slots when clock-time restrictions matter. Undated assessments use the same start-plus-six-day fallback for task scheduling and the plan's overall end date.
+
+When all remaining workload is zero, generation and regeneration accept an omitted or empty availability map and save an empty seven-day plan. This includes incomplete assessments with explicit zero estimates and estimates fully covered by completed study. Positive remaining work still requires availability. Regeneration clears obsolete planned AI calendar entries while preserving saved history and other commitments.
 
 All subject, assessment, activity, planning and calendar calls require the opaque bearer token returned by Account Service. Services validate the token with Account Service and scope every query and mutation to its account ID. Raw tokens and passwords are never stored: session tokens are SHA-256 hashed and passwords use BCrypt.
 

@@ -1,6 +1,6 @@
 # Completion progress — fresh audit
 
-Baseline merged main: `14a2a27b80d8e673207cff6f2433405aa3de30b4` (PR #13). Correction branch: `agent/final-readiness`. Date: 11 October 2026.
+Baseline merged main: `d38e32968e73635f0b5496ff4ac17ccc8ab0cd1d` (PR #14). Correction branch: `agent/readiness-edge-cases`. Date: 12 October 2026. The original nine corrections are retained below alongside the four follow-up fixes.
 
 | Task | Status | Evidence |
 |---|---|---|
@@ -18,10 +18,14 @@ Baseline merged main: `14a2a27b80d8e673207cff6f2433405aa3de30b4` (PR #13). Corre
 | Accepted/modified/rejected AI decision record | Done | ADR-002 records current decisions, no invented team approvals |
 | Examples for all 18 FRs and six NFRs | Done | Demonstration guide, Postman, requirements and executable checks |
 | Design/proposal differences explained | Done | Target events versus REST, authenticated UUID contracts, seven-day plans |
-| Java verification | Passed | 87 tests; zero failures/errors/skips |
+| Follow-up 1. Fractional REST integers | Done | Structured 400 before mutation in all five services; HTTP boundary checks |
+| Follow-up 2. Zero remaining work without availability | Done | Shared remaining-work guard; zero estimates and fully studied estimates; domain/HTTP |
+| Follow-up 3. Zero estimates through imports | Done | Direct, nested manual and outline-confirmation routes preserve zero; HTTP |
+| Follow-up 4. Minutes-only calendar conflicts | Done | Shared interval placement; overnight/full-day checks; failed generation/regeneration preserves calendar/history |
+| Java verification | Passed | 94 tests; zero failures/errors/skips |
 | Frontend verification | Passed | 21 tests; browser account isolation and overnight checks |
-| Five-service API/persistence/model protocol verification | Passed | 96 checks with a local fixture; no private provider key |
+| Five-service API/persistence/model protocol verification | Passed | 132 checks with a local fixture; no private provider key |
 | Launcher verification | Passed | Docker failure, timeout, healthy startup |
 | Exact-revision GitHub CI | Required publication gate | Final delivery links the branch revision and completed test/Kafka run |
 
-The [completion audit](compliance/software-completion-audit.md) contains the full evidence and limits. These corrections close all nine listed code defects and the requested repository artefact gaps. A live provider demonstration still uses the team's private key; academic reports, presentations and actual team approvals cannot be manufactured from source code. No claim of absolute bug freedom is made.
+The [completion audit](compliance/software-completion-audit.md) and [four follow-up corrections](compliance/edge-case-corrections.md) contain the evidence and limits. These corrections close the nine earlier listed code defects, four follow-up cases and requested repository artefact gaps. A live provider demonstration still uses the team's private key; academic reports, presentations and actual team approvals cannot be manufactured from source code. No claim of absolute bug freedom is made.

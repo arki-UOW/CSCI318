@@ -117,4 +117,27 @@ class DeadlineSchedulerTest {
     assertTrue(result.items().isEmpty());
     assertEquals(0, result.requestedMinutes());
   }
+
+  @Test
+  void zeroEstimateNeedsNoAvailability() {
+    var result = scheduler.schedule(start, capacity(0), List.of(work(0, 5)), Map.of());
+    assertTrue(result.items().isEmpty());
+    assertEquals(0, result.requestedMinutes());
+    assertEquals(start.plusDays(6), result.endDate());
+  }
+
+  @Test
+  void fullyStudiedIncompleteAssessmentNeedsNoAvailability() {
+    var result =
+        scheduler.schedule(start, capacity(0), List.of(work(60, 5)), Map.of(assessment, 60));
+    assertTrue(result.items().isEmpty());
+    assertEquals(0, result.requestedMinutes());
+  }
+
+  @Test
+  void positiveRemainingWorkStillRequiresAvailability() {
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> scheduler.schedule(start, capacity(0), List.of(work(60, 5)), Map.of(assessment, 59)));
+  }
 }

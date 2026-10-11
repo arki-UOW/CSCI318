@@ -1,5 +1,8 @@
 server: {port: 8083}
 spring:
+  jackson:
+    deserialization:
+      accept-float-as-int: false
   application: {name: study-activity-service}
   datasource: {url: "jdbc:h2:file:./data/activity-db;AUTO_SERVER=TRUE", username: sa, password: ""}
   jpa: {hibernate: {ddl-auto: update}, open-in-view: false}

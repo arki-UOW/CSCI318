@@ -18,6 +18,11 @@ The file `results.json` from the HTTP fixture and CI run links are machine-verif
 | Foreign subject/assessment ID | 400 invalid reference or 404 owned-resource lookup |
 | Provider quota/timeout | 503 safe message; no private SDK response leakage |
 | Model `allocatedMinutes: 15.5` or string `"15"` | 400; no silent conversion or saved version |
+| REST integer minute field `15.5` or `-0.5` | 400 before mutation; saved integer value unchanged |
+| Import `estimatedHours: 0` | Accepted and persisted as zero minutes, matching direct entry |
+| All remaining estimates zero, no availability supplied | Empty seven-day version; regeneration removes obsolete planned AI blocks |
+| Minutes-only plan with an existing evening commitment | New blocks avoid that commitment and retain total allocated minutes |
+| Minutes-only generation/regeneration with a fully occupied scheduled day | 400 explaining insufficient availability; previous calendar and plan history unchanged |
 | Eight concurrent valid plan requests | Distinct versions and one coherent latest active calendar; bounded contention may be rejected explicitly |
 | Complete final assessment then regenerate | 201 empty new version; historical plan retained; obsolete calendar removed |
 | Overnight event then next-day query | Entry included until its exclusive end time |
