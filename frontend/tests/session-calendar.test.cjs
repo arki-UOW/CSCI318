@@ -80,3 +80,14 @@ test('sign-out clears private DOM and memory before the logout network response'
   assert.equal(node('form').value,''); assert.equal(node('dialog[open]').closed,true);
   logout.resolve(); await pending;
 });
+
+test('calendar completion cannot disclose its review date after switching during refresh', async () => {
+  const refresh=deferred(); let handler; const messages=[];
+  const c={state:{sessionEpoch:1,currentView:'calendar'},API:{planning:'/api'},
+    $:selector=>selector==='#complete-calendar-entry'?{addEventListener:(name,fn)=>handler=fn}:{value:'A-entry',close(){}},
+    setBusy(){}, request:async()=>({nextReview:{startAt:'private A review'}}),loadCalendar:()=>refresh.promise,
+    formatDateTime:x=>x,feedback:(...args)=>messages.push(args)};
+  vm.createContext(c);vm.runInContext(app.slice(app.indexOf("$('#complete-calendar-entry').addEventListener"),app.indexOf('function setAssistantOpen(')),c);
+  const pending=handler({currentTarget:{}}); await new Promise(resolve=>setImmediate(resolve));
+  c.state.sessionEpoch=2;refresh.resolve();await pending;assert.equal(messages.length,0);
+});

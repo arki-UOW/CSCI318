@@ -19,7 +19,7 @@ Baseline merged main: `14a2a27b80d8e673207cff6f2433405aa3de30b4` (PR #13). Corre
 | Examples for all 18 FRs and six NFRs | Done | Demonstration guide, Postman, requirements and executable checks |
 | Design/proposal differences explained | Done | Target events versus REST, authenticated UUID contracts, seven-day plans |
 | Java verification | Passed | 87 tests; zero failures/errors/skips |
-| Frontend verification | Passed | 20 tests; browser account isolation and overnight checks |
+| Frontend verification | Passed | 21 tests; browser account isolation and overnight checks |
 | Five-service API/persistence/model protocol verification | Passed | 96 checks with a local fixture; no private provider key |
 | Launcher verification | Passed | Docker failure, timeout, healthy startup |
 | Exact-revision GitHub CI | Required publication gate | Final delivery links the branch revision and completed test/Kafka run |

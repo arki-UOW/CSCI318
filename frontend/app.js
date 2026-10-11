@@ -1061,6 +1061,7 @@ function syncReviewDraft() {
 }
 
 async function confirmReview() {
+  const epoch = state.sessionEpoch;
   syncReviewDraft();
   const button = $('#confirm-btn');
   const weeklyTarget = state.review.weeklyStudyTargetMinutes;
@@ -1082,6 +1083,7 @@ async function confirmReview() {
     state.review = null;
     $('#review').replaceChildren();
     await load();
+    if (state.sessionEpoch !== epoch) return;
     if (state.reviewQueue.length) {
       state.review = state.reviewQueue.shift();
       renderUploadQueue();
@@ -1426,6 +1428,7 @@ $('#close-calendar-dialog').addEventListener('click', () => $('#calendar-dialog'
 $('#cancel-calendar-dialog').addEventListener('click', () => $('#calendar-dialog').close());
 
 $('#calendar-form').addEventListener('submit', async event => {
+  const epoch = state.sessionEpoch;
   event.preventDefault();
   const button = event.submitter;
   const id = $('#calendar-id').value;
@@ -1440,6 +1443,7 @@ $('#calendar-form').addEventListener('submit', async event => {
     });
     $('#calendar-dialog').close();
     await loadCalendar(false);
+    if (state.sessionEpoch !== epoch) return;
     feedback(state.currentView === 'week' ? 'week-feedback' : 'calendar-feedback', id ? 'Calendar item updated.' : 'Calendar item created.', 'success');
   } catch (error) {
     if (error.staleSession) return; feedback('calendar-dialog-feedback', error.message, 'error'); }
@@ -1447,6 +1451,7 @@ $('#calendar-form').addEventListener('submit', async event => {
 });
 
 $('#delete-calendar-entry').addEventListener('click', async event => {
+  const epoch = state.sessionEpoch;
   if (!window.confirm('Delete this calendar item?')) return;
   const button = event.currentTarget;
   setBusy(button, true, 'Deleting');
@@ -1454,6 +1459,7 @@ $('#delete-calendar-entry').addEventListener('click', async event => {
     await request(`${API.planning}/calendar/${$('#calendar-id').value}`, { method: 'DELETE' });
     $('#calendar-dialog').close();
     await loadCalendar(false);
+    if (state.sessionEpoch !== epoch) return;
     feedback(state.currentView === 'week' ? 'week-feedback' : 'calendar-feedback', 'Calendar item deleted.', 'success');
   } catch (error) {
     if (error.staleSession) return; feedback('calendar-dialog-feedback', error.message, 'error'); }
@@ -1461,12 +1467,14 @@ $('#delete-calendar-entry').addEventListener('click', async event => {
 });
 
 $('#complete-calendar-entry').addEventListener('click', async event => {
+  const epoch = state.sessionEpoch;
   const button = event.currentTarget;
   setBusy(button, true, 'Completing');
   try {
     const result = await request(`${API.planning}/calendar/${$('#calendar-id').value}/complete`, { method: 'POST' });
     $('#calendar-dialog').close();
     await loadCalendar(false);
+    if (state.sessionEpoch !== epoch) return;
     const message = result.nextReview ? `Completed. Your next spaced review is ${formatDateTime(result.nextReview.startAt)}.` : 'Calendar item completed.';
     feedback(state.currentView === 'week' ? 'week-feedback' : 'calendar-feedback', message, 'success');
   } catch (error) {

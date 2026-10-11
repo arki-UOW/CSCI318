@@ -29,7 +29,7 @@ DescriptionPersistenceTest in Assessment and Activity recreates the legacy VARCH
 
 ## Fresh-audit regression coverage
 
-The current local suite has 87 Java tests, 20 frontend tests and 96 isolated HTTP checks. The HTTP suite drives eight simultaneous generation requests followed by eight simultaneous regeneration requests and checks unique versions plus one coherent active calendar. It also tests final-assessment completion, all-deleted and zero-capacity empty plans, strict fractional/missing/string/extra model fields, nested null lists, profile length boundaries, outline provider outages and overnight query boundaries. PlanWriteLockTest checks existing duplicate-version repair, uniqueness and restart idempotence.
+The current local suite has 87 Java tests, 21 frontend tests and 96 isolated HTTP checks. The HTTP suite drives eight simultaneous generation requests followed by eight simultaneous regeneration requests and checks unique versions plus one coherent active calendar. It also tests final-assessment completion, all-deleted and zero-capacity empty plans, strict fractional/missing/string/extra model fields, nested null lists, profile length boundaries, outline provider outages and overnight query boundaries. PlanWriteLockTest checks existing duplicate-version repair, uniqueness and restart idempotence.
 
 `node --test frontend/tests/*.test.cjs` exercises stale headers/bodies/401 responses, calendar navigation races, midnight/month boundaries and synchronous sign-out cleanup before logout resolves. `pwsh -File scripts/test-launcher.ps1` runs the actual launcher with controlled native-command/readiness boundaries, including Docker failure, timeout and success. CI executes both suites.
 

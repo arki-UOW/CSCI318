@@ -8,7 +8,7 @@ This is an engineering artifact for the repository. It is not the student-author
 
 The nine defects in the fresh professor-perspective audit are fixed and covered by passing regression/acceptance checks. Earlier readiness work remains in place; the table of earlier changes below records that history rather than treating it as sufficient verification. All 18 functional requirements have corresponding code paths and test evidence. New planning follows the proposal's exact seven-day contract; the model submits structured items and the server validates them before persistence.
 
-Local evidence: **87 Java tests, 20 frontend tests and 96 isolated five-service HTTP checks passed**. No real API key was requested, read, committed or used. The HTTP suite used the actual LangChain4j OpenAI SDK against an explicitly local protocol fixture. It proves integration and failure handling, not the quality/availability of a live Gemini/OpenAI model.
+Local evidence: **87 Java tests, 21 frontend tests and 96 isolated five-service HTTP checks passed**. No real API key was requested, read, committed or used. The HTTP suite used the actual LangChain4j OpenAI SDK against an explicitly local protocol fixture. It proves integration and failure handling, not the quality/availability of a live Gemini/OpenAI model.
 
 The PR's `test` and `kafka-integration` checks must be green on the reviewed commit. The former rebuilds and runs Java, frontend and isolated HTTP acceptance; the latter starts real Kafka and all services in fresh Docker volumes, tests event projections/SSE and proves queries work with upstream academic services stopped. The final delivery checklist records the exact GitHub run/revision when completed.
 
@@ -97,7 +97,7 @@ Browser smoke verification used disposable accounts and the five actual services
 | NFR-02 | No committed secrets | Private environment injection retained; fixture credential is explicitly fake; status/errors do not return keys |
 | NFR-03 | Consistent errors | All five advice handlers use timestamp/status/error/message/path/validationErrors; malformed/validation paths tested through HTTP |
 | NFR-04 | Consistent layers/names | Five bounded contexts with four layers; technical shared messaging module |
-| NFR-05 | Repeatable tests | 87 Java, 20 frontend, 96 isolated HTTP checks plus real-Kafka CI |
+| NFR-05 | Repeatable tests | 87 Java, 21 frontend, 96 isolated HTTP checks plus real-Kafka CI |
 | NFR-06 | Repeatable Postman demo | Ordered account/ID capture, bounded projection polling, seven-day generation and changed-state regeneration assertions; real-key execution remains an external verification prerequisite |
 
 ## Operational boundaries
