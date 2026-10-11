@@ -1,6 +1,6 @@
 # CSCI318 software readiness verification
 
-Verification date: 12 October 2026. Baseline: `d38e32968e73635f0b5496ff4ac17ccc8ab0cd1d` (merged PR #14). Follow-up changes are on `agent/readiness-edge-cases`.
+Verification date: 12 October 2026. Baseline: `f1ebffe` (merged PR #15). Final interface changes are on `agent/zero-work-interface-gaps`.
 
 This is an engineering artifact for the repository. It is not the student-authored assessed report or presentation. Requirements were taken from the professor's **CSCI318 Project Specification Spring 2026 (4).pdf**, pages 3–7, and the team's **CSCI318_Study_Leftovers_Project_Proposal_Updated (4).pdf**, especially FR-01–FR-18, NFR-01–NFR-06, RT-01/02 and AI-01/02. Earlier repository claims of unconditional completion are superseded by this verification.
 
@@ -10,7 +10,9 @@ The nine defects in the fresh professor-perspective audit are fixed and covered 
 
 The [four follow-up corrections](edge-case-corrections.md) additionally cover fractional REST integers, zero remaining work without availability, zero-valued imports and minutes-only calendar conflicts. Their regression checks run alongside the earlier suite.
 
-Local evidence: **94 Java tests, 21 frontend tests and 132 isolated five-service HTTP checks passed**. No real API key was requested, read, committed or used. The HTTP suite used the actual LangChain4j OpenAI SDK against an explicitly local protocol fixture. It proves integration and failure handling, not the quality/availability of a live Gemini/OpenAI model.
+The [two final interface corrections](zero-work-interface-corrections.md) close omitted/null availability handling and browser zero-hours validation, which the earlier empty-map and REST-only tests did not cover.
+
+Local evidence: **94 Java tests, 23 frontend tests and 142 isolated five-service HTTP checks passed**. No real API key was requested, read, committed or used. The HTTP suite used the actual LangChain4j OpenAI SDK against an explicitly local protocol fixture. It proves integration and failure handling, not the quality/availability of a live Gemini/OpenAI model.
 
 The PR's `test` and `kafka-integration` checks must be green on the reviewed commit. The former rebuilds and runs Java, frontend and isolated HTTP acceptance; the latter starts real Kafka and all services in fresh Docker volumes, tests event projections/SSE and proves queries work with upstream academic services stopped. The final delivery checklist records the exact GitHub run/revision when completed.
 
@@ -99,7 +101,7 @@ Browser smoke verification used disposable accounts and the five actual services
 | NFR-02 | No committed secrets | Private environment injection retained; fixture credential is explicitly fake; status/errors do not return keys |
 | NFR-03 | Consistent errors | All five advice handlers use timestamp/status/error/message/path/validationErrors; malformed/validation paths tested through HTTP |
 | NFR-04 | Consistent layers/names | Five bounded contexts with four layers; technical shared messaging module |
-| NFR-05 | Repeatable tests | 94 Java, 21 frontend, 132 isolated HTTP checks plus real-Kafka CI |
+| NFR-05 | Repeatable tests | 94 Java, 23 frontend, 142 isolated HTTP checks plus real-Kafka CI |
 | NFR-06 | Repeatable Postman demo | Ordered account/ID capture, bounded projection polling, seven-day generation and changed-state regeneration assertions; real-key execution remains an external verification prerequisite |
 
 ## Operational boundaries

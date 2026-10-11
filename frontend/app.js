@@ -746,7 +746,7 @@ function manualAssessmentEditor(assessment, index) {
     <label>Weight %<input class="weight" type="number" min="0" max="100" step="0.1" value="${esc(assessment.weighting)}"></label>
     <label>Due date<input class="due-date" type="date" value="${esc(assessment.dueDate)}"></label>
     <label>Due week<input class="due-week" type="number" min="1" max="52" value="${esc(assessment.dueWeek)}"></label>
-    <label>Est. hours<input class="hours" type="number" min="0.1" step="0.1" value="${esc(assessment.estimatedHours)}"></label>
+    <label>Est. hours<input class="hours" type="number" min="0" step="0.1" value="${esc(assessment.estimatedHours)}"></label>
     <button class="icon-button remove-manual-assessment" type="button" data-index="${index}" aria-label="Remove assessment">×</button>
   </div>`;
 }
@@ -1033,7 +1033,7 @@ function assessmentEditor(assessment, index) {
     <label>Weight %<input class="weight" type="number" min="0" max="100" step="0.1" value="${esc(assessment.weighting)}"></label>
     <label>Due date<input class="due-date" type="date" value="${esc(assessment.dueDate)}"></label>
     <label>Due week<input class="due-week" type="number" min="1" max="52" value="${esc(assessment.dueWeek)}"></label>
-    <label>Est. hours<input class="hours" type="number" min="0.1" step="0.1" value="${esc(assessment.estimatedHours)}"></label>
+    <label>Est. hours<input class="hours" type="number" min="0" step="0.1" value="${esc(assessment.estimatedHours)}"></label>
     <button class="icon-button remove-assessment" type="button" data-index="${index}" aria-label="Remove ${esc(assessment.title || 'assessment')}">×</button>
   </div>`;
 }

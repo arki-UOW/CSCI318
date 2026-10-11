@@ -1,6 +1,6 @@
 # Completion progress — fresh audit
 
-Baseline merged main: `d38e32968e73635f0b5496ff4ac17ccc8ab0cd1d` (PR #14). Correction branch: `agent/readiness-edge-cases`. Date: 12 October 2026. The original nine corrections are retained below alongside the four follow-up fixes.
+Baseline merged main: `f1ebffe` (PR #15). Correction branch: `agent/zero-work-interface-gaps`. Date: 12 October 2026. The original nine corrections and four follow-up fixes are retained below, with the two final interface corrections.
 
 | Task | Status | Evidence |
 |---|---|---|
@@ -22,10 +22,12 @@ Baseline merged main: `d38e32968e73635f0b5496ff4ac17ccc8ab0cd1d` (PR #14). Corre
 | Follow-up 2. Zero remaining work without availability | Done | Shared remaining-work guard; zero estimates and fully studied estimates; domain/HTTP |
 | Follow-up 3. Zero estimates through imports | Done | Direct, nested manual and outline-confirmation routes preserve zero; HTTP |
 | Follow-up 4. Minutes-only calendar conflicts | Done | Shared interval placement; overnight/full-day checks; failed generation/regeneration preserves calendar/history |
+| Final interface 1. Omitted/null availability | Done | Normalize to zero capacity; zero work succeeds, positive work rejects without mutation; HTTP |
+| Final interface 2. Browser zero-hours entry | Done | Both editors allow zero; renderer regressions and eight DOM constraint checks |
 | Java verification | Passed | 94 tests; zero failures/errors/skips |
-| Frontend verification | Passed | 21 tests; browser account isolation and overnight checks |
-| Five-service API/persistence/model protocol verification | Passed | 132 checks with a local fixture; no private provider key |
+| Frontend verification | Passed | 23 tests; earlier browser account isolation and overnight checks |
+| Five-service API/persistence/model protocol verification | Passed | 142 checks with a local fixture; no private provider key |
 | Launcher verification | Passed | Docker failure, timeout, healthy startup |
 | Exact-revision GitHub CI | Required publication gate | Final delivery links the branch revision and completed test/Kafka run |
 
-The [completion audit](compliance/software-completion-audit.md) and [four follow-up corrections](compliance/edge-case-corrections.md) contain the evidence and limits. These corrections close the nine earlier listed code defects, four follow-up cases and requested repository artefact gaps. A live provider demonstration still uses the team's private key; academic reports, presentations and actual team approvals cannot be manufactured from source code. No claim of absolute bug freedom is made.
+The [completion audit](compliance/software-completion-audit.md), [four follow-up corrections](compliance/edge-case-corrections.md) and [two final interface corrections](compliance/zero-work-interface-corrections.md) contain the evidence and limits. These corrections close the listed reproduced defects and requested repository artefact gaps. A live provider demonstration still uses the team's private key; academic reports, presentations and actual team approvals cannot be manufactured from source code. No claim of absolute bug freedom is made.
