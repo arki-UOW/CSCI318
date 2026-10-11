@@ -308,6 +308,76 @@ def main():
         check('overnight entry appears on continuation day', overnight_entry['id'] in [e['id'] for e in api(18084, f'calendar?from={next_date}&to={next_date}', other_token)[1]], True)
         api(18084, 'calendar/' + overnight_entry['id'], other_token, {**overnight, 'endAt': next_date.isoformat() + 'T00:00:00'}, 'PATCH')
         check('midnight endpoint does not occupy next day', overnight_entry['id'] in [e['id'] for e in api(18084, f'calendar?from={next_date}&to={next_date}', other_token)[1]], False)
+        # Reverification edge cases: REST number types, all zero-work routes, and clock conflicts.
+        status, edge_account = api(18085, 'auth/register', body={'username': 'edge_' + uuid.uuid4().hex[:8], 'password': 'FixtureOnly-1234', 'displayName': 'Edge regressions', 'timezone': 'UTC'})
+        check('create edge-case account', status, 201)
+        edge_token = edge_account['token']
+        edge_subject_body = {**subject_body, 'code': 'EDGE318'}
+        status, edge_subject = api(18081, 'subjects', edge_token, edge_subject_body)
+        check('create edge-case subject', status, 201)
+        edge_assessment_body = {**body, 'subjectId': edge_subject['id'], 'title': 'Zero workload', 'estimatedMinutes': 0}
+        status, edge_assessment = api(18082, 'assessments', edge_token, edge_assessment_body)
+        check('direct zero workload accepted', (status, edge_assessment.get('estimatedMinutes')), (201, 0))
+        for minutes in [15.5, -0.5]:
+            invalid_body = {**edge_assessment_body, 'estimatedMinutes': minutes}
+            for label, path, method in [('create', 'assessments', 'POST'), ('update', 'assessments/' + edge_assessment['id'], 'PATCH')]:
+                status, error = api(18082, path, edge_token, invalid_body, method)
+                check(f'assessment {label} rejects fractional {minutes}', (status, set(error)), (400, {'timestamp', 'status', 'error', 'message', 'path', 'validationErrors'}))
+        check('rejected numeric updates preserve estimate', api(18082, 'assessments/' + edge_assessment['id'], edge_token)[1]['estimatedMinutes'], 0)
+        check('rejected numeric creates leave no assessment', len(api(18082, 'assessments', edge_token)[1]), 1)
+        edge_session = {'subjectId': edge_subject['id'], 'studyDate': TODAY.isoformat(), 'durationMinutes': 30, 'description': 'Whole minutes'}
+        status, edge_study = api(18083, 'study-sessions', edge_token, edge_session)
+        check('integer study minutes accepted', status, 201)
+        for label, path, method in [('create', 'study-sessions', 'POST'), ('update', 'study-sessions/' + edge_study['id'], 'PATCH')]:
+            check('study ' + label + ' rejects fractional minutes', api(18083, path, edge_token, {**edge_session, 'durationMinutes': 15.5}, method)[0], 400)
+        check('rejected study changes preserve minutes', api(18083, 'study-sessions', edge_token)[1][0]['durationMinutes'], 30)
+        check('fractional subject credit points rejected', api(18081, 'subjects', edge_token, {**edge_subject_body, 'code': 'FRACTION', 'creditPoints': 6.5})[0], 400)
+        check('fractional subject target rejected', api(18081, 'subjects/' + edge_subject['id'] + '/study-target', edge_token, {'minutes': -0.5}, 'PATCH')[0], 400)
+        check('fractional planning map capacity rejected', api(18084, 'planning/plans', edge_token, {'startDate': START.isoformat(), 'dailyAvailabilityMinutes': {START.isoformat(): 60.5}})[0], 400)
+        check('invalid capacity creates no plan', api(18084, 'planning/plans', edge_token)[1], [])
+        zero_candidate = {'title': 'Imported zero', 'estimatedHours': 0, 'weighting': 12.5}
+        status, imported_zero = api(18082, 'assessments/import', edge_token, {'subjectId': edge_subject['id'], 'assessments': [zero_candidate]})
+        check('zero import and fractional weighting accepted', (status, imported_zero[0]['estimatedMinutes'], imported_zero[0]['weighting']), (201, 0, 12.5))
+        check('negative import estimate still rejected', api(18082, 'assessments/import', edge_token, {'subjectId': edge_subject['id'], 'assessments': [{**zero_candidate, 'estimatedHours': -0.5}]})[0], 400)
+        status, manual_zero = api(18081, 'subjects', edge_token, {**edge_subject_body, 'code': 'EDGE319', 'assessments': [zero_candidate]})
+        check('manual subject imports zero workload', (status, [a['estimatedMinutes'] for a in api(18082, 'assessments', edge_token)[1] if a['subjectId'] == manual_zero['id']]), (201, [0]))
+        status, zero_review = api(18081, 'subject-outlines', edge_token, upload, content_type='multipart/form-data; boundary=' + boundary)
+        zero_extraction = zero_review['extraction']
+        zero_extraction['assessments'][0]['estimatedHours'] = 0
+        status, zero_outline = api(18081, 'subject-outlines/' + zero_review['importId'] + '/confirm', edge_token, {'extraction': zero_extraction, 'weeklyStudyTargetMinutes': 180})
+        check('outline confirmation preserves zero workload', (status, [a['estimatedMinutes'] for a in api(18082, 'assessments', edge_token)[1] if a['subjectId'] == zero_outline['id']]), (201, [0]))
+        empty_request = {'startDate': START.isoformat(), 'dailyAvailabilityMinutes': {}}
+        status, zero_version = api(18084, 'planning/plans', edge_token, empty_request)
+        check('incomplete zero estimates generate without availability', (status, zero_version.get('items'), zero_version.get('endDate')), (201, [], END.isoformat()))
+        status, zero_regeneration = api(18084, 'planning/plans/' + zero_version['id'] + '/regenerate', edge_token, empty_request)
+        check('incomplete zero estimates regenerate without availability', (status, zero_regeneration.get('version'), zero_regeneration.get('items')), (201, 2, []))
+        api(18082, 'assessments/' + edge_assessment['id'], edge_token, {**edge_assessment_body, 'estimatedMinutes': 60}, 'PATCH')
+        check('positive work with no availability still rejected', api(18084, 'planning/plans', edge_token, empty_request)[0], 400)
+        minutes_only_request = {'startDate': START.isoformat(), 'dailyAvailabilityMinutes': {START.isoformat(): 60}}
+        status, nonempty_version = api(18084, 'planning/plans', edge_token, minutes_only_request)
+        check('positive workload creates calendar before zero correction', (status, bool(api(18084, f'calendar?from={START}&to={END}', edge_token)[1])), (201, True))
+        api(18082, 'assessments/' + edge_assessment['id'], edge_token, edge_assessment_body, 'PATCH')
+        status, cleared_version = api(18084, 'planning/plans/' + nonempty_version['id'] + '/regenerate', edge_token, empty_request)
+        check('zero estimate correction clears obsolete plan calendar', (status, cleared_version.get('items'), api(18084, f'calendar?from={START}&to={END}', edge_token)[1]), (201, [], []))
+        api(18082, 'assessments/' + edge_assessment['id'], edge_token, {**edge_assessment_body, 'estimatedMinutes': 60}, 'PATCH')
+        commitment = {'title': 'Existing commitment', 'type': 'TASK', 'startAt': START.isoformat() + 'T18:00:00', 'endAt': START.isoformat() + 'T19:00:00', 'spacedRepetition': False}
+        status, busy = api(18084, 'calendar', edge_token, commitment)
+        check('create evening calendar commitment', status, 201)
+        status, conflict_free = api(18084, 'planning/plans', edge_token, minutes_only_request)
+        current_calendar = api(18084, f'calendar?from={START}&to={END}', edge_token)[1]
+        generated_entries = [e for e in current_calendar if e.get('planId') == conflict_free['id']]
+        check('minutes-only plan avoids manual commitment', (status, bool(generated_entries), all(e['startAt'] >= busy['endAt'] or e['endAt'] <= busy['startAt'] for e in generated_entries)), (201, True, True))
+        check('minutes-only plan keeps all sixty allocated minutes', sum(int((dt.datetime.fromisoformat(e['endAt']) - dt.datetime.fromisoformat(e['startAt'])).total_seconds() / 60) for e in generated_entries), 60)
+        api(18084, 'calendar/' + busy['id'], edge_token, {**commitment, 'startAt': START.isoformat() + 'T00:00:00', 'endAt': (START + dt.timedelta(days=1)).isoformat() + 'T00:00:00'}, 'PATCH')
+        before_conflict = api(18084, f'calendar?from={START}&to={END}', edge_token)[1]
+        before_history = api(18084, 'planning/plans', edge_token)[1]
+        for label, path in [('generation', 'planning/plans'), ('regeneration', 'planning/plans/' + conflict_free['id'] + '/regenerate')]:
+            check('full-day conflict rejects ' + label, api(18084, path, edge_token, minutes_only_request)[0], 400)
+            check('full-day conflict retains calendar after ' + label, api(18084, f'calendar?from={START}&to={END}', edge_token)[1], before_conflict)
+            check('full-day conflict retains history after ' + label, api(18084, 'planning/plans', edge_token)[1], before_history)
+        # Hours and percentages remain decimal fields; only integer fields reject decimal JSON.
+        status, half_hour = api(18082, 'assessments/import', edge_token, {'subjectId': edge_subject['id'], 'assessments': [{'title': 'Half hour', 'estimatedHours': 0.5}]})
+        check('fractional hours still convert to whole minutes', (status, half_hour[0]['estimatedMinutes']), (201, 30))
         check('no private provider account used', bool(MODEL_CALLS), True)
         print(f'All {len(results)} readiness checks passed. This fixture is not live-provider or Kafka evidence.', flush=True)
     finally:

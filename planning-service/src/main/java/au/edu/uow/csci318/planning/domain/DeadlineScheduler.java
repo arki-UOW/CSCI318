@@ -29,7 +29,8 @@ public class DeadlineScheduler {
       Map<UUID, Integer> completedMinutes) {
     List<AssessmentSnapshot> assessments = prioritised(work, startDate);
     Map<DayOfWeek, Integer> weeklyAvailability = availability.minutes();
-    if (!assessments.isEmpty()
+    if (assessments.stream()
+            .anyMatch(assessment -> remainingMinutes(assessment, completedMinutes) > 0)
         && weeklyAvailability.values().stream().mapToInt(Integer::intValue).sum() <= 0) {
       throw new IllegalArgumentException(
           "Add at least one available study period before generating a plan.");
@@ -46,11 +47,7 @@ public class DeadlineScheduler {
       LocalDate dueDate = effectiveDeadline(assessment, startDate);
       if (dueDate.isBefore(startDate)) continue;
 
-      int totalMinutes =
-          assessment.estimatedMinutes() == null
-              ? DEFAULT_ESTIMATED_MINUTES
-              : assessment.estimatedMinutes();
-      totalMinutes = Math.max(0, totalMinutes - completedMinutes.getOrDefault(assessment.id(), 0));
+      int totalMinutes = remainingMinutes(assessment, completedMinutes);
       if (totalMinutes == 0) continue;
       requestedMinutes += totalMinutes;
       LocalDate lastStudyDate = dueDate.isAfter(startDate) ? dueDate.minusDays(1) : dueDate;
@@ -175,6 +172,14 @@ public class DeadlineScheduler {
 
   private LocalDate effectiveDeadline(AssessmentSnapshot assessment, LocalDate startDate) {
     return assessment.dueDate() == null ? startDate.plusDays(6) : assessment.dueDate();
+  }
+
+  private int remainingMinutes(AssessmentSnapshot assessment, Map<UUID, Integer> completedMinutes) {
+    int estimate =
+        assessment.estimatedMinutes() == null
+            ? DEFAULT_ESTIMATED_MINUTES
+            : assessment.estimatedMinutes();
+    return Math.max(0, estimate - completedMinutes.getOrDefault(assessment.id(), 0));
   }
 
   private List<AssessmentSnapshot> prioritised(List<AssessmentSnapshot> work, LocalDate startDate) {

@@ -49,11 +49,16 @@ public record WeeklyTimeSlots(Map<DayOfWeek, List<Window>> days) {
    * Subtract existing commitments, including ones spanning midnight, from the available intervals.
    */
   public List<Interval> free(LocalDate date, List<Interval> occupied) {
-    List<Interval> free =
-        new ArrayList<>(
-            days.getOrDefault(date.getDayOfWeek(), List.of()).stream()
-                .map(window -> new Interval(date.atTime(window.start()), date.atTime(window.end())))
-                .toList());
+    return subtract(
+        days.getOrDefault(date.getDayOfWeek(), List.of()).stream()
+            .map(window -> new Interval(date.atTime(window.start()), date.atTime(window.end())))
+            .toList(),
+        occupied);
+  }
+
+  /** Also accepts full calendar days ending at the following midnight. */
+  public static List<Interval> subtract(List<Interval> available, List<Interval> occupied) {
+    List<Interval> free = new ArrayList<>(available);
     for (Interval busy : occupied) {
       List<Interval> next = new ArrayList<>();
       for (Interval slot : free) {

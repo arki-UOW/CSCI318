@@ -110,56 +110,10 @@ public class CalendarApplicationService {
   @Transactional
   public void replaceAiPlan(
       UUID ownerId, UUID planId, List<PlanItem> items, WeeklyTimeSlots slots) {
-    if (slots != null) {
-      replaceWithinSlots(ownerId, planId, items, slots);
-      return;
-    }
-    entries.deleteByOwnerIdAndOriginAndStatus(ownerId, Origin.AI_PLAN, EntryStatus.PLANNED);
-    Map<LocalDate, Integer> dayMinutes = new HashMap<>();
-    Map<LocalDate, Integer> dayCount = new HashMap<>();
-    items.forEach(
-        item -> {
-          dayMinutes.merge(item.date(), item.allocatedMinutes(), Integer::sum);
-          dayCount.merge(item.date(), 1, Integer::sum);
-        });
-    Map<LocalDate, Integer> usedMinutes = new HashMap<>();
-    for (PlanItem item : items) {
-      int offset = usedMinutes.getOrDefault(item.date(), 0);
-      int total = dayMinutes.get(item.date());
-      int gap =
-          dayCount.get(item.date()) <= 1
-              ? 0
-              : Math.min(10, (1440 - total) / (dayCount.get(item.date()) - 1));
-      int firstMinute = Math.min(18 * 60, 1440 - total - gap * (dayCount.get(item.date()) - 1));
-      LocalDateTime startAt = item.date().atStartOfDay().plusMinutes(firstMinute + offset);
-      LocalDateTime endAt = startAt.plusMinutes(item.allocatedMinutes());
-      EntryType type = item.repetitionStage() > 0 ? EntryType.REVIEW : EntryType.STUDY_SESSION;
-      String description =
-          item.repetitionStage() > 0
-              ? "Pre-planned spaced review "
-                  + item.repetitionStage()
-                  + " before the assessment due date"
-              : "Deadline-planned study block based on estimated workload";
-      entries.save(
-          new CalendarEntry(
-              ownerId,
-              item.subjectId(),
-              item.assessmentId(),
-              planId,
-              null,
-              calendarTitle(item.title()),
-              description,
-              type,
-              startAt,
-              endAt,
-              Origin.AI_PLAN,
-              false,
-              item.repetitionStage()));
-      usedMinutes.merge(item.date(), item.allocatedMinutes() + gap, Integer::sum);
-    }
+    replaceWithinAvailability(ownerId, planId, items, slots);
   }
 
-  private void replaceWithinSlots(
+  private void replaceWithinAvailability(
       UUID ownerId, UUID planId, List<PlanItem> items, WeeklyTimeSlots slots) {
     if (items.isEmpty()) {
       entries.deleteByOwnerIdAndOriginAndStatus(ownerId, Origin.AI_PLAN, EntryStatus.PLANNED);
@@ -177,10 +131,18 @@ public class CalendarApplicationService {
             .map(entry -> new WeeklyTimeSlots.Interval(entry.getStartAt(), entry.getEndAt()))
             .toList();
     Map<LocalDate, Deque<WeeklyTimeSlots.Interval>> free = new HashMap<>();
+    Map<LocalDate, Integer> dayMinutes = new HashMap<>();
+    items.forEach(item -> dayMinutes.merge(item.date(), item.allocatedMinutes(), Integer::sum));
     List<CalendarEntry> replacement = new ArrayList<>();
     for (PlanItem item : items) {
       Deque<WeeklyTimeSlots.Interval> windows =
-          free.computeIfAbsent(item.date(), date -> new ArrayDeque<>(slots.free(date, occupied)));
+          free.computeIfAbsent(
+              item.date(),
+              date ->
+                  new ArrayDeque<>(
+                      slots == null
+                          ? freeDay(date, dayMinutes.get(date), occupied)
+                          : slots.free(date, occupied)));
       int remaining = item.allocatedMinutes();
       while (remaining > 0 && !windows.isEmpty()) {
         WeeklyTimeSlots.Interval window = windows.removeFirst();
@@ -196,7 +158,9 @@ public class CalendarApplicationService {
                 planId,
                 null,
                 calendarTitle(item.title()),
-                "Study scheduled within your availability",
+                slots == null
+                    ? "Study scheduled around existing calendar commitments"
+                    : "Study scheduled within your availability",
                 item.repetitionStage() > 0 ? EntryType.REVIEW : EntryType.STUDY_SESSION,
                 window.start(),
                 end,
@@ -217,6 +181,24 @@ public class CalendarApplicationService {
     // Validate all placements first so a conflict never destroys the previous calendar plan.
     entries.deleteByOwnerIdAndOriginAndStatus(ownerId, Origin.AI_PLAN, EntryStatus.PLANNED);
     replacement.forEach(entries::save);
+  }
+
+  private List<WeeklyTimeSlots.Interval> freeDay(
+      LocalDate date, int minutes, List<WeeklyTimeSlots.Interval> occupied) {
+    // Daily minutes specify capacity, not clock times. Prefer evenings when the whole day's
+    // allocation fits; otherwise use the entire day's free time in chronological order.
+    LocalDateTime end = date.plusDays(1).atStartOfDay();
+    List<WeeklyTimeSlots.Interval> evening =
+        WeeklyTimeSlots.subtract(
+            List.of(new WeeklyTimeSlots.Interval(date.atTime(18, 0), end)), occupied);
+    long eveningMinutes =
+        evening.stream()
+            .mapToLong(window -> Duration.between(window.start(), window.end()).toMinutes())
+            .sum();
+    return eveningMinutes >= minutes
+        ? evening
+        : WeeklyTimeSlots.subtract(
+            List.of(new WeeklyTimeSlots.Interval(date.atStartOfDay(), end)), occupied);
   }
 
   private String calendarTitle(String title) {

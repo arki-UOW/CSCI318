@@ -26,6 +26,82 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class CalendarApplicationServiceTest {
   @Mock CalendarEntryRepository entries;
 
+  private CalendarEntry busy(UUID owner, LocalDateTime from, LocalDateTime to) {
+    return new CalendarEntry(
+        owner,
+        null,
+        null,
+        null,
+        null,
+        "Commitment",
+        "",
+        CalendarEntry.EntryType.TASK,
+        from,
+        to,
+        MANUAL,
+        false,
+        0);
+  }
+
+  private List<CalendarEntry> place(UUID owner, LocalDate date, int minutes) {
+    new CalendarApplicationService(
+            entries, mock(CompletedStudyBlockEvents.class), mock(CalendarReferences.class))
+        .replaceAiPlan(
+            owner,
+            UUID.randomUUID(),
+            List.of(new PlanItem(date, UUID.randomUUID(), UUID.randomUUID(), "AI", minutes, 0)));
+    ArgumentCaptor<CalendarEntry> saved = ArgumentCaptor.forClass(CalendarEntry.class);
+    verify(entries, atLeastOnce()).save(saved.capture());
+    return saved.getAllValues();
+  }
+
+  @Test
+  void minutesOnlyPlanningMovesPastExistingEveningCommitment() {
+    UUID owner = UUID.randomUUID();
+    LocalDate day = LocalDate.of(2026, 10, 12);
+    when(entries.findOverlapping(eq(owner), any(), any()))
+        .thenReturn(List.of(busy(owner, day.atTime(18, 0), day.atTime(19, 0))));
+    var saved = place(owner, day, 60);
+    assertEquals(1, saved.size());
+    assertEquals(day.atTime(19, 0), saved.getFirst().getStartAt());
+    assertEquals(day.atTime(20, 0), saved.getFirst().getEndAt());
+  }
+
+  @Test
+  void minutesOnlyPlanningUsesEarlierFreeTimeAndRespectsOvernightCommitments() {
+    UUID owner = UUID.randomUUID();
+    LocalDate day = LocalDate.of(2026, 10, 12);
+    when(entries.findOverlapping(eq(owner), any(), any()))
+        .thenReturn(
+            List.of(
+                busy(owner, day.minusDays(1).atTime(23, 0), day.atTime(1, 0)),
+                busy(owner, day.atTime(18, 0), day.plusDays(1).atStartOfDay())));
+    var saved = place(owner, day, 60);
+    assertEquals(day.atTime(1, 0), saved.getFirst().getStartAt());
+    assertEquals(day.atTime(2, 0), saved.getFirst().getEndAt());
+  }
+
+  @Test
+  void minutesOnlyPlanningCanUseFullTwentyFourHourCapacity() {
+    UUID owner = UUID.randomUUID();
+    LocalDate day = LocalDate.of(2026, 10, 12);
+    when(entries.findOverlapping(eq(owner), any(), any())).thenReturn(List.of());
+    var saved = place(owner, day, 1440);
+    assertEquals(day.atStartOfDay(), saved.getFirst().getStartAt());
+    assertEquals(day.plusDays(1).atStartOfDay(), saved.getFirst().getEndAt());
+  }
+
+  @Test
+  void minutesOnlyConflictPreservesPreviousCalendarWithoutPartialWrites() {
+    UUID owner = UUID.randomUUID();
+    LocalDate day = LocalDate.of(2026, 10, 12);
+    when(entries.findOverlapping(eq(owner), any(), any()))
+        .thenReturn(List.of(busy(owner, day.atStartOfDay(), day.plusDays(1).atStartOfDay())));
+    assertThrows(IllegalArgumentException.class, () -> place(owner, day, 60));
+    verify(entries, never()).deleteByOwnerIdAndOriginAndStatus(any(), any(), any());
+    verify(entries, never()).save(any());
+  }
+
   @Test
   void planBlocksStayInSlotsAndSplitAroundExistingCommitments() {
     LocalDate monday = LocalDate.of(2026, 10, 12), date = monday.plusWeeks(1);

@@ -16,7 +16,7 @@ public final class AssessmentDtos {
       LocalDate dueDate,
       @Min(1) @Max(52) Integer dueWeek,
       @Size(max = 2000) String description,
-      @Positive Double estimatedHours,
+      @PositiveOrZero Double estimatedHours,
       Double confidence,
       String warning) {}
 

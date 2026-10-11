@@ -1,6 +1,6 @@
 # CSCI318 software readiness verification
 
-Verification date: 11 October 2026. Baseline: `14a2a27b80d8e673207cff6f2433405aa3de30b4`. Changes are on `agent/final-readiness`.
+Verification date: 12 October 2026. Baseline: `d38e32968e73635f0b5496ff4ac17ccc8ab0cd1d` (merged PR #14). Follow-up changes are on `agent/readiness-edge-cases`.
 
 This is an engineering artifact for the repository. It is not the student-authored assessed report or presentation. Requirements were taken from the professor's **CSCI318 Project Specification Spring 2026 (4).pdf**, pages 3–7, and the team's **CSCI318_Study_Leftovers_Project_Proposal_Updated (4).pdf**, especially FR-01–FR-18, NFR-01–NFR-06, RT-01/02 and AI-01/02. Earlier repository claims of unconditional completion are superseded by this verification.
 
@@ -8,7 +8,9 @@ This is an engineering artifact for the repository. It is not the student-author
 
 The nine defects in the fresh professor-perspective audit are fixed and covered by passing regression/acceptance checks. Earlier readiness work remains in place; the table of earlier changes below records that history rather than treating it as sufficient verification. All 18 functional requirements have corresponding code paths and test evidence. New planning follows the proposal's exact seven-day contract; the model submits structured items and the server validates them before persistence.
 
-Local evidence: **87 Java tests, 21 frontend tests and 96 isolated five-service HTTP checks passed**. No real API key was requested, read, committed or used. The HTTP suite used the actual LangChain4j OpenAI SDK against an explicitly local protocol fixture. It proves integration and failure handling, not the quality/availability of a live Gemini/OpenAI model.
+The [four follow-up corrections](edge-case-corrections.md) additionally cover fractional REST integers, zero remaining work without availability, zero-valued imports and minutes-only calendar conflicts. Their regression checks run alongside the earlier suite.
+
+Local evidence: **94 Java tests, 21 frontend tests and 132 isolated five-service HTTP checks passed**. No real API key was requested, read, committed or used. The HTTP suite used the actual LangChain4j OpenAI SDK against an explicitly local protocol fixture. It proves integration and failure handling, not the quality/availability of a live Gemini/OpenAI model.
 
 The PR's `test` and `kafka-integration` checks must be green on the reviewed commit. The former rebuilds and runs Java, frontend and isolated HTTP acceptance; the latter starts real Kafka and all services in fresh Docker volumes, tests event projections/SSE and proves queries work with upstream academic services stopped. The final delivery checklist records the exact GitHub run/revision when completed.
 
@@ -97,13 +99,13 @@ Browser smoke verification used disposable accounts and the five actual services
 | NFR-02 | No committed secrets | Private environment injection retained; fixture credential is explicitly fake; status/errors do not return keys |
 | NFR-03 | Consistent errors | All five advice handlers use timestamp/status/error/message/path/validationErrors; malformed/validation paths tested through HTTP |
 | NFR-04 | Consistent layers/names | Five bounded contexts with four layers; technical shared messaging module |
-| NFR-05 | Repeatable tests | 87 Java, 21 frontend, 96 isolated HTTP checks plus real-Kafka CI |
+| NFR-05 | Repeatable tests | 94 Java, 21 frontend, 132 isolated HTTP checks plus real-Kafka CI |
 | NFR-06 | Repeatable Postman demo | Ordered account/ID capture, bounded projection polling, seven-day generation and changed-state regeneration assertions; real-key execution remains an external verification prerequisite |
 
 ## Operational boundaries
 
 - Keep genuine provider keys in private environment configuration. Missing keys are an intentional setup prerequisite, not missing code. A valid key does not guarantee quota/network/model availability; those errors now fail safely.
 - Stream projections are eventually consistent. Tests poll for convergence; completed linked work can lag immediately after a command.
-- A plan replaces the account's currently planned AI calendar entries, while saved plan versions and completed history remain available. If exact slots conflict with commitments, validation rejects the request and retains the previous plan.
+- A plan replaces the account's currently planned AI calendar entries, while saved plan versions and completed history remain available. Both exact-slot and minutes-only placement avoid existing commitments; insufficient free time rejects the request and retains the previous plan.
 - Confirmed assessments with no date use the current week; explicit zero work yields an empty plan. Overdue work is excluded from new future schedules and is not silently assigned after its deadline.
 - Professor administrative requirements (report/presentation authorship, meeting minutes, signed contributions, private-repository submission and approval of extra dependencies) require team evidence; they are not inferred from source code. No repository visibility or submission settings were changed.
