@@ -84,3 +84,7 @@ Version-2 envelopes contain UUID `eventId`, `eventType`, integer `eventVersion=2
 | `planning-workload-dlq`, `planning-progress-dlq` | Failed query-model sink delivery |
 
 Malformed, legacy owner-less and unsupported envelopes never enter query state. Duplicate/stale aggregate revisions are ignored. Projections are eventually consistent; query endpoints do not call upstream academic services. `X-Study-Timezone` supplies an IANA timezone (default UTC) for dashboard dates, activity validation, agent context and completed-block history. SSE emits `event: dashboard` with `{week,stream}` JSON, heartbeats and periodic reconnection; the browser uses a bearer-authenticated fetch stream rather than URL tokens.
+
+## Fresh-audit contract clarifications
+
+An empty seven-day plan is valid when no outstanding work remains; regeneration saves the next version and clears obsolete planned AI blocks while retaining history. Concurrent plan commits are serialized per owner; versions are unique. Invalid model item fields (including fractional minutes) return 400 without changing plan/calendar state. Outline-provider outages return 503. Calendar date ranges use interval overlap, so overnight entries appear on continuation days and midnight endpoints are exclusive. Profile lengths are limited to 80 characters for display name, 255 for institution/course and 800 for study goal. Nested null assessment items return 400.

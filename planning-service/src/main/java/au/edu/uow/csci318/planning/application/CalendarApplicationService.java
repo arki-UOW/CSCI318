@@ -39,8 +39,7 @@ public class CalendarApplicationService {
       throw new IllegalArgumentException("Choose a valid calendar range of at most 370 days");
     }
     return entries
-        .findByOwnerIdAndStartAtBetweenOrderByStartAt(
-            ownerId, from.atStartOfDay(), to.plusDays(1).atStartOfDay().minusNanos(1))
+        .findOverlapping(ownerId, from.atStartOfDay(), to.plusDays(1).atStartOfDay())
         .stream()
         .map(this::response)
         .toList();

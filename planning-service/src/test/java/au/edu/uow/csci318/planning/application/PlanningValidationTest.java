@@ -33,7 +33,8 @@ class PlanningValidationTest {
           mock(AvailabilityAssistant.class),
           mock(ConfiguredPlanningChatModel.class),
           calendar,
-          new ObjectMapper());
+          new ObjectMapper(),
+          mock(au.edu.uow.csci318.planning.infrastructure.PlanWriteLock.class));
 
   static Stream<PlanItem> invalidItems() {
     return Stream.of(

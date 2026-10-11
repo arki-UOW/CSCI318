@@ -53,6 +53,10 @@ class ModelFixture(BaseHTTPRequestHandler):
                 items = candidate['items']
                 for item in items:
                     item['title'] = 'Fixture submitted study block'
+                if items and MODE == 'fractional': items[0]['allocatedMinutes'] += 0.5
+                if items and MODE == 'missing-stage': items[0].pop('repetitionStage', None)
+                if items and MODE == 'extra-field': items[0]['unapprovedField'] = True
+                if items and MODE == 'string-minute': items[0]['allocatedMinutes'] = str(items[0]['allocatedMinutes'])
                 if MODE == 'invalid' and items:
                     items[0]['date'] = (END + dt.timedelta(days=1)).isoformat()
                 args = {'action': action, 'summary': 'Reviewed current workload and progress' + (' and revised the previous plan.' if action == 'REGENERATE' else '.'), 'items': items}
@@ -115,7 +119,7 @@ def main():
             name = module + '-service'
             handle = open(out / (name + '.log'), 'w', encoding='utf-8')
             handles.append(handle)
-            args = [options.java, '-jar', str(REPO / name / 'target' / f'{name}-0.1.0-SNAPSHOT.jar'),
+            args = [options.java, '-Xms32m', '-Xmx256m', '-jar', str(REPO / name / 'target' / f'{name}-0.1.0-SNAPSHOT.jar'),
                     f'--server.port={port}', '--spring.datasource.url=jdbc:h2:mem:acceptance;DB_CLOSE_DELAY=-1',
                     '--spring.cloud.stream.output-bindings=', '--spring.cloud.function.definition=',
                     '--spring.cloud.stream.function.autodetect=false', '--study.events.delivery-delay-ms=3600000',
@@ -233,6 +237,77 @@ def main():
         check('confirmed assessment exists in owning service', len([a for a in assessment_rows if a['subjectId'] == imported['id']]), 1)
         status, repeated = api(18081, f"subject-outlines/{review['importId']}/confirm", token, confirm)
         check('outline confirmation retry is idempotent', (status, repeated.get('id')), (201, imported['id']))
+        # Regression coverage for the fresh professor-perspective audit.
+        for port, path, payload in [
+            (18081, 'subjects', {**subject_body, 'code': 'CSCI321', 'assessments': [None]}),
+            (18082, 'assessments/import', {'subjectId': sid, 'assessments': [None]}),
+            (18081, f"subject-outlines/{review['importId']}/confirm", {'extraction': {**review['extraction'], 'assessments': [None]}, 'weeklyStudyTargetMinutes': 180})]:
+            check('null nested item rejected by ' + path, api(port, path, token, payload)[0], 400)
+        check('null input never creates a partial subject', any(row['code'] == 'CSCI321' for row in api(18081, 'subjects', token)[1]), False)
+        for length, expected in [(80, 201), (81, 400)]:
+            check('display-name boundary ' + str(length), api(18085, 'auth/register', body={'username': 'limits_' + uuid.uuid4().hex[:8], 'password': 'FixtureOnly-1234', 'displayName': 'n' * length, 'timezone': 'UTC'})[0], expected)
+        profile = {'displayName': 'n' * 80, 'institution': 'i' * 255, 'course': 'c' * 255, 'studyGoal': 'g' * 800, 'timezone': 'UTC'}
+        check('profile maximum text lengths persist', api(18085, 'profile', token, profile, 'PATCH')[0], 200)
+        for field in ['displayName', 'institution', 'course', 'studyGoal']:
+            check('profile rejects excessive ' + field, api(18085, 'profile', token, {**profile, field: profile[field] + 'x'}, 'PATCH')[0], 400)
+        check('failed profile update preserves goal', api(18085, 'auth/session', token)[1]['studyGoal'], profile['studyGoal'])
+        MODE = 'quota'
+        status, failure = api(18081, 'subject-outlines', token, upload, content_type='multipart/form-data; boundary=' + boundary)
+        check('outline quota failure returns 503', status, 503)
+        check('outline provider details stay private', 'PRIVATE_SENTINEL' not in json.dumps(failure), True)
+        MODE = 'valid'
+        status, audit_subject = api(18081, 'subjects', other_token, {**subject_body, 'code': 'CSCI320'})
+        check('create concurrency subject', status, 201)
+        status, audit_assessment = api(18082, 'assessments', other_token, {**body, 'subjectId': audit_subject['id'], 'estimatedMinutes': 30})
+        check('create concurrency assessment', status, 201)
+        from concurrent.futures import ThreadPoolExecutor
+        barrier = threading.Barrier(8)
+        def concurrent_generate(_):
+            barrier.wait(timeout=10)
+            return api(18084, 'planning/plans', other_token, request)
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            simultaneous = list(pool.map(concurrent_generate, range(8)))
+        check('all concurrent nonempty plans commit', [code for code, plan in simultaneous], [201] * 8)
+        check('concurrent versions are unique and ordered', sorted(plan['version'] for code, plan in simultaneous), list(range(1, 9)))
+        audit_history = api(18084, 'planning/plans', other_token)[1]
+        active = api(18084, f'calendar?from={START}&to={END}', other_token)[1]
+        check('concurrent calendar retains exactly newest plan', set(e['planId'] for e in active), {audit_history[0]['id']})
+        check('concurrent calendar does not duplicate minutes', sum(int((dt.datetime.fromisoformat(e['endAt']) - dt.datetime.fromisoformat(e['startAt'])).total_seconds() / 60) for e in active), 30)
+        barrier = threading.Barrier(8)
+        previous_id = audit_history[0]['id']
+        def concurrent_regenerate(_):
+            barrier.wait(timeout=10)
+            return api(18084, 'planning/plans/' + previous_id + '/regenerate', other_token, request)
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            simultaneous = list(pool.map(concurrent_regenerate, range(8)))
+        check('all concurrent regenerations commit', [code for code, plan in simultaneous], [201] * 8)
+        check('concurrent regeneration versions are unique', sorted(plan['version'] for code, plan in simultaneous), list(range(9, 17)))
+        audit_history = api(18084, 'planning/plans', other_token)[1]
+        active = api(18084, f'calendar?from={START}&to={END}', other_token)[1]
+        check('concurrent regeneration calendar retains newest plan', set(e['planId'] for e in active), {audit_history[0]['id']})
+        check('concurrent regeneration does not duplicate minutes', sum(int((dt.datetime.fromisoformat(e['endAt']) - dt.datetime.fromisoformat(e['startAt'])).total_seconds() / 60) for e in active), 30)
+        for invalid_mode in ['fractional', 'missing-stage', 'extra-field', 'string-minute']:
+            MODE = invalid_mode
+            check('reject model schema violation: ' + invalid_mode, api(18084, 'planning/plans', other_token, request)[0], 400)
+            check('invalid schema preserves history: ' + invalid_mode, len(api(18084, 'planning/plans', other_token)[1]), 16)
+            check('invalid schema preserves calendar: ' + invalid_mode, api(18084, f'calendar?from={START}&to={END}', other_token)[1], active)
+        MODE = 'valid'
+        check('complete final assessment', api(18082, 'assessments/' + audit_assessment['id'] + '/complete', other_token, method='POST')[0], 200)
+        status, empty_plan = api(18084, 'planning/plans/' + audit_history[0]['id'] + '/regenerate', other_token, request)
+        check('all-completed regeneration stores empty next version', (status, empty_plan.get('version'), empty_plan.get('items'), empty_plan.get('endDate')), (201, 17, [], END.isoformat()))
+        check('empty regeneration removes obsolete calendar blocks', api(18084, f'calendar?from={START}&to={END}', other_token)[1], [])
+        check('empty regeneration preserves historical plan', bool(api(18084, 'planning/plans/' + audit_history[0]['id'], other_token)[1]['items']), True)
+        api(18082, 'assessments/' + audit_assessment['id'], other_token, method='DELETE')
+        check('deleted-all workload also generates empty plan', api(18084, 'planning/plans', other_token, request)[1].get('items'), [])
+        status, zero_capacity_empty = api(18084, 'planning/plans', other_token, {'startDate': START.isoformat(), 'dailyAvailabilityMinutes': {}, 'availabilitySlots': {}})
+        check('no workload needs no artificial availability', (status, zero_capacity_empty.get('items')), (201, []))
+        next_date = START + dt.timedelta(days=1)
+        overnight = {**entry, 'subjectId': None, 'assessmentId': None, 'title': 'Overnight', 'spacedRepetition': False, 'startAt': START.isoformat() + 'T23:00:00', 'endAt': next_date.isoformat() + 'T01:00:00'}
+        status, overnight_entry = api(18084, 'calendar', other_token, overnight)
+        check('overnight entry accepted', status, 201)
+        check('overnight entry appears on continuation day', overnight_entry['id'] in [e['id'] for e in api(18084, f'calendar?from={next_date}&to={next_date}', other_token)[1]], True)
+        api(18084, 'calendar/' + overnight_entry['id'], other_token, {**overnight, 'endAt': next_date.isoformat() + 'T00:00:00'}, 'PATCH')
+        check('midnight endpoint does not occupy next day', overnight_entry['id'] in [e['id'] for e in api(18084, f'calendar?from={next_date}&to={next_date}', other_token)[1]], False)
         check('no private provider account used', bool(MODEL_CALLS), True)
         print(f'All {len(results)} readiness checks passed. This fixture is not live-provider or Kafka evidence.', flush=True)
     finally:

@@ -129,7 +129,7 @@ public class SubjectApplicationService {
     if (r.assessments() == null) throw new IllegalArgumentException("Assessments are required");
     Set<String> seen = new HashSet<>();
     for (var a : r.assessments()) {
-      if (a.title() == null || a.title().isBlank())
+      if (a == null || a.title() == null || a.title().isBlank())
         throw new IllegalArgumentException("Assessment title is required");
       if (a.weighting() != null && (a.weighting() < 0 || a.weighting() > 100))
         throw new IllegalArgumentException("Assessment weighting is invalid");

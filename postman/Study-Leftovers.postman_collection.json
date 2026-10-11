@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Study Leftovers - authenticated end-to-end demo",
-    "description": "Run in order. The collection creates an account, subject, assessment and study session, then verifies the two Kafka-derived projections and both agentic planning workflows.",
+    "description": "Ordered FR-01\u2013FR-17 demonstration and invalid-input gate. Requires Kafka and a privately configured provider for AI requests. Full malformed-model FR-18 checks use scripts/verify-readiness.py, whose local fixture controls the model output. Optional file upload is disabled unless runOutlineUpload=true and a local file is selected.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -82,6 +82,10 @@
     {
       "key": "planBody",
       "value": ""
+    },
+    {
+      "key": "runOutlineUpload",
+      "value": "false"
     }
   ],
   "event": [
@@ -107,147 +111,696 @@
   ],
   "item": [
     {
-      "name": "1 - Account",
-      "item": [
-        {
-          "name": "Register and remember token",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"username\":\"{{username}}\",\"password\":\"{{password}}\",\"displayName\":\"Postman Demo\",\"timezone\":\"{{timezone}}\"}"
-            },
-            "url": "{{accountBase}}/auth/register"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('account created', () => pm.response.to.have.status(201));",
-                  "const body=pm.response.json(); pm.collectionVariables.set('token', body.token); pm.expect(body.account.username).to.eql(pm.collectionVariables.get('username'));"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
+      "name": "Register and remember token",
+      "request": {
+        "auth": {
+          "type": "noauth"
         },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"username\":\"{{username}}\",\"password\":\"{{password}}\",\"displayName\":\"Postman Demo\",\"timezone\":\"{{timezone}}\"}"
+        },
+        "url": "{{accountBase}}/auth/register"
+      },
+      "event": [
         {
-          "name": "Read remembered profile",
-          "request": {
-            "method": "GET",
-            "url": "{{accountBase}}/auth/session"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('profile belongs to demo account', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().username).to.eql(pm.collectionVariables.get('username')); });"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('account created', () => pm.response.to.have.status(201));",
+              "const body=pm.response.json(); pm.collectionVariables.set('token', body.token); pm.expect(body.account.username).to.eql(pm.collectionVariables.get('username'));"
+            ],
+            "type": "text/javascript"
+          }
         }
       ]
     },
     {
-      "name": "2 - Subject and assessment",
+      "name": "Read remembered profile",
+      "request": {
+        "method": "GET",
+        "url": "{{accountBase}}/auth/session"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('profile belongs to demo account', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().username).to.eql(pm.collectionVariables.get('username')); });"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create subject manually",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"code\":\"CSCI318\",\"name\":\"Software Engineering Practices\",\"creditPoints\":6,\"weeklyStudyTargetMinutes\":240,\"assessments\":[]}"
+        },
+        "url": "{{subjectBase}}/subjects"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('subject created', () => pm.response.to.have.status(201)); pm.collectionVariables.set('subjectId', pm.response.json().id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Edit subject details",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"code\":\"CSCI318\",\"name\":\"Software Engineering Practices and Principles\",\"creditPoints\":6,\"weeklyStudyTargetMinutes\":300}"
+        },
+        "url": "{{subjectBase}}/subjects/{{subjectId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('subject update is returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().weeklyStudyTargetMinutes).to.eql(300); });"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "FR-02 retrieve owned subject",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Study-Timezone",
+            "value": "{{timezone}}"
+          }
+        ],
+        "url": "{{subjectBase}}/subjects/{{subjectId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('subject returned',()=>{pm.response.to.have.status(200);pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('subjectId'));});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "FR-03 list subjects",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Study-Timezone",
+            "value": "{{timezone}}"
+          }
+        ],
+        "url": "{{subjectBase}}/subjects"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('subject listed',()=>{pm.response.to.have.status(200);pm.expect(pm.response.json().some(s=>s.id===pm.collectionVariables.get('subjectId'))).to.eql(true);});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "FR-04 update weekly study target",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "X-Study-Timezone",
+            "value": "{{timezone}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{subjectBase}}/subjects/{{subjectId}}/study-target",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"minutes\": 300}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('target updated',()=>{pm.response.to.have.status(200);pm.expect(pm.response.json().weeklyStudyTargetMinutes).to.eql(300);});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create assessment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"subjectId\":\"{{subjectId}}\",\"title\":\"Architecture Report\",\"type\":\"Report\",\"weighting\":40,\"dueDate\":\"{{dueDate}}\",\"estimatedMinutes\":420,\"priority\":\"HIGH\",\"description\":\"Demonstrate DDD, Kafka Streams and agentic AI\"}"
+        },
+        "url": "{{assessmentBase}}/assessments"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('assessment created', () => pm.response.to.have.status(201)); pm.collectionVariables.set('assessmentId', pm.response.json().id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "FR-06 list all assessments",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Study-Timezone",
+            "value": "{{timezone}}"
+          }
+        ],
+        "url": "{{assessmentBase}}/assessments"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('assessment present',()=>{pm.response.to.have.status(200);pm.expect(pm.response.json().some(a=>a.id===pm.collectionVariables.get('assessmentId'))).to.eql(true);});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "FR-07 list incomplete assessments",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Study-Timezone",
+            "value": "{{timezone}}"
+          }
+        ],
+        "url": "{{assessmentBase}}/assessments?status=INCOMPLETE&subjectId={{subjectId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('assessment present',()=>{pm.response.to.have.status(200);pm.expect(pm.response.json().some(a=>a.id===pm.collectionVariables.get('assessmentId'))).to.eql(true);});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Record study session",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Study-Timezone",
+            "value": "{{timezone}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"subjectId\":\"{{subjectId}}\",\"durationMinutes\":45,\"studyDate\":\"{{today}}\",\"description\":\"Reviewed event-driven architecture\"}"
+        },
+        "url": "{{activityBase}}/study-sessions"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('session created', () => pm.response.to.have.status(201)); pm.collectionVariables.set('sessionId', pm.response.json().id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "FR-12 sessions for selected subject",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Study-Timezone",
+            "value": "{{timezone}}"
+          }
+        ],
+        "url": "{{activityBase}}/study-sessions?subjectId={{subjectId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('owned session listed',()=>{pm.response.to.have.status(200);pm.expect(pm.response.json().some(s=>s.id===pm.collectionVariables.get('sessionId'))).to.eql(true);});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "FR-13 weekly activity summary",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Study-Timezone",
+            "value": "{{timezone}}"
+          }
+        ],
+        "url": "{{activityBase}}/study-sessions/summary?subjectId={{subjectId}}&weekOf={{weekStart}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('weekly minutes correct',()=>{pm.response.to.have.status(200);pm.expect(pm.response.json().totalMinutes).to.eql(45);});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Wait for Kafka projections",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Study-Timezone",
+            "value": "{{timezone}}"
+          }
+        ],
+        "url": "{{planningBase}}/stream-status"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('stream state is queryable', () => pm.response.to.have.status(200));",
+              "if (!pm.response.json().initialized) console.warn('Kafka is still catching up; repeat the streaming requests in a moment.');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RT-01 workload projection",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Study-Timezone",
+            "value": "{{timezone}}"
+          }
+        ],
+        "url": "{{planningBase}}/workload"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.response.to.have.status(200); const body = pm.response.json();",
+              "if (!(body.incompleteAssessments === 1) && Number(pm.collectionVariables.get('workloadPoll') || 0) < 30) { pm.collectionVariables.set('workloadPoll', Number(pm.collectionVariables.get('workloadPoll') || 0) + 1); setTimeout(() => pm.execution.setNextRequest(pm.info.requestName), 500); } else { pm.collectionVariables.set('workloadPoll', 0); pm.test('projection reached expected state', () => { pm.expect(body.incompleteAssessments).to.eql(1); }); }"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RT-02 progress projection",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Study-Timezone",
+            "value": "{{timezone}}"
+          }
+        ],
+        "url": "{{planningBase}}/progress/{{subjectId}}?weekOf={{weekStart}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.response.to.have.status(200); const body = pm.response.json();",
+              "if (!(body.studiedMinutes === 45 && body.targetMinutes === 300) && Number(pm.collectionVariables.get('progressPoll') || 0) < 30) { pm.collectionVariables.set('progressPoll', Number(pm.collectionVariables.get('progressPoll') || 0) + 1); setTimeout(() => pm.execution.setNextRequest(pm.info.requestName), 500); } else { pm.collectionVariables.set('progressPoll', 0); pm.test('projection reached expected state', () => { pm.expect(body.studiedMinutes).to.eql(45); pm.expect(body.targetMinutes).to.eql(300); }); }"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "FR-13 total and weekly projected study minutes",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Study-Timezone",
+            "value": "{{timezone}}"
+          }
+        ],
+        "url": "{{planningBase}}/progress/{{subjectId}}?weekOf={{weekStart}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('total and weekly minutes correct',()=>{pm.response.to.have.status(200);const p=pm.response.json();pm.expect(p.totalMinutes).to.eql(45);pm.expect(p.studiedMinutes).to.eql(45);});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "AI-01 generate validated seven-day plan",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Study-Timezone",
+            "value": "{{timezone}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{{planBody}}"
+        },
+        "url": "{{planningBase}}/plans"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('agentic plan created', () => pm.response.to.have.status(201)); const body=pm.response.json(); pm.collectionVariables.set('planId', body.id); pm.expect(body.items.length).to.be.above(0); pm.expect(body.explanation).to.include('agent used');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Retrieve saved plan",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Study-Timezone",
+            "value": "{{timezone}}"
+          }
+        ],
+        "url": "{{planningBase}}/plans/{{planId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('plan retrieved',()=>{pm.response.to.have.status(200);pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('planId'));});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Read plan version history",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Study-Timezone",
+            "value": "{{timezone}}"
+          }
+        ],
+        "url": "{{planningBase}}/plans"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('history exists',()=>{pm.response.to.have.status(200);pm.expect(pm.response.json().length).to.eql(1);});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "FR-18 reject excessive requested availability",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Study-Timezone",
+            "value": "{{timezone}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{planningBase}}/plans",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"startDate\":\"{{weekStart}}\",\"dailyAvailabilityMinutes\":{\"{{weekStart}}\":1441}}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('invalid capacity rejected',()=>pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Change deadline before regeneration",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \"Architecture Report\", \"type\": \"Report\", \"weighting\": 40, \"dueDate\": \"{{changedDueDate}}\", \"estimatedMinutes\": 180, \"priority\": \"HIGH\", \"description\": \"Revised deadline and workload\"}"
+        },
+        "url": "{{assessmentBase}}/assessments/{{assessmentId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('deadline changed', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().dueDate).to.eql(pm.collectionVariables.get('changedDueDate')); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "AI-02 regenerate after current-state retrieval",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Study-Timezone",
+            "value": "{{timezone}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{{planBody}}"
+        },
+        "url": "{{planningBase}}/plans/{{planId}}/regenerate"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('regenerated plan reflects changed deadline and workload', () => { pm.response.to.have.status(201); const plan=pm.response.json(); pm.expect(plan.version).to.be.above(1); const start=new Date(JSON.parse(pm.collectionVariables.get('planBody')).startDate+'T00:00:00Z'); start.setUTCDate(start.getUTCDate()+6); pm.expect(plan.endDate).to.eql(start.toISOString().slice(0,10)); pm.expect(plan.items.every(item=>item.date<=pm.collectionVariables.get('changedDueDate'))).to.eql(true); pm.expect(plan.items.reduce((total,item) => total+item.allocatedMinutes, 0)).to.eql(180); pm.expect(plan.explanation).to.include('getExistingStudyPlan'); });"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Complete assessment",
+      "request": {
+        "method": "POST",
+        "url": "{{assessmentBase}}/assessments/{{assessmentId}}/complete"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('assessment completed', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('COMPLETED'); });"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "FR-17 regenerate after all assessments completed",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Study-Timezone",
+            "value": "{{timezone}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{planningBase}}/plans/{{planId}}/regenerate",
+        "body": {
+          "mode": "raw",
+          "raw": "{{planBody}}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('completed work removed',()=>{pm.response.to.have.status(201);const p=pm.response.json();pm.expect(p.version).to.eql(3);pm.expect(p.items).to.eql([]);});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Verify workload correction after Kafka catches up",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Study-Timezone",
+            "value": "{{timezone}}"
+          }
+        ],
+        "url": "{{planningBase}}/workload"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.response.to.have.status(200); const body = pm.response.json();",
+              "if (!(body.incompleteAssessments === 0) && Number(pm.collectionVariables.get('completePoll') || 0) < 30) { pm.collectionVariables.set('completePoll', Number(pm.collectionVariables.get('completePoll') || 0) + 1); setTimeout(() => pm.execution.setNextRequest(pm.info.requestName), 500); } else { pm.collectionVariables.set('completePoll', 0); pm.test('projection reached expected state', () => { pm.expect(body.incompleteAssessments).to.eql(0); }); }"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Optional document upload (disabled in the ordered demo)",
       "item": [
-        {
-          "name": "Create subject manually",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"code\":\"CSCI318\",\"name\":\"Software Engineering Practices\",\"creditPoints\":6,\"weeklyStudyTargetMinutes\":240,\"assessments\":[]}"
-            },
-            "url": "{{subjectBase}}/subjects"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('subject created', () => pm.response.to.have.status(201)); pm.collectionVariables.set('subjectId', pm.response.json().id);"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "Edit subject details",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"code\":\"CSCI318\",\"name\":\"Software Engineering Practices and Principles\",\"creditPoints\":6,\"weeklyStudyTargetMinutes\":300}"
-            },
-            "url": "{{subjectBase}}/subjects/{{subjectId}}"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('subject update is returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().weeklyStudyTargetMinutes).to.eql(300); });"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "Create assessment",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"subjectId\":\"{{subjectId}}\",\"title\":\"Architecture Report\",\"type\":\"Report\",\"weighting\":40,\"dueDate\":\"{{dueDate}}\",\"estimatedMinutes\":420,\"priority\":\"HIGH\",\"description\":\"Demonstrate DDD, Kafka Streams and agentic AI\"}"
-            },
-            "url": "{{assessmentBase}}/assessments"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('assessment created', () => pm.response.to.have.status(201)); pm.collectionVariables.set('assessmentId', pm.response.json().id);"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
         {
           "name": "Upload outline (choose a local file before sending)",
           "request": {
@@ -263,261 +816,15 @@
               ]
             },
             "url": "{{subjectBase}}/subject-outlines"
-          }
-        }
-      ]
-    },
-    {
-      "name": "3 - Activity and streaming",
-      "item": [
-        {
-          "name": "Record study session",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Study-Timezone",
-                "value": "{{timezone}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"subjectId\":\"{{subjectId}}\",\"durationMinutes\":45,\"studyDate\":\"{{today}}\",\"description\":\"Reviewed event-driven architecture\"}"
-            },
-            "url": "{{activityBase}}/study-sessions"
           },
           "event": [
             {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('session created', () => pm.response.to.have.status(201)); pm.collectionVariables.set('sessionId', pm.response.json().id);"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "Wait for Kafka projections",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-Study-Timezone",
-                "value": "{{timezone}}"
-              }
-            ],
-            "url": "{{planningBase}}/stream-status"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('stream state is queryable', () => pm.response.to.have.status(200));",
-                  "if (!pm.response.json().initialized) console.warn('Kafka is still catching up; repeat the streaming requests in a moment.');"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "RT-01 workload projection",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-Study-Timezone",
-                "value": "{{timezone}}"
-              }
-            ],
-            "url": "{{planningBase}}/workload"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.response.to.have.status(200); const body = pm.response.json();",
-                  "if (!(body.incompleteAssessments === 1) && Number(pm.collectionVariables.get('workloadPoll') || 0) < 30) { pm.collectionVariables.set('workloadPoll', Number(pm.collectionVariables.get('workloadPoll') || 0) + 1); setTimeout(() => pm.execution.setNextRequest(pm.info.requestName), 500); } else { pm.collectionVariables.set('workloadPoll', 0); pm.test('projection reached expected state', () => { pm.expect(body.incompleteAssessments).to.eql(1); }); }"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "RT-02 progress projection",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-Study-Timezone",
-                "value": "{{timezone}}"
-              }
-            ],
-            "url": "{{planningBase}}/progress/{{subjectId}}?weekOf={{weekStart}}"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.response.to.have.status(200); const body = pm.response.json();",
-                  "if (!(body.studiedMinutes === 45 && body.targetMinutes === 300) && Number(pm.collectionVariables.get('progressPoll') || 0) < 30) { pm.collectionVariables.set('progressPoll', Number(pm.collectionVariables.get('progressPoll') || 0) + 1); setTimeout(() => pm.execution.setNextRequest(pm.info.requestName), 500); } else { pm.collectionVariables.set('progressPoll', 0); pm.test('projection reached expected state', () => { pm.expect(body.studiedMinutes).to.eql(45); pm.expect(body.targetMinutes).to.eql(300); }); }"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "4 - Agentic planning",
-      "item": [
-        {
-          "name": "AI-01 generate validated seven-day plan",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Study-Timezone",
-                "value": "{{timezone}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{{planBody}}"
-            },
-            "url": "{{planningBase}}/plans"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('agentic plan created', () => pm.response.to.have.status(201)); const body=pm.response.json(); pm.collectionVariables.set('planId', body.id); pm.expect(body.items.length).to.be.above(0); pm.expect(body.explanation).to.include('agent used');"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "Change deadline before regeneration",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"title\": \"Architecture Report\", \"type\": \"Report\", \"weighting\": 40, \"dueDate\": \"{{changedDueDate}}\", \"estimatedMinutes\": 180, \"priority\": \"HIGH\", \"description\": \"Revised deadline and workload\"}"
-            },
-            "url": "{{assessmentBase}}/assessments/{{assessmentId}}"
-          },
-          "event": [
-            {
-              "listen": "test",
+              "listen": "prerequest",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('deadline changed', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().dueDate).to.eql(pm.collectionVariables.get('changedDueDate')); });"
+                  "if (pm.collectionVariables.get('runOutlineUpload') !== 'true') pm.execution.skipRequest();"
                 ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "AI-02 regenerate after current-state retrieval",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Study-Timezone",
-                "value": "{{timezone}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{{planBody}}"
-            },
-            "url": "{{planningBase}}/plans/{{planId}}/regenerate"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('regenerated plan reflects changed deadline and workload', () => { pm.response.to.have.status(201); const plan=pm.response.json(); pm.expect(plan.version).to.be.above(1); const start=new Date(JSON.parse(pm.collectionVariables.get('planBody')).startDate+'T00:00:00Z'); start.setUTCDate(start.getUTCDate()+6); pm.expect(plan.endDate).to.eql(start.toISOString().slice(0,10)); pm.expect(plan.items.every(item=>item.date<=pm.collectionVariables.get('changedDueDate'))).to.eql(true); pm.expect(plan.items.reduce((total,item) => total+item.allocatedMinutes, 0)).to.eql(180); pm.expect(plan.explanation).to.include('getExistingStudyPlan'); });"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "5 - Lifecycle correction",
-      "item": [
-        {
-          "name": "Complete assessment",
-          "request": {
-            "method": "POST",
-            "url": "{{assessmentBase}}/assessments/{{assessmentId}}/complete"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('assessment completed', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('COMPLETED'); });"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "Verify workload correction after Kafka catches up",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-Study-Timezone",
-                "value": "{{timezone}}"
-              }
-            ],
-            "url": "{{planningBase}}/workload"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.response.to.have.status(200); const body = pm.response.json();",
-                  "if (!(body.incompleteAssessments === 0) && Number(pm.collectionVariables.get('completePoll') || 0) < 30) { pm.collectionVariables.set('completePoll', Number(pm.collectionVariables.get('completePoll') || 0) + 1); setTimeout(() => pm.execution.setNextRequest(pm.info.requestName), 500); } else { pm.collectionVariables.set('completePoll', 0); pm.test('projection reached expected state', () => { pm.expect(body.incompleteAssessments).to.eql(0); }); }"
-                ],
-                "type": "text/javascript"
               }
             }
           ]

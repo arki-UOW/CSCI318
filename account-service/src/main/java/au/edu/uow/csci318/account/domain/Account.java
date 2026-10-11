@@ -71,7 +71,7 @@ public class Account {
     this.id = UUID.randomUUID();
     this.username = normaliseUsername(username);
     this.passwordHash = require(passwordHash, "Password hash");
-    this.displayName = require(displayName, "Display name");
+    this.displayName = limited(require(displayName, "Display name"), 80, "Display name");
     this.timezone = require(timezone, "Timezone");
     this.primaryColor = "#245d45";
     this.accentColor = "#d69b38";
@@ -85,10 +85,10 @@ public class Account {
 
   public void updateProfile(
       String displayName, String institution, String course, String studyGoal, String timezone) {
-    this.displayName = require(displayName, "Display name");
-    this.institution = clean(institution);
-    this.course = clean(course);
-    this.studyGoal = clean(studyGoal);
+    this.displayName = limited(require(displayName, "Display name"), 80, "Display name");
+    this.institution = limited(institution, 255, "Institution");
+    this.course = limited(course, 255, "Course");
+    this.studyGoal = limited(studyGoal, 800, "Study goal");
     this.timezone = require(timezone, "Timezone");
     this.timezoneAutomatic = false;
   }
@@ -167,6 +167,12 @@ public class Account {
     if (!colour.matches("#[0-9a-f]{6}"))
       throw new IllegalArgumentException(label + " must be a six-digit hex colour");
     return colour;
+  }
+
+  private static String limited(String value, int maximum, String label) {
+    if (value != null && value.length() > maximum)
+      throw new IllegalArgumentException(label + " must be at most " + maximum + " characters");
+    return clean(value);
   }
 
   private static String clean(String value) {

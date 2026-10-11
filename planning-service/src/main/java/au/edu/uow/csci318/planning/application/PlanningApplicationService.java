@@ -23,6 +23,7 @@ public class PlanningApplicationService {
   private final ConfiguredPlanningChatModel configuredModel;
   private final CalendarApplicationService calendar;
   private final ObjectMapper json;
+  private final au.edu.uow.csci318.planning.infrastructure.PlanWriteLock writeLock;
 
   public PlanningApplicationService(
       StudyPlanRepository plans,
@@ -32,7 +33,8 @@ public class PlanningApplicationService {
       AvailabilityAssistant availabilityAssistant,
       ConfiguredPlanningChatModel configuredModel,
       CalendarApplicationService calendar,
-      ObjectMapper json) {
+      ObjectMapper json,
+      au.edu.uow.csci318.planning.infrastructure.PlanWriteLock writeLock) {
     this.plans = plans;
     this.agent = agent;
     this.advisor = advisor;
@@ -41,6 +43,7 @@ public class PlanningApplicationService {
     this.configuredModel = configuredModel;
     this.calendar = calendar;
     this.json = json;
+    this.writeLock = writeLock;
   }
 
   @Transactional
@@ -50,6 +53,7 @@ public class PlanningApplicationService {
     StudyPlanningAgent.Schedule candidate = agent.generate(ownerId, request, authorization);
     AgenticPlanningAdvisor.Advice advice =
         advisor.adviseGenerate(ownerId, authorization, timezone, request, candidate);
+    writeLock.acquire(ownerId);
     StudyPlanningAgent.Schedule schedule =
         submittedSchedule(ownerId, authorization, request, candidate, advice);
     try {
@@ -88,6 +92,7 @@ public class PlanningApplicationService {
     StudyPlanningAgent.Schedule candidate = agent.generate(ownerId, request, authorization);
     AgenticPlanningAdvisor.Advice advice =
         advisor.adviseRegenerate(ownerId, authorization, timezone, request, previousId, candidate);
+    writeLock.acquire(ownerId);
     StudyPlanningAgent.Schedule schedule =
         submittedSchedule(ownerId, authorization, request, candidate, advice);
     try {

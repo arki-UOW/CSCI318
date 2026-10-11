@@ -248,12 +248,38 @@ public class AgenticPlanningAdvisor {
         JsonNode items = arguments.path("items");
         if (!items.isArray() || items.size() > 1000)
           yield "Rejected: items must be an array of at most 1000 study blocks.";
+        Set<String> fields =
+            Set.of(
+                "date",
+                "subjectId",
+                "assessmentId",
+                "title",
+                "allocatedMinutes",
+                "repetitionStage");
+        for (JsonNode item : items) {
+          Set<String> supplied = new java.util.HashSet<>();
+          item.fieldNames().forEachRemaining(supplied::add);
+          if (!item.isObject()
+              || !supplied.equals(fields)
+              || !item.path("date").isTextual()
+              || !item.path("subjectId").isTextual()
+              || !item.path("assessmentId").isTextual()
+              || !item.path("title").isTextual()
+              || !item.path("allocatedMinutes").isIntegralNumber()
+              || !item.path("allocatedMinutes").canConvertToInt()
+              || !item.path("repetitionStage").isIntegralNumber()
+              || !item.path("repetitionStage").canConvertToInt()) {
+            throw new IllegalArgumentException(
+                "The model submitted invalid plan fields. Allocations and repetition stages must be"
+                    + " whole integers; every required field must be present.");
+          }
+        }
         List<PlanningDtos.PlanItem> parsed;
         try {
           parsed = json.readerForListOf(PlanningDtos.PlanItem.class).readValue(items);
         } catch (Exception invalid) {
           yield "Rejected: invalid plan item fields. Check dates, UUIDs and whole-minute"
-                    + " allocations.";
+              + " allocations.";
         }
         submitted[0] = new SubmittedDecision(summary, parsed);
         yield "Submitted for application validation and atomic persistence.";

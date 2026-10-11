@@ -9,6 +9,8 @@ const API = {
 const state = {
   token: localStorage.getItem('studyLeftoversToken'),
   account: null,
+  sessionEpoch: 0,
+  calendarRequest: 0,
   subjects: [],
   assessments: [],
   week: null,
@@ -117,6 +119,7 @@ $('#main-navigation').addEventListener('drop', async event => {
     });
     $('#app-announcer').textContent = 'Navigation order saved.';
   } catch (error) {
+    if (error.staleSession) return;
     applyNavigationOrder(previousOrder);
     feedback(state.currentView === 'dashboard' ? 'dashboard-feedback' : 'settings-feedback', error.message, 'error');
   }
@@ -159,33 +162,40 @@ function setBusy(button, busy, busyText) {
 }
 
 async function request(url, options) {
+  const token = state.token;
+  const epoch = state.sessionEpoch || 0;
+  const ensureCurrent = () => {
+    if (state.token !== token || (state.sessionEpoch || 0) !== epoch) {
+      const error = new Error('Discarded response from a previous session');
+      error.staleSession = true;
+      throw error;
+    }
+  };
   const requestOptions = { ...(options || {}) };
   const headers = new Headers(requestOptions.headers || {});
-  if (state.token) headers.set('Authorization', `Bearer ${state.token}`);
+  if (token) headers.set('Authorization', `Bearer ${token}`);
   headers.set('X-Study-Timezone', accountTimezone());
   requestOptions.headers = headers;
   let response;
-  try {
-    response = await fetch(url, requestOptions);
-  } catch (error) {
+  try { response = await fetch(url, requestOptions); }
+  catch (error) {
+    ensureCurrent();
     throw new Error('Could not reach the service. Check that the application is running and try again.');
   }
+  ensureCurrent();
   if (!response.ok) {
     let payload = {};
-    try {
-      payload = await response.json();
-    } catch {
-      payload = { message: response.statusText };
-    }
-    const validation = payload.validationErrors
-      ? Object.values(payload.validationErrors).filter(Boolean).join('; ')
-      : '';
-    if (response.status === 401 && state.token) signOut(false);
+    try { payload = await response.json(); } catch { payload = { message: response.statusText }; }
+    ensureCurrent();
+    const validation = payload.validationErrors ? Object.values(payload.validationErrors).filter(Boolean).join('; ') : '';
+    if (response.status === 401 && token) signOut(false);
     throw new Error([payload.message || 'Request failed', validation].filter(Boolean).join(': '));
   }
   if (response.status === 204) return null;
   const contentType = response.headers.get('content-type') || '';
-  return contentType.includes('application/json') ? response.json() : response.text();
+  const body = await (contentType.includes('application/json') ? response.json() : response.text());
+  ensureCurrent();
+  return body;
 }
 
 function setAuthMode(mode) {
@@ -298,6 +308,7 @@ const dashboardStream = new DashboardStreamClient({
 });
 
 async function establishSession(session) {
+  const epoch = state.sessionEpoch = (state.sessionEpoch || 0) + 1;
   state.token = session.token;
   state.account = session.account;
   localStorage.setItem('studyLeftoversToken', state.token);
@@ -314,29 +325,41 @@ async function establishSession(session) {
       // The detected browser timezone still applies locally if persistence is temporarily unavailable.
     }
   }
+  if (state.sessionEpoch !== epoch) return;
   document.body.classList.remove('auth-required');
   $('#auth-shell').hidden = true;
   populateAccount();
   await load();
-  dashboardStream.start();
+  if (state.sessionEpoch === epoch) dashboardStream.start();
 }
 
 async function signOut(callServer = true) {
   dashboardStream.stop();
   const token = state.token;
-  if (callServer && token) {
-    try { await request(`${API.accounts}/auth/logout`, { method: 'POST' }); } catch { /* local sign-out still succeeds */ }
-  }
+  const logout = callServer && token
+    ? request(`${API.accounts}/auth/logout`, { method: 'POST' }).catch(() => {}) : null;
+  state.sessionEpoch = (state.sessionEpoch || 0) + 1;
+  state.calendarRequest = (state.calendarRequest || 0) + 1;
   state.token = null;
   state.account = null;
   Object.assign(state, { subjects: [], assessments: [], sessions: [], calendarEntries: [],
     plan: null, planHistory: [], week: null, review: null, reviewQueue: [], uploadItems: [],
-    availability: {}, availabilityMinutes: {}, assistantHistory: [] });
+    availability: {}, availabilityMinutes: {}, assistantHistory: [], manualAssessments: [],
+    profilePictureDraft: null, subjectAi: null, planningAi: null, serviceFailures: [] });
   localStorage.removeItem('studyLeftoversToken');
   setAssistantOpen(false);
   document.body.classList.add('auth-required');
   $('#auth-shell').hidden = false;
   setAuthMode('login');
+  document.querySelectorAll('form').forEach(form => form.reset());
+  document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
+  document.querySelectorAll('.feedback').forEach(target => target.replaceChildren());
+  $('#app-announcer').textContent = '';
+  ['study-chat-messages', 'chat-messages', 'review', 'manual-assessments'].forEach(id => document.getElementById(id)?.replaceChildren());
+  $('#activity-date').value = localDate(new Date());
+  $('#plan-start').value = localDate(mondayFor(new Date()));
+  render(); renderCalendar(); renderWeek(); renderUploadQueue(); renderProfilePictures(null);
+  await logout;
 }
 
 $('#signup-tab').addEventListener('click', () => setAuthMode('signup'));
@@ -356,7 +379,8 @@ $('#signup-form').addEventListener('submit', async event => {
         timezone: BrowserTimezone.detected() })
     });
     await establishSession(session);
-  } catch (error) { feedback('auth-feedback', error.message, 'error'); }
+  } catch (error) {
+    if (error.staleSession) return; feedback('auth-feedback', error.message, 'error'); }
   finally { setBusy(button, false); }
 });
 
@@ -371,7 +395,8 @@ $('#login-form').addEventListener('submit', async event => {
       body: JSON.stringify({ username: $('#login-username').value.trim(), password: $('#login-password').value })
     });
     await establishSession(session);
-  } catch (error) { feedback('auth-feedback', error.message, 'error'); }
+  } catch (error) {
+    if (error.staleSession) return; feedback('auth-feedback', error.message, 'error'); }
   finally { setBusy(button, false); }
 });
 
@@ -583,6 +608,7 @@ function bindComplete() {
         feedback(target, 'Assessment marked complete. Regenerate your plan to rebalance the week.', 'success');
         await load();
       } catch (error) {
+    if (error.staleSession) return;
         feedback(target, error.message, 'error');
         setBusy(button, false);
       }
@@ -602,6 +628,7 @@ function bindDeleteAssessments() {
         feedback(target, 'Assessment removed.', 'success');
         await load();
       } catch (error) {
+    if (error.staleSession) return;
         feedback(target, error.message, 'error');
         setBusy(button, false);
       }
@@ -663,7 +690,8 @@ $('#assessment-form').addEventListener('submit', async event => {
     await load();
     const target = state.currentView === 'dashboard' ? 'dashboard-feedback' : 'assessment-feedback';
     feedback(target, id ? 'Assessment updated.' : 'Assessment added.', 'success');
-  } catch (error) { feedback('assessment-dialog-feedback', error.message, 'error'); }
+  } catch (error) {
+    if (error.staleSession) return; feedback('assessment-dialog-feedback', error.message, 'error'); }
   finally { setBusy(button, false); }
 });
 
@@ -691,6 +719,7 @@ $('#subject-form').addEventListener('submit', async event => {
     await load();
     feedback('subject-feedback', 'Subject updated. Live progress will use the new weekly target.', 'success');
   } catch (error) {
+    if (error.staleSession) return;
     feedback('subject-dialog-feedback', error.message, 'error');
   } finally {
     setBusy(button, false);
@@ -779,6 +808,7 @@ $('#manual-subject-form').addEventListener('submit', async event => {
     show('subjects');
     feedback('subject-feedback', 'Subject added successfully.', 'success');
   } catch (error) {
+    if (error.staleSession) return;
     feedback('manual-feedback', error.message, 'error');
   } finally {
     setBusy(button, false);
@@ -910,6 +940,7 @@ document.addEventListener('drop', event => {
 });
 
 extractButton.addEventListener('click', async () => {
+  const epoch = state.sessionEpoch;
   const items = state.uploadItems.filter(item => ['ready', 'error'].includes(item.status));
   if (!items.length) return feedback('upload-feedback', 'Add at least one document to analyse.', 'error');
   setBusy(extractButton, true, `Analysing 0 of ${items.length}`);
@@ -933,6 +964,7 @@ extractButton.addEventListener('click', async () => {
       state.reviewQueue.push(review);
       succeeded += 1;
     } catch (requestError) {
+      if (requestError.staleSession || state.sessionEpoch !== epoch) { setBusy(extractButton, false); return; }
       item.status = 'error';
       item.error = requestError.message;
     }
@@ -1029,6 +1061,7 @@ function syncReviewDraft() {
 }
 
 async function confirmReview() {
+  const epoch = state.sessionEpoch;
   syncReviewDraft();
   const button = $('#confirm-btn');
   const weeklyTarget = state.review.weeklyStudyTargetMinutes;
@@ -1050,6 +1083,7 @@ async function confirmReview() {
     state.review = null;
     $('#review').replaceChildren();
     await load();
+    if (state.sessionEpoch !== epoch) return;
     if (state.reviewQueue.length) {
       state.review = state.reviewQueue.shift();
       renderUploadQueue();
@@ -1064,6 +1098,7 @@ async function confirmReview() {
       feedback('subject-feedback', `${savedCount} ${savedCount === 1 ? 'subject was' : 'subjects were'} added successfully.`, 'success');
     }
   } catch (error) {
+    if (error.staleSession) return;
     feedback('review-feedback', error.message, 'error');
     setBusy(button, false);
   }
@@ -1091,6 +1126,7 @@ $('#activity-form').addEventListener('submit', async event => {
     $('#activity-date').value = localDate(new Date());
     await load();
   } catch (error) {
+    if (error.staleSession) return;
     feedback('activity-feedback', error.message, 'error');
   } finally {
     setBusy(button, false);
@@ -1114,6 +1150,7 @@ async function generatePlan(availability, button, availabilitySlots, previousId 
     feedback('plan-feedback', `Version ${state.plan.version} covers seven days through ${state.plan.endDate}.`, 'success');
     render();
   } catch (error) {
+    if (error.staleSession) return;
     feedback('plan-feedback', error.message, 'error');
   } finally {
     setBusy(button, false);
@@ -1151,6 +1188,7 @@ async function selectPlan(id) {
     state.plan = selected;
     render();
   } catch (error) {
+    if (error.staleSession) return;
     feedback('plan-feedback', error.message, 'error');
     renderPlanHistory();
   }
@@ -1215,6 +1253,7 @@ async function sendAvailability(message, button) {
     renderAvailability();
     feedback('chat-feedback', result.readyToPlan ? 'Availability understood. You can generate the plan.' : 'Add the detail requested above.', result.readyToPlan ? 'success' : 'info');
   } catch (error) {
+    if (error.staleSession) return;
     appendChatMessage('assistant', error.message);
     feedback('chat-feedback', error.message, 'error');
   } finally {
@@ -1276,27 +1315,36 @@ function formatTime(value) {
 
 async function loadCalendar(showErrors = true) {
   if (!state.token) return;
+  const token = state.token;
+  const sequence = state.calendarRequest = (state.calendarRequest || 0) + 1;
   const month = monthRange();
   const weekStart = state.calendarWeek || mondayFor(new Date());
   const from = new Date(Math.min(month.from.getTime(), weekStart.getTime()));
   const to = new Date(Math.max(month.to.getTime(), addDays(weekStart, 6).getTime()));
   try {
-    state.calendarEntries = await request(`${API.planning}/calendar?from=${localDate(from)}&to=${localDate(to)}`);
+    const entries = await request(`${API.planning}/calendar?from=${localDate(from)}&to=${localDate(to)}`);
+    if (state.token !== token || state.calendarRequest !== sequence) return;
+    state.calendarEntries = entries;
     renderCalendar();
     renderWeek();
     render();
   } catch (error) {
+    if (error.staleSession) return;
+    if (state.token !== token || state.calendarRequest !== sequence) return;
     if (showErrors) feedback(state.currentView === 'week' ? 'week-feedback' : 'calendar-feedback', error.message, 'error');
   }
 }
 
 function entriesForDate(date) {
-  return state.calendarEntries.filter(item => item.startAt.slice(0, 10) === date)
+  const from = new Date(`${date}T00:00:00`);
+  const to = new Date(from); to.setDate(to.getDate() + 1);
+  return state.calendarEntries.filter(item => new Date(item.startAt) < to && new Date(item.endAt) > from)
     .sort((a, b) => a.startAt.localeCompare(b.startAt));
 }
 
-function calendarEvent(item, compact = false) {
-  return `<button class="calendar-event ${item.type.toLowerCase()} ${item.status.toLowerCase()}" data-calendar-id="${esc(item.id)}" title="${esc(item.title)}"><span>${formatTime(item.startAt)}</span>${compact ? '' : `<strong>${esc(item.title)}</strong>`}</button>`;
+function calendarEvent(item, compact = false, date = null) {
+  const timeLabel = date && item.startAt.slice(0, 10) < date ? `Continues until ${formatTime(item.endAt)}` : formatTime(item.startAt);
+  return `<button class="calendar-event ${item.type.toLowerCase()} ${item.status.toLowerCase()}" data-calendar-id="${esc(item.id)}" title="${esc(item.title)}"><span>${timeLabel}</span>${compact ? '' : `<strong>${esc(item.title)}</strong>`}</button>`;
 }
 
 function renderCalendar() {
@@ -1310,7 +1358,7 @@ function renderCalendar() {
     const outside = date.getMonth() !== state.calendarMonth.getMonth();
     return `<div class="month-day ${outside ? 'outside' : ''} ${dateValue === todayValue ? 'today' : ''}" data-calendar-date="${dateValue}">
       <button class="day-number" data-new-calendar-date="${dateValue}" aria-label="Add item on ${date.toLocaleDateString('en-AU')}">${date.getDate()}</button>
-      <div class="month-events">${entries.slice(0, 3).map(item => calendarEvent(item)).join('')}${entries.length > 3 ? `<small>+${entries.length - 3} more</small>` : ''}</div>
+      <div class="month-events">${entries.slice(0, 3).map(item => calendarEvent(item, false, dateValue)).join('')}${entries.length > 3 ? `<small>+${entries.length - 3} more</small>` : ''}</div>
     </div>`;
   }).join('');
   bindCalendarItems();
@@ -1325,7 +1373,7 @@ function renderWeek() {
     const date = addDays(start, index);
     const dateValue = localDate(date);
     const entries = entriesForDate(dateValue);
-    return `<article class="week-day ${dateValue === localDate(new Date()) ? 'today' : ''}"><button class="week-day-head" data-new-calendar-date="${dateValue}"><span>${date.toLocaleDateString('en-AU', { weekday: 'short' })}</span><strong>${date.getDate()}</strong></button><div class="week-events">${entries.length ? entries.map(item => calendarEvent(item)).join('') : '<small>Free</small>'}</div></article>`;
+    return `<article class="week-day ${dateValue === localDate(new Date()) ? 'today' : ''}"><button class="week-day-head" data-new-calendar-date="${dateValue}"><span>${date.toLocaleDateString('en-AU', { weekday: 'short' })}</span><strong>${date.getDate()}</strong></button><div class="week-events">${entries.length ? entries.map(item => calendarEvent(item, false, dateValue)).join('') : '<small>Free</small>'}</div></article>`;
   }).join('');
   bindCalendarItems();
 }
@@ -1380,6 +1428,7 @@ $('#close-calendar-dialog').addEventListener('click', () => $('#calendar-dialog'
 $('#cancel-calendar-dialog').addEventListener('click', () => $('#calendar-dialog').close());
 
 $('#calendar-form').addEventListener('submit', async event => {
+  const epoch = state.sessionEpoch;
   event.preventDefault();
   const button = event.submitter;
   const id = $('#calendar-id').value;
@@ -1394,12 +1443,15 @@ $('#calendar-form').addEventListener('submit', async event => {
     });
     $('#calendar-dialog').close();
     await loadCalendar(false);
+    if (state.sessionEpoch !== epoch) return;
     feedback(state.currentView === 'week' ? 'week-feedback' : 'calendar-feedback', id ? 'Calendar item updated.' : 'Calendar item created.', 'success');
-  } catch (error) { feedback('calendar-dialog-feedback', error.message, 'error'); }
+  } catch (error) {
+    if (error.staleSession) return; feedback('calendar-dialog-feedback', error.message, 'error'); }
   finally { setBusy(button, false); }
 });
 
 $('#delete-calendar-entry').addEventListener('click', async event => {
+  const epoch = state.sessionEpoch;
   if (!window.confirm('Delete this calendar item?')) return;
   const button = event.currentTarget;
   setBusy(button, true, 'Deleting');
@@ -1407,21 +1459,26 @@ $('#delete-calendar-entry').addEventListener('click', async event => {
     await request(`${API.planning}/calendar/${$('#calendar-id').value}`, { method: 'DELETE' });
     $('#calendar-dialog').close();
     await loadCalendar(false);
+    if (state.sessionEpoch !== epoch) return;
     feedback(state.currentView === 'week' ? 'week-feedback' : 'calendar-feedback', 'Calendar item deleted.', 'success');
-  } catch (error) { feedback('calendar-dialog-feedback', error.message, 'error'); }
+  } catch (error) {
+    if (error.staleSession) return; feedback('calendar-dialog-feedback', error.message, 'error'); }
   finally { setBusy(button, false); }
 });
 
 $('#complete-calendar-entry').addEventListener('click', async event => {
+  const epoch = state.sessionEpoch;
   const button = event.currentTarget;
   setBusy(button, true, 'Completing');
   try {
     const result = await request(`${API.planning}/calendar/${$('#calendar-id').value}/complete`, { method: 'POST' });
     $('#calendar-dialog').close();
     await loadCalendar(false);
+    if (state.sessionEpoch !== epoch) return;
     const message = result.nextReview ? `Completed. Your next spaced review is ${formatDateTime(result.nextReview.startAt)}.` : 'Calendar item completed.';
     feedback(state.currentView === 'week' ? 'week-feedback' : 'calendar-feedback', message, 'success');
-  } catch (error) { feedback('calendar-dialog-feedback', error.message, 'error'); }
+  } catch (error) {
+    if (error.staleSession) return; feedback('calendar-dialog-feedback', error.message, 'error'); }
   finally { setBusy(button, false); }
 });
 
@@ -1481,7 +1538,8 @@ $('#study-chat-form').addEventListener('submit', async event => {
     });
     appendStudyChat('assistant', answer.reply);
     feedback('assistant-feedback', `Answered with ${answer.provider}.`, 'success');
-  } catch (error) { appendStudyChat('assistant', error.message); feedback('assistant-feedback', error.message, 'error'); }
+  } catch (error) {
+    if (error.staleSession) return; appendStudyChat('assistant', error.message); feedback('assistant-feedback', error.message, 'error'); }
   finally { setBusy(button, false); }
 });
 
@@ -1498,13 +1556,15 @@ $('#profile-picture-input').addEventListener('change', event => {
     feedback('profile-feedback', 'Choose a PNG, JPEG or WebP image no larger than 10 MB.', 'error');
     return;
   }
+  const epoch = state.sessionEpoch;
   const reader = new FileReader();
   reader.addEventListener('load', () => {
+    if (state.sessionEpoch !== epoch) return;
     state.profilePictureDraft = String(reader.result);
     renderProfilePictures(state.profilePictureDraft);
     feedback('profile-feedback', 'Picture ready. Save your profile to keep it.', 'info');
   });
-  reader.addEventListener('error', () => feedback('profile-feedback', 'That image could not be read.', 'error'));
+  reader.addEventListener('error', () => state.sessionEpoch === epoch && feedback('profile-feedback', 'That image could not be read.', 'error'));
   reader.readAsDataURL(file);
 });
 
@@ -1527,7 +1587,8 @@ $('#profile-form').addEventListener('submit', async event => {
     populateAccount();
     dashboardStream.start();
     feedback('profile-feedback', 'Profile saved.', 'success');
-  } catch (error) { feedback('profile-feedback', error.message, 'error'); }
+  } catch (error) {
+    if (error.staleSession) return; feedback('profile-feedback', error.message, 'error'); }
   finally { setBusy(button, false); }
 });
 
@@ -1548,7 +1609,8 @@ $('#password-form').addEventListener('submit', async event => {
     });
     form.reset();
     feedback('password-feedback', 'Password changed. Other remembered sessions were signed out.', 'success');
-  } catch (error) { feedback('password-feedback', error.message, 'error'); }
+  } catch (error) {
+    if (error.staleSession) return; feedback('password-feedback', error.message, 'error'); }
   finally { setBusy(button, false); }
 });
 
@@ -1584,7 +1646,8 @@ $('#theme-form').addEventListener('submit', async event => {
         backgroundColor: $('#theme-background').value, surfaceColor: $('#theme-surface').value,
         textColor: $('#theme-text').value, navigationColor: $('#theme-navigation').value }) });
     populateAccount(); feedback('settings-feedback', 'Theme saved to your profile.', 'success');
-  } catch (error) { applyTheme(state.account); feedback('settings-feedback', error.message, 'error'); }
+  } catch (error) {
+    if (error.staleSession) return; applyTheme(state.account); feedback('settings-feedback', error.message, 'error'); }
   finally { setBusy(button, false); }
 });
 
@@ -1603,6 +1666,7 @@ state.calendarWeek = mondayFor(today);
 $('#plan-start').value = localDate(monday);
 
 async function bootstrap() {
+  const epoch = state.sessionEpoch;
   document.body.classList.add('auth-required');
   if (!state.token) return;
   try {
@@ -1611,8 +1675,9 @@ async function bootstrap() {
     $('#auth-shell').hidden = true;
     populateAccount();
     await load();
-    dashboardStream.start();
+    if (state.sessionEpoch === epoch) dashboardStream.start();
   } catch (error) {
+    if (error.staleSession) return;
     signOut(false);
     feedback('auth-feedback', 'Your remembered session expired. Sign in again.', 'info');
   }

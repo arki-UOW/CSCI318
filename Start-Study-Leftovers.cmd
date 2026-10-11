@@ -20,24 +20,11 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if not exist ".env" (
-  copy /y ".env.example" ".env" >nul
-  echo Created your private .env file. The app works without an AI key,
-  echo but Gemini features require GEMINI_API_KEY in that file.
-  echo.
-)
-
 echo Starting Study Leftovers. The first launch can take a few minutes...
-docker compose up -d --build
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\run-all.ps1"
 if errorlevel 1 (
-  echo.
-  echo Study Leftovers could not start. Recent container details follow:
-  docker compose ps
+  echo Startup did not complete. Review the error above.
   pause
   exit /b 1
 )
-
-echo.
-echo Study Leftovers is running at http://localhost:3000
-start "" "http://localhost:3000"
 pause

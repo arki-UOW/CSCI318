@@ -28,7 +28,7 @@
       </div>
       <form id="signup-form" class="auth-form">
         <div><p class="eyebrow">WELCOME</p><h2>Make your workspace</h2><p>Your login keeps every subject and session tied to you.</p></div>
-        <label>Display name<input id="signup-name" autocomplete="name" required placeholder="Your name"></label>
+        <label>Display name<input id="signup-name" maxlength="80" autocomplete="name" required placeholder="Your name"></label>
         <label>Username<input id="signup-username" autocomplete="username" required minlength="3" placeholder="e.g. arka"></label>
         <label>Password<input id="signup-password" type="password" autocomplete="new-password" required minlength="8" placeholder="At least 8 characters"></label>
         <button class="primary full">Create my account</button>
@@ -259,10 +259,10 @@
             <span class="profile-picture-preview"><img id="profile-picture-preview" alt="Profile picture preview" hidden><span id="profile-picture-initials">SL</span></span>
             <div><strong>Profile picture</strong><small>PNG, JPEG or WebP · up to 10 MB</small><div class="profile-picture-actions"><label class="secondary" for="profile-picture-input">Choose image</label><input id="profile-picture-input" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp"><button id="remove-profile-picture" class="link danger" type="button">Remove</button></div></div>
           </div>
-          <label>Display name<input id="profile-name" required></label>
-          <label>Institution<input id="profile-institution" placeholder="University of Wollongong"></label>
-          <label>Course<input id="profile-course" placeholder="Bachelor of Computer Science"></label>
-          <label>Study goal<textarea id="profile-goal" rows="4" placeholder="What are you working towards?"></textarea></label>
+          <label>Display name<input id="profile-name" maxlength="80" required></label>
+          <label>Institution<input id="profile-institution" maxlength="255" placeholder="University of Wollongong"></label>
+          <label>Course<input id="profile-course" maxlength="255" placeholder="Bachelor of Computer Science"></label>
+          <label>Study goal<textarea id="profile-goal" maxlength="800" rows="4" placeholder="What are you working towards?"></textarea></label>
           <label>Timezone<input id="profile-timezone" list="timezone-options" required value="Australia/Sydney"><datalist id="timezone-options"></datalist></label>
           <button class="primary">Save profile</button><div id="profile-feedback" class="feedback" aria-live="polite"></div>
         </form>

@@ -21,7 +21,7 @@ public final class AssessmentDtos {
       String warning) {}
 
   public record ImportRequest(
-      @NotNull UUID subjectId, @NotEmpty List<@Valid AssessmentCandidate> assessments) {}
+      @NotNull UUID subjectId, @NotEmpty List<@NotNull @Valid AssessmentCandidate> assessments) {}
 
   public record CreateRequest(
       @NotNull UUID subjectId,
