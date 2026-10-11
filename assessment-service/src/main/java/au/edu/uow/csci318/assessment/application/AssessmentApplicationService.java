@@ -42,6 +42,7 @@ public class AssessmentApplicationService implements SnapshotSource {
     List<Response> output = new ArrayList<>();
     Set<String> titles = new HashSet<>();
     for (AssessmentCandidate candidate : request.assessments()) {
+      if (candidate == null) throw new IllegalArgumentException("Assessment items cannot be null");
       String key = candidate.title().trim().toLowerCase();
       if (!titles.add(key))
         throw new IllegalArgumentException("Duplicate assessment: " + candidate.title());

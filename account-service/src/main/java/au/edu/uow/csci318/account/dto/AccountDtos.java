@@ -13,16 +13,16 @@ public final class AccountDtos {
   public record RegisterRequest(
       @NotBlank String username,
       @NotBlank @Size(min = 8, max = 72) String password,
-      String displayName,
+      @Size(max = 80) String displayName,
       String timezone) {}
 
   public record LoginRequest(@NotBlank String username, @NotBlank String password) {}
 
   public record ProfileUpdateRequest(
-      @NotBlank String displayName,
-      String institution,
-      String course,
-      String studyGoal,
+      @NotBlank @Size(max = 80) String displayName,
+      @Size(max = 255) String institution,
+      @Size(max = 255) String course,
+      @Size(max = 800) String studyGoal,
       @NotBlank String timezone,
       @Size(max = 14_000_000) String profilePicture) {}
 

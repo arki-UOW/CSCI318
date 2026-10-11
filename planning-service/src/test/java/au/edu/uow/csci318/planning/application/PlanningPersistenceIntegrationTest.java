@@ -36,7 +36,8 @@ class PlanningPersistenceIntegrationTest {
     PlanningApplicationService.class,
     StudyPlanningAgent.class,
     AgenticPlanningAdvisor.class,
-    CalendarApplicationService.class
+    CalendarApplicationService.class,
+    PlanWriteLock.class
   })
   static class Config {
     @Bean
@@ -154,6 +155,7 @@ class PlanningPersistenceIntegrationTest {
     try {
       return new ObjectMapper()
           .findAndRegisterModules()
+          .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
           .writeValueAsString(
               Map.of(
                   "action",

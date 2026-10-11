@@ -52,7 +52,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
   @ExceptionHandler({
     org.springframework.dao.DataIntegrityViolationException.class,
-    org.springframework.dao.OptimisticLockingFailureException.class
+    org.springframework.dao.OptimisticLockingFailureException.class,
+    org.springframework.dao.PessimisticLockingFailureException.class
   })
   ResponseEntity<Object> conflict(RuntimeException e, HttpServletRequest r) {
     return response(

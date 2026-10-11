@@ -28,13 +28,9 @@ public class DeadlineScheduler {
       List<AssessmentSnapshot> work,
       Map<UUID, Integer> completedMinutes) {
     List<AssessmentSnapshot> assessments = prioritised(work, startDate);
-    if (assessments.isEmpty()) {
-      throw new IllegalArgumentException(
-          "No usable incomplete assessments were found. Add an assessment with a due date first.");
-    }
-
     Map<DayOfWeek, Integer> weeklyAvailability = availability.minutes();
-    if (weeklyAvailability.values().stream().mapToInt(Integer::intValue).sum() <= 0) {
+    if (!assessments.isEmpty()
+        && weeklyAvailability.values().stream().mapToInt(Integer::intValue).sum() <= 0) {
       throw new IllegalArgumentException(
           "Add at least one available study period before generating a plan.");
     }

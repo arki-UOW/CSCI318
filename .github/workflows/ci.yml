@@ -19,6 +19,9 @@ jobs:
         with: {node-version: '22'}
       - name: Verify authenticated browser stream client
         run: node --test frontend/tests/*.test.cjs
+      - name: Verify Windows launcher failure and readiness handling
+        shell: pwsh
+        run: ./scripts/test-launcher.ps1
       - name: Verify isolated REST, persistence and model protocol acceptance
         run: python3 scripts/verify-readiness.py --output readiness-results
       - uses: actions/upload-artifact@v4

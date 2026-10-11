@@ -18,7 +18,7 @@ public interface CalendarEntryRepository extends JpaRepository<CalendarEntry, UU
 
   @Query(
       "select e from CalendarEntry e where e.ownerId = :ownerId and e.startAt < :to and e.endAt >"
-          + " :from")
+          + " :from order by e.startAt")
   List<CalendarEntry> findOverlapping(UUID ownerId, LocalDateTime from, LocalDateTime to);
 
   void deleteByOwnerIdAndOriginAndStatus(UUID ownerId, Origin origin, EntryStatus status);

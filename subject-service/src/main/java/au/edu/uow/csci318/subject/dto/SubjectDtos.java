@@ -25,7 +25,7 @@ public final class SubjectDtos {
       @NotBlank @Size(max = 255) String subjectCode,
       @NotBlank @Size(max = 255) String subjectName,
       @Positive Integer creditPoints,
-      @NotNull List<@Valid AssessmentCandidate> assessments,
+      @NotNull List<@NotNull @Valid AssessmentCandidate> assessments,
       List<String> warnings) {}
 
   public record ImportReview(
@@ -40,7 +40,7 @@ public final class SubjectDtos {
       @NotBlank @Size(max = 255) String name,
       @Positive Integer creditPoints,
       @Min(0) @Max(10080) int weeklyStudyTargetMinutes,
-      @NotNull List<@Valid AssessmentCandidate> assessments) {}
+      @NotNull List<@NotNull @Valid AssessmentCandidate> assessments) {}
 
   public record UpdateSubjectRequest(
       @NotBlank @Size(max = 255) String code,

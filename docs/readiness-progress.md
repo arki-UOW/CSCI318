@@ -1,23 +1,27 @@
-# Specification readiness progress
+# Completion progress — fresh audit
 
-Baseline GitHub main: `0fda7273a58f657d4ef18ff93ee4583dd706cd2c`. Implementation branch: `agent/specification-readiness`.
+Baseline merged main: `14a2a27b80d8e673207cff6f2433405aa3de30b4` (PR #13). Correction branch: `agent/final-readiness`. Date: 11 October 2026.
 
 | Task | Status | Evidence |
 |---|---|---|
-| Inspect baseline against both PDFs | Done | Architecture/FR/NFR audit; six defects reproduced before edits |
-| F1 descriptions/storage/migration | Done | Domain/DTO bounds, legacy upgrade tests and HTTP persistence |
-| F2 safe provider errors | Done | Four API failure cases and real SDK 429 fixture |
-| F3 explicit zero estimate | Done | Scheduler and HTTP end-to-end zero-plan tests |
-| F4 input validation/error contract | Done | All five services' malformed JSON; study and subject target validation |
-| F5 long spaced-review titles | Done | Unit and HTTP completion checks |
-| F6 calendar ownership/references | Done | REST adapter and unit/HTTP missing/foreign/mismatch tests |
-| D1 seven-day horizon | Done | Candidate and API horizon bounded to start+6 |
-| D2 model-submitted structured plan | Done | saveStudyPlan, mandatory progress, workload/identity/date validation, rollback tests |
-| D3 history and UI regeneration | Done | Owned queries, version selector, regeneration button and tests |
-| Local clean build | Done | 86 Java tests, no failures/errors/skips |
-| Frontend verification | Done | 13 tests |
-| Isolated five-service acceptance | Done | 51 assertions, actual SDK protocol fixture, no real key |
-| Specification/contract/documentation reconciliation | Done | Completion audit, traceability, README, architecture, API/AI design and Postman |
-| GitHub real-Kafka validation | CI gate | Current PR checks publish the exact revision/result; final delivery includes the run link |
+| Reconcile the two supplied documents and fresh audit | Done | FR/NFR matrix and proposal reconciliation |
+| 1. Final-assessment/empty-work regeneration | Done | Empty new version, obsolete calendar removed, history preserved; HTTP |
+| 2. Concurrent plan generation/regeneration | Done | DB lock and unique index; 8+8 simultaneous requests; legacy repair test |
+| 3. Account-switch response races and private UI state | Done | Shared session guards, calendar sequence, immediate DOM cleanup; Node/browser |
+| 4. Overnight calendar overlap | Done | Backend range query, month/week continuation, midnight exclusivity; HTTP/Node/browser |
+| 5. Null nested assessments | Done | Validated lists and application guards; three HTTP entry paths |
+| 6. Oversized profile input | Done | DTO/domain/UI limits; maximum and over-boundary HTTP tests |
+| 7. Outline provider status mapping | Done | Safe 503 through actual SDK protocol fixture |
+| 8. Fractional/malformed model allocations | Done | Strict schema before mapping; invalid output cannot modify history/calendar |
+| 9. Windows startup false success | Done | Native exit checks and readiness polling; three executable launcher scenarios |
+| UML/domain/layer/activity diagrams and 18 use cases | Done | docs/domain-model, architecture/diagrams, use-cases |
+| Accepted/modified/rejected AI decision record | Done | ADR-002 records current decisions, no invented team approvals |
+| Examples for all 18 FRs and six NFRs | Done | Demonstration guide, Postman, requirements and executable checks |
+| Design/proposal differences explained | Done | Target events versus REST, authenticated UUID contracts, seven-day plans |
+| Java verification | Passed | 87 tests; zero failures/errors/skips |
+| Frontend verification | Passed | 20 tests; browser account isolation and overnight checks |
+| Five-service API/persistence/model protocol verification | Passed | 96 checks with a local fixture; no private provider key |
+| Launcher verification | Passed | Docker failure, timeout, healthy startup |
+| Exact-revision GitHub CI | Required publication gate | Final delivery links the branch revision and completed test/Kafka run |
 
-Full task list, evidence and limitations: [completion verification](compliance/software-completion-audit.md). Live provider credentials/quota are external prerequisites and were not tested using a private key. This checklist does not assert absolute bug freedom or completion of student-authored academic deliverables.
+The [completion audit](compliance/software-completion-audit.md) contains the full evidence and limits. These corrections close all nine listed code defects and the requested repository artefact gaps. A live provider demonstration still uses the team's private key; academic reports, presentations and actual team approvals cannot be manufactured from source code. No claim of absolute bug freedom is made.

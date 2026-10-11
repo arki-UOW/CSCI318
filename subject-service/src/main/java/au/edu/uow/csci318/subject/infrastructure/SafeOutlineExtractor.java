@@ -112,7 +112,8 @@ class SafeOutlineExtractor implements au.edu.uow.csci318.subject.application.Out
       try {
         raw = requestAi(selection.get(), text);
       } catch (Exception e) {
-        throw new IllegalArgumentException(providerFailure(selection.get(), e), e);
+        throw new au.edu.uow.csci318.subject.application.SubjectApplicationService
+            .ServiceDependencyException(providerFailure(selection.get(), e), e);
       }
       try {
         return validate(parseAiResponse(raw));

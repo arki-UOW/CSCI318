@@ -1,20 +1,44 @@
 # CSCI318 software readiness verification
 
-Verification date: 11 October 2026. Baseline: `0fda7273a58f657d4ef18ff93ee4583dd706cd2c`. Changes are on `agent/specification-readiness`.
+Verification date: 11 October 2026. Baseline: `14a2a27b80d8e673207cff6f2433405aa3de30b4`. Changes are on `agent/final-readiness`.
 
 This is an engineering artifact for the repository. It is not the student-authored assessed report or presentation. Requirements were taken from the professor's **CSCI318 Project Specification Spring 2026 (4).pdf**, pages 3–7, and the team's **CSCI318_Study_Leftovers_Project_Proposal_Updated (4).pdf**, especially FR-01–FR-18, NFR-01–NFR-06, RT-01/02 and AI-01/02. Earlier repository claims of unconditional completion are superseded by this verification.
 
 ## Result and limits
 
-The six reproduced defects and three identified proposal gaps are fixed in source and covered by passing local regression/acceptance checks. All 18 functional requirements have corresponding code paths and test evidence. New planning follows the proposal's exact seven-day contract; the model submits structured items and the server validates them before persistence.
+The nine defects in the fresh professor-perspective audit are fixed and covered by passing regression/acceptance checks. Earlier readiness work remains in place; the table of earlier changes below records that history rather than treating it as sufficient verification. All 18 functional requirements have corresponding code paths and test evidence. New planning follows the proposal's exact seven-day contract; the model submits structured items and the server validates them before persistence.
 
-Local evidence: **86 Java tests, 13 frontend tests and 51 isolated five-service HTTP checks passed**. No real API key was requested, read, committed or used. The HTTP suite used the actual LangChain4j OpenAI SDK against an explicitly local protocol fixture. It proves integration and failure handling, not the quality/availability of a live Gemini/OpenAI model.
+Local evidence: **87 Java tests, 20 frontend tests and 96 isolated five-service HTTP checks passed**. No real API key was requested, read, committed or used. The HTTP suite used the actual LangChain4j OpenAI SDK against an explicitly local protocol fixture. It proves integration and failure handling, not the quality/availability of a live Gemini/OpenAI model.
 
 The PR's `test` and `kafka-integration` checks must be green on the reviewed commit. The former rebuilds and runs Java, frontend and isolated HTTP acceptance; the latter starts real Kafka and all services in fresh Docker volumes, tests event projections/SSE and proves queries work with upstream academic services stopped. The final delivery checklist records the exact GitHub run/revision when completed.
 
 No finite test suite establishes that software is absolutely perfect. The team's privately configured live-provider demonstration and academic deliverables are distinct from these code fixes. Credentials, quota, model access, coordinator approvals and member contributions cannot be certified from code.
 
-## Completed changes
+## Fresh audit: all nine correction groups
+
+| # | Completed correction | Verification |
+|---|---|---|
+| 1 | Empty seven-day plans are valid when the final assessment is completed or all assessments deleted. Regeneration creates a new version and removes obsolete planned AI calendar entries while retaining history. No artificial availability is required for zero work. | HTTP completion/deletion/zero-capacity cases; previous plan remains readable |
+| 2 | Database owner-row lock serializes version allocation and calendar replacement; unique owner/version index protects persistence. Legacy duplicate versions are repaired without changing IDs or contents. | Eight concurrent generation requests and eight concurrent regeneration requests all commit unique ordered versions and leave only the newest plan's 30 minutes; migration/restart test |
+| 3 | Shared network helper rejects stale session responses, including delayed bodies and 401 errors. Calendar requests also carry a navigation sequence. Sign-out immediately clears drafts, chats, forms, calendar and feedback. | Frontend race/cleanup tests and actual browser account switching |
+| 4 | Calendar REST uses interval overlap; month/week display includes overnight continuation dates, with exclusive midnight endings. | HTTP next-day query; month-boundary Node test; browser shows October 31 start and November 1 continuation |
+| 5 | Null nested assessment elements fail validation before mutation. Application guards also protect internal calls. | HTTP subject creation, direct import and outline confirmation return 400; no partial subject |
+| 6 | Profile request/domain/UI limits match database fields: display name 80, institution/course 255, goal 800. | HTTP maximum and maximum+1 boundaries; invalid changes retain previous profile |
+| 7 | Outline model provider exceptions map to safe 503 dependency errors. | Actual SDK quota fixture returns 503 without private provider details |
+| 8 | Model item schema requires exactly the supported fields with integral numeric allocations/stages before Java mapping. Fractional, missing, string and extra-field values are rejected. | HTTP malformed-model cases return 400 and preserve plan history/calendar |
+| 9 | Windows launchers check Docker exit status and poll every service/frontend before opening the browser or reporting ready. | PowerShell Docker failure, readiness timeout and success scenarios |
+
+## Repository evidence completed
+
+- [Domain UML and DDD responsibilities](../domain-model/domain-model.md), [architecture/layers/agent sequence](../architecture/diagrams.md), and [18 detailed use cases with activity diagrams](../use-cases/functional-use-cases.md).
+- [Implemented FR/NFR requirements](../requirements/implemented-requirements.md) and [proposal reconciliation](../architecture/proposal-reconciliation.md), including event-based targets versus the original REST retrieval proposal.
+- [Current accepted, modified and rejected AI decisions](../ai-decisions/ADR-002-completion-decisions.md), identified as assistant-authored engineering records; no invented historical human approvals.
+- [Complete demonstration guide](../testing/demonstration-guide.md), ordered Postman examples and executable fixture/broker checks. Optional outline upload is separated from the core collection so it cannot alter workload assertions.
+- [Progress checklist](../readiness-progress.md) and updated [traceability](../traceability.md).
+
+Browser smoke verification used disposable accounts and the five actual services with a local provider fixture. It checked overnight month-boundary rendering, account switching, and immediate chat/form/feedback clearing. It does not claim a complete visual certification of every screen.
+
+## Earlier readiness changes retained
 
 | Audit item | Completed implementation | Regression evidence |
 |---|---|---|
@@ -73,7 +97,7 @@ No finite test suite establishes that software is absolutely perfect. The team's
 | NFR-02 | No committed secrets | Private environment injection retained; fixture credential is explicitly fake; status/errors do not return keys |
 | NFR-03 | Consistent errors | All five advice handlers use timestamp/status/error/message/path/validationErrors; malformed/validation paths tested through HTTP |
 | NFR-04 | Consistent layers/names | Five bounded contexts with four layers; technical shared messaging module |
-| NFR-05 | Repeatable tests | 86 Java, 13 frontend, 51 isolated HTTP checks plus real-Kafka CI |
+| NFR-05 | Repeatable tests | 87 Java, 20 frontend, 96 isolated HTTP checks plus real-Kafka CI |
 | NFR-06 | Repeatable Postman demo | Ordered account/ID capture, bounded projection polling, seven-day generation and changed-state regeneration assertions; real-key execution remains an external verification prerequisite |
 
 ## Operational boundaries

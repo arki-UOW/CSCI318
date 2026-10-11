@@ -25,3 +25,5 @@ Plan explanations use a CLOB so the permitted 500-character agent summary plus t
 ## Prompt safety
 
 Prompts constrain the allowed workflow and identify source context. Tool schemas restrict actions and arguments. Raw model prose is never trusted as a plan, and the model cannot call arbitrary Java code. Unit tests use a mocked `ChatModel` to verify the tool protocol without consuming provider quota; the Postman agentic requests are the documented live-provider verification path.
+
+Model submission is checked before Jackson conversion: all required item fields must be present, minute/stage numbers must be integral, and unknown fields are rejected. A valid no-work result is an empty seven-day plan. The application serializes final version/calendar writes by owner in H2 after the model call, then revalidates authoritative assessment state. See ADR-002 for the current decisions.

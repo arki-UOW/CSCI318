@@ -102,7 +102,7 @@ Serve `frontend/` with any static server. The UI expects the documented localhos
 1. Create an account or sign back in to restore your profile, data and theme.
 2. Upload or drop up to 10 PDF, DOCX, JPG or JPEG files together, or choose **Enter manually**.
 3. Review and confirm each queued subject; subjects are stored by Subject Service and assessments by Assessment Service.
-4. Tell the planning assistant your weekly time slots and generate a spaced plan through every assessment due date.
+4. Tell the planning assistant your weekly time slots and generate a spaced plan for exactly the requested seven days.
 5. Open Schedule and switch between the monthly overview and weekly detail to edit generated blocks or add your own tasks and sessions.
 6. Mark a spaced-repetition block complete and check the next review in the monthly overview.
 7. Ask the Study Assistant for explanations or help breaking down the nearest assessment.
@@ -144,3 +144,11 @@ After `mvn --batch-mode clean verify`, run `python scripts/verify-readiness.py`.
 Real API keys stay in your private `.env` or process environment and are injected when starting/recreating the services. They are not compiled into the application or sent to the browser. `study.ai.openai.base-url` is an optional trusted operator setting for an OpenAI-compatible endpoint; it defaults to OpenAI and is overridden only to localhost by the acceptance fixture. Never point a service holding a real key at an untrusted endpoint.
 
 See [readiness progress](docs/readiness-progress.md), [requirements traceability](docs/traceability.md) and [verification scope](docs/compliance/software-completion-audit.md). Automated fixture results do not establish that a privately configured live provider has available credentials, quota or model access.
+
+## Completion evidence
+
+See [the correction checklist](docs/readiness-progress.md), [all eighteen use cases and activity diagrams](docs/use-cases/functional-use-cases.md), [UML domain model](docs/domain-model/domain-model.md), [architecture/layer diagrams](docs/architecture/diagrams.md), [proposal reconciliation](docs/architecture/proposal-reconciliation.md), [implemented AI decisions](docs/ai-decisions/ADR-002-completion-decisions.md), and [demonstration guide](docs/testing/demonstration-guide.md).
+
+Generation with no incomplete work saves an empty seven-day version and clears obsolete planned AI blocks. Plan writes are serialized per account in the database, with a unique owner/version index. On startup, only owners with legacy duplicate plan versions are renumbered chronologically; IDs, plan content, dates and calendar links remain intact. Normal unique histories retain their numbers.
+
+The Windows launcher checks Docker's exit code and waits for service endpoints before opening the site. The optional outline request is skipped in the ordered Postman run unless explicitly enabled. Private provider keys remain runtime configuration.
