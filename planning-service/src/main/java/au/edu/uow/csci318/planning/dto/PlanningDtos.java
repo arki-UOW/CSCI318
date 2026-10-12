@@ -49,6 +49,11 @@ public final class PlanningDtos {
       @NotNull LocalDate startDate,
       @NotNull Map<LocalDate, @PositiveOrZero @Max(1440) Integer> dailyAvailabilityMinutes,
       Map<LocalDate, List<@Valid TimeSlot>> availabilitySlots) {
+    public PlanRequest {
+      // Missing availability means no capacity; the scheduler still rejects outstanding work.
+      if (dailyAvailabilityMinutes == null) dailyAvailabilityMinutes = Map.of();
+    }
+
     public PlanRequest(LocalDate startDate, Map<LocalDate, Integer> dailyAvailabilityMinutes) {
       this(startDate, dailyAvailabilityMinutes, null);
     }

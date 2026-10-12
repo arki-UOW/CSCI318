@@ -351,11 +351,26 @@ def main():
         check('incomplete zero estimates generate without availability', (status, zero_version.get('items'), zero_version.get('endDate')), (201, [], END.isoformat()))
         status, zero_regeneration = api(18084, 'planning/plans/' + zero_version['id'] + '/regenerate', edge_token, empty_request)
         check('incomplete zero estimates regenerate without availability', (status, zero_regeneration.get('version'), zero_regeneration.get('items')), (201, 2, []))
+        absent_requests = [('omitted', {'startDate': START.isoformat()}),
+                           ('null', {'startDate': START.isoformat(), 'dailyAvailabilityMinutes': None})]
+        for label, absent_request in absent_requests:
+            status, absent_plan = api(18084, 'planning/plans', edge_token, absent_request)
+            check('zero work generates with ' + label + ' availability', (status, absent_plan.get('items'), absent_plan.get('endDate')), (201, [], END.isoformat()))
+            status, absent_regeneration = api(18084, 'planning/plans/' + absent_plan['id'] + '/regenerate', edge_token, absent_request)
+            check('zero work regenerates with ' + label + ' availability', (status, absent_regeneration.get('items'), absent_regeneration.get('version')), (201, [], absent_plan['version'] + 1))
         api(18082, 'assessments/' + edge_assessment['id'], edge_token, {**edge_assessment_body, 'estimatedMinutes': 60}, 'PATCH')
         check('positive work with no availability still rejected', api(18084, 'planning/plans', edge_token, empty_request)[0], 400)
         minutes_only_request = {'startDate': START.isoformat(), 'dailyAvailabilityMinutes': {START.isoformat(): 60}}
         status, nonempty_version = api(18084, 'planning/plans', edge_token, minutes_only_request)
         check('positive workload creates calendar before zero correction', (status, bool(api(18084, f'calendar?from={START}&to={END}', edge_token)[1])), (201, True))
+        before_missing_history = api(18084, 'planning/plans', edge_token)[1]
+        before_missing_calendar = api(18084, f'calendar?from={START}&to={END}', edge_token)[1]
+        for label, absent_request in absent_requests:
+            for operation, path in [('generation', 'planning/plans'), ('regeneration', 'planning/plans/' + nonempty_version['id'] + '/regenerate')]:
+                status, error = api(18084, path, edge_token, absent_request)
+                check('positive work rejects ' + label + ' availability for ' + operation, (status, error.get('message')), (400, 'Add at least one available study period before generating a plan.'))
+        check('missing availability failures preserve plan history', api(18084, 'planning/plans', edge_token)[1], before_missing_history)
+        check('missing availability failures preserve calendar', api(18084, f'calendar?from={START}&to={END}', edge_token)[1], before_missing_calendar)
         api(18082, 'assessments/' + edge_assessment['id'], edge_token, edge_assessment_body, 'PATCH')
         status, cleared_version = api(18084, 'planning/plans/' + nonempty_version['id'] + '/regenerate', edge_token, empty_request)
         check('zero estimate correction clears obsolete plan calendar', (status, cleared_version.get('items'), api(18084, f'calendar?from={START}&to={END}', edge_token)[1]), (201, [], []))
