@@ -82,6 +82,18 @@ $env:GEMINI_MODEL = "gemini-3.6-flash"
 
 `AI_PROVIDER=auto` prefers Gemini when both provider keys are present. `AI_PROVIDER=openai` preserves the existing OpenAI path. Never put a real key in `application.yml`, frontend JavaScript, `.env.example`, screenshots, commits, or chat messages.
 
+## Diagnose a live Gemini failure
+
+An outline-import HTTP 503 is the application's dependency-error status; it does **not** by itself mean Google returned 503 or the key is invalid. Updated error messages include the upstream HTTP status when the SDK supplies it, distinguish temporary provider failures from authentication, quota and request-format failures, and never echo raw provider responses.
+
+On the computer running the app, from the repository root, run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-gemini.ps1
+```
+
+The diagnostic reads the private `.env` (process environment takes precedence), sends one small JSON-generation request directly to Google, and reports the upstream error safely. It does not upload documents or print the key. Exit codes: `0` minimal live request passed; `1` request/response failed; `2` missing/invalid local configuration. Share only its output, never `.env`. A passing probe still requires a successful real outline import and planning demonstration. If the probe passes but the app fails, recreate the containers to apply the same configuration and retry the document. The existing SDK retries transient failures; persistent Google unavailability cannot be repaired by changing application error messages. See [Google's troubleshooting guidance](https://ai.google.dev/gemini-api/docs/troubleshooting).
+
 ## Local development
 
 Requirements: JDK 21, Maven 3.9+, Kafka on port 9092 for domain-event services.

@@ -50,7 +50,6 @@ class ConfiguredPlanningChatModel {
                   .maxRetries(1)
                   .apiKey(geminiKey)
                   .modelName(geminiModel)
-                  .temperature(0.0)
                   .build()));
     }
     if ((provider.equals("auto") || provider.equals("openai")) && !openAiKey.isBlank()) {
@@ -91,21 +90,30 @@ class ConfiguredPlanningChatModel {
 
   static String failureMessage(Selection selection, Exception failure, String action) {
     StringBuilder messages = new StringBuilder();
+    Integer upstreamStatus = null;
     Throwable current = failure;
     while (current != null) {
+      if (current instanceof dev.langchain4j.exception.HttpException http) {
+        upstreamStatus = http.statusCode();
+      }
       if (current.getMessage() != null) {
         messages.append(' ').append(current.getMessage().toLowerCase(Locale.ROOT));
       }
       current = current.getCause();
     }
     String details = messages.toString();
+    // Only expose the status and our own guidance, never the raw provider body or URL.
+    String upstream = upstreamStatus == null ? "" : "Upstream HTTP " + upstreamStatus + ". ";
     String prefix = selection.provider() + " could not " + action + ". ";
-    if (details.contains("429")
+    prefix += upstream;
+    if (Integer.valueOf(429).equals(upstreamStatus) || details.contains("429")
         || details.contains("quota")
         || details.contains("resource_exhausted")) {
       return prefix + "The API quota or rate limit was reached. Wait briefly and retry.";
     }
-    if (details.contains("401")
+    if (Integer.valueOf(401).equals(upstreamStatus)
+        || Integer.valueOf(403).equals(upstreamStatus)
+        || details.contains("401")
         || details.contains("403")
         || details.contains("api key")
         || details.contains("permission_denied")
@@ -113,10 +121,23 @@ class ConfiguredPlanningChatModel {
       return prefix
           + "The API key was rejected or lacks permission. Check .env and rebuild the containers.";
     }
-    if (details.contains("404")
+    if (Integer.valueOf(404).equals(upstreamStatus) || details.contains("404")
         || details.contains("not found")
         || details.contains("no longer available")) {
       return prefix + "The configured model '" + selection.modelName() + "' is unavailable.";
+    }
+    if ((upstreamStatus != null && upstreamStatus >= 500)
+        || details.contains("503") || details.contains("unavailable")
+        || details.contains("overloaded") || details.contains("high demand")) {
+      return prefix
+          + "The provider is temporarily unavailable or overloaded. Retry after a short wait."
+          + " This error does not establish that the API key is invalid.";
+    }
+    if (Integer.valueOf(400).equals(upstreamStatus)
+        || details.contains("invalid_argument") || details.contains("bad request")) {
+      return prefix
+          + "The provider rejected the request format or model parameters. Run the Gemini"
+          + " diagnostic and check the configured model; repeatedly retrying will not fix this.";
     }
     if (details.contains("timeout")
         || details.contains("connection")

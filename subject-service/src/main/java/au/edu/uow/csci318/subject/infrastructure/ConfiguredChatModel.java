@@ -26,6 +26,9 @@ class ConfiguredChatModel implements SubjectAiConfiguration {
   @Value("${study.ai.openai.base-url:https://api.openai.com/v1}")
   private String openAiBaseUrl = "https://api.openai.com/v1";
 
+  @Value("${study.ai.gemini.base-url:https://generativelanguage.googleapis.com/v1beta}")
+  private String geminiBaseUrl = "https://generativelanguage.googleapis.com/v1beta";
+
   ConfiguredChatModel(
       @Value("${study.ai.provider:auto}") String provider,
       @Value("${study.ai.gemini.api-key:}") String geminiKey,
@@ -48,9 +51,9 @@ class ConfiguredChatModel implements SubjectAiConfiguration {
     if ((provider.equals("auto") || provider.equals("gemini")) && !geminiKey.isBlank()) {
       ChatModel model =
           GoogleAiGeminiChatModel.builder()
+              .baseUrl(geminiBaseUrl)
               .apiKey(geminiKey)
               .modelName(geminiModel)
-              .temperature(0.0)
               .responseFormat(ResponseFormat.JSON)
               .maxOutputTokens(8192)
               .timeout(Duration.ofSeconds(120))

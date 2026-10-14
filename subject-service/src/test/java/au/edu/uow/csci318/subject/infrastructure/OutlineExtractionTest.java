@@ -90,7 +90,7 @@ class OutlineExtractionTest {
                 new RuntimeException("404: this model is no longer available"));
 
         assertTrue(error.contains("retired-model"));
-        assertTrue(error.contains("gemini-3.6-flash"));
+        assertTrue(error.contains("GEMINI_MODEL"));
     }
 
     @Test
