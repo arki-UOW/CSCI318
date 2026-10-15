@@ -13,6 +13,7 @@ The reported screenshots show three distinct conditions: an individual Gemini re
 | Late responses could restore cleared availability or the wrong selected version | Availability responses are checked against request order, account and selected week. Saved-version selection discards older responses. History refresh retains a version saved during its request. | Delayed-response Node tests |
 | Regeneration could reuse unconfirmed availability, and overlapping frontend generation requests were possible | Regeneration requires confirmation for existing slots; generation controls prevent simultaneous submissions and preserve disabled state after availability is cleared | Node tests; failed generation retains the selected plan and history |
 | Signing out left the availability summary rendered and could leave Send disabled | Sign-out renders the empty schedule and restores the relevant controls before waiting for logout | Node sign-out regression and full-document DOM check |
+| CI reported failure after the diagnostic harness printed PASS | The harness now explicitly exits zero after all assertions and cleanup succeed, instead of leaking the intentionally failing malformed-response child process exit code | Reproduced with the GitHub PowerShell wrapper convention; verified the same wrapper exits zero after the fix |
 
 ## Results and limits
 

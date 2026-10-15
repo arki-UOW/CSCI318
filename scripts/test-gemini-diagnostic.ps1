@@ -58,3 +58,6 @@ try {
     Remove-Item -LiteralPath $runner -Force
     Remove-Item -LiteralPath $sandbox
 }
+# The last child intentionally exits 1 for malformed output. Do not let a successful
+# harness leak that expected child status to the GitHub Actions PowerShell wrapper.
+exit 0
