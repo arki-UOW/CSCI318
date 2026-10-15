@@ -4,7 +4,6 @@
 
 > Historical baseline transcribed from the team's original 14-page PDF. This document preserves the original proposed scope and terminology; for implemented functionality see [Final Implemented Software Specification](final-implemented-software-specification.md).
 
-
 CSCI318 Software Engineering Practices & Principles
 GROUP PROJECT PROPOSAL
 
@@ -55,35 +54,26 @@ record study sessions, observe continuously updated workload and progress summar
 to produce or revise a weekly plan using current application data.
 
 ### 3.1 Primary Stakeholders
-```text
-     Stakeholder                                             Needs and Expectations
-Student                Simple subject and assessment management; accurate workload visibility; study-progress tracking;
-```
-practical weekly plans; clear feedback when information changes.
 
-```text
-     Stakeholder                                            Needs and Expectations
-Project Team            A manageable implementation; strong rubric coverage; repeatable integration; clear task ownership;
-```
-reusable evidence for the final report and presentation.
-```text
-Teaching Team           A coherent architecture; inspectable source code; reproducible setup; clear evidence of DDD,
-```
-microservices, Kafka, stream processing, agentic AI, testing, and AI-assisted development.
+| Stakeholder | Needs and Expectations |
+|---|---|
+| Student | Simple subject and assessment management; accurate workload visibility; study-progress tracking; practical weekly plans; clear feedback when information changes. |
+| Project Team | A manageable implementation; strong rubric coverage; repeatable integration; clear task ownership; reusable evidence for the final report and presentation. |
+| Teaching Team | A coherent architecture; inspectable source code; reproducible setup; clear evidence of DDD, microservices, Kafka, stream processing, agentic AI, testing, and AI-assisted development. |
 
 ## 4. Project Objectives
-## 1. Provide subject management and weekly study-target information.
-## 2. Provide assessment creation, updating, deadline changes, workload estimates, priority, and completion.
-## 3. Record study sessions and calculate study duration by subject.
-## 4. Update workload information when assessment events occur.
-## 5. Update study-progress information when study-session events occur.
-## 6. Generate a seven-day study plan using current application data.
-## 7. Regenerate a plan after deadlines, status, progress, or availability change.
-## 8. Demonstrate four justified bounded contexts with independent data ownership.
-## 9. Apply DDD patterns intentionally rather than as labels only.
-## 10. Demonstrate meaningful event-driven communication and stateful stream processing.
-## 11. Demonstrate genuine tool-using agentic AI rather than a generic chatbot prompt.
-## 12. Maintain requirement traceability and strong automated and manual testing evidence.
+1. Provide subject management and weekly study-target information.
+2. Provide assessment creation, updating, deadline changes, workload estimates, priority, and completion.
+3. Record study sessions and calculate study duration by subject.
+4. Update workload information when assessment events occur.
+5. Update study-progress information when study-session events occur.
+6. Generate a seven-day study plan using current application data.
+7. Regenerate a plan after deadlines, status, progress, or availability change.
+8. Demonstrate four justified bounded contexts with independent data ownership.
+9. Apply DDD patterns intentionally rather than as labels only.
+10. Demonstrate meaningful event-driven communication and stateful stream processing.
+11. Demonstrate genuine tool-using agentic AI rather than a generic chatbot prompt.
+12. Maintain requirement traceability and strong automated and manual testing evidence.
 
 ## 5. Scope
 ### 5.1 Included Scope
@@ -114,45 +104,27 @@ running Spring Boot microservice with its own H2 database. No service will read 
 directly. Assessment Service will synchronously verify subject existence through the Subject Service REST API
 before creating an assessment. Planning Service will retrieve a subject’s weekly study target through the
 Subject Service REST API when updating the subject progress projection.
-Subject Service
-```text
-          |
-```
-| REST subject verification
-```text
-          v
-```
-Assessment Service
-```text
-          |
-```
-| assessment-events (Kafka)
-```text
-          v
-    Planning Service <---- study-activity-events ----                 Study Activity Service
-          |
-```
-| LangChain4j tool-calling integration
-```text
-          v
-```
-LLM Provider
+**Proposed integration topology (historical design):**
 
 ```text
-    Microservice                      Primary Responsibility                                   Owned Data
-Subject Service          Manage subjects and weekly study targets.         Subjects, subject codes, names, credit points,
+Subject Service
+   | REST subject verification
+   v
+Assessment Service
+   | assessment-events (Kafka)
+   v
+Planning Service <---- study-activity-events ---- Study Activity Service
+   | LangChain4j tool-calling integration
+   v
+LLM Provider
 ```
-weekly targets.
-```text
-Assessment Service       Manage assessed tasks and publish assessment      Assessments, deadlines, estimated workload,
-                         events.                                           priority, status.
-Study Activity Service   Record study sessions and publish activity        Study sessions, dates, durations, descriptions.
-```
-events.
-```text
-Planning Service         Consume events, maintain projections, and         Workload projections, progress projections, study
-                         provide AI planning.                              plans and plan versions.
-```
+
+| Microservice | Primary responsibility | Owned data |
+|---|---|---|
+| Subject Service | Manage subjects and weekly study targets. | Subjects, subject codes, names, credit points, weekly targets. |
+| Assessment Service | Manage assessed tasks and publish assessment events. | Assessments, deadlines, estimated workload, priority, status. |
+| Study Activity Service | Record study sessions and publish activity events. | Study sessions, dates, durations, descriptions. |
+| Planning Service | Consume events, maintain projections, and provide AI planning. | Workload projections, progress projections, study plans and plan versions. |
 
 Subject verification behaviour: if the referenced subject exists, Assessment Service continues creation; if it
 does not exist, the request is rejected with a clear client error; if Subject Service is unavailable, Assessment
@@ -175,13 +147,11 @@ Principal Domain Objects
 - WeeklyStudyTarget
 
 Proposed REST Endpoints
-```text
     POST /api/subjects
     GET /api/subjects
     GET /api/subjects/{subjectId}
     PUT /api/subjects/{subjectId}
     PATCH /api/subjects/{subjectId}/study-target
-```
 
 ### 7.2 Assessment Service
 
@@ -200,7 +170,6 @@ Principal Domain Objects
 - AssessmentStatus
 
 Proposed REST Endpoints
-```text
     POST /api/assessments
     GET /api/assessments
     GET /api/assessments/{assessmentId}
@@ -210,7 +179,6 @@ Proposed REST Endpoints
     PATCH /api/assessments/{assessmentId}/workload
     PATCH /api/assessments/{assessmentId}/priority
     PATCH /api/assessments/{assessmentId}/complete
-```
 
 ### 7.3 Study Activity Service
 
@@ -228,13 +196,11 @@ Principal Domain Objects
 - ActivityDescription
 
 Proposed REST Endpoints
-```text
     POST /api/study-sessions
     GET /api/study-sessions
     GET /api/study-sessions/{sessionId}
     GET /api/study-sessions/subject/{subjectId}
     GET /api/study-sessions/summary/{subjectId}
-```
 
 ### 7.4 Planning Service
 
@@ -254,7 +220,6 @@ Principal Domain Objects
 - PlanningRecommendation
 
 Proposed REST Endpoints
-```text
     GET /api/planning/workload
     GET /api/planning/progress
     GET /api/planning/progress/{subjectId}
@@ -262,67 +227,49 @@ Proposed REST Endpoints
     POST /api/planning/regenerate
     GET /api/planning/plans
     GET /api/planning/plans/{planId}
-```
 
 ## 8. Layered Architecture
-```text
-      Layer                                   Responsibilities                                      Typical Packages
-Presentation       REST controllers, request/response DTOs, HTTP codes, request               controller, dto, exception
-```
-validation, exception mapping.
-```text
-Application        Coordinate use cases, load and save aggregates, invoke domain              application
-```
-behaviour, define transactions, call ports, publish events.
 
-```text
-        Layer                                    Responsibilities                                         Typical Packages
-Domain               Entities, value objects, aggregates, domain events, domain services,           domain
-```
-invariants, domain exceptions.
-```text
-Infrastructure       JPA adapters, Kafka bindings, REST clients, LLM adapters, persistence          infrastructure, config
-```
-mapping, configuration.
+| Layer | Responsibilities | Typical packages |
+|---|---|---|
+| Presentation | REST controllers, request/response DTOs, HTTP codes, request validation, exception mapping. | controller, dto, exception |
+| Application | Coordinate use cases, load and save aggregates, invoke domain behaviour, define transactions, call ports, publish events. | application |
+| Domain | Entities, value objects, aggregates, domain events, domain services, invariants, domain exceptions. | domain |
+| Infrastructure | JPA adapters, Kafka bindings, REST clients, LLM adapters, persistence mapping, configuration. | infrastructure, config |
 
 ## 9. Functional Requirements
-```text
-        ID                                                        Requirement
-FR-01            Create a subject.
-FR-02            Retrieve a subject.
-FR-03            List all registered subjects.
-FR-04            Update subject information and weekly study targets.
-FR-05            Create an assessment associated with a subject.
-FR-06            Display all assessments.
-FR-07            Display incomplete assessments.
-FR-08            Change an assessment deadline.
-FR-09            Update estimated assessment workload.
-FR-10            Mark an assessment as completed.
-FR-11            Record a completed study session.
-FR-12            Display study sessions for a selected subject.
-FR-13            Calculate total and weekly study duration for each subject.
-FR-14            Update assessment workload information from assessment events.
-FR-15            Update study-progress information from study-session events.
-FR-16            Generate a seven-day study plan using current data.
-FR-17            Regenerate an existing study plan after relevant changes.
-FR-18            Reject an AI-generated plan that references invalid or completed assessments, exceeds daily availability,
-```
-contains invalid dates, or violates required plan constraints.
+
+| ID | Requirement |
+|---|---|
+| FR-01 | Create a subject. |
+| FR-02 | Retrieve a subject. |
+| FR-03 | List all registered subjects. |
+| FR-04 | Update subject information and weekly study targets. |
+| FR-05 | Create an assessment associated with a subject. |
+| FR-06 | Display all assessments. |
+| FR-07 | Display incomplete assessments. |
+| FR-08 | Change an assessment deadline. |
+| FR-09 | Update estimated assessment workload. |
+| FR-10 | Mark an assessment as completed. |
+| FR-11 | Record a completed study session. |
+| FR-12 | Display study sessions for a selected subject. |
+| FR-13 | Calculate total and weekly study duration for each subject. |
+| FR-14 | Update assessment workload information from assessment events. |
+| FR-15 | Update study-progress information from study-session events. |
+| FR-16 | Generate a seven-day study plan using current data. |
+| FR-17 | Regenerate an existing study plan after relevant changes. |
+| FR-18 | Reject an AI-generated plan that references invalid or completed assessments, exceeds daily availability, contains invalid dates, or violates required plan constraints. |
 
 ### 9.1 Non-Functional Requirements
-```text
-        ID                                               Non-Functional Requirement
-NFR-01           The complete local system shall be reproducible by following the README and supplied configuration files.
-NFR-02           No LLM API key, password, or other secret shall be committed to the repository.
-NFR-03           All microservices shall use a consistent structured error-response format.
-NFR-04           The codebase shall use a consistent layered package structure and shared naming conventions.
-NFR-05           Core domain behaviour, REST endpoints, event flows, stream projections, and AI-plan validation shall be
-```
-supported by repeatable tests.
-```text
-NFR-06           The complete Postman demonstration shall be repeatable using deterministic sample data and documented
-```
-startup steps.
+
+| ID | Non-functional requirement |
+|---|---|
+| NFR-01 | The complete local system shall be reproducible by following the README and supplied configuration files. |
+| NFR-02 | No LLM API key, password, or other secret shall be committed to the repository. |
+| NFR-03 | All microservices shall use a consistent structured error-response format. |
+| NFR-04 | The codebase shall use a consistent layered package structure and shared naming conventions. |
+| NFR-05 | Core domain behaviour, REST endpoints, event flows, stream projections, and AI-plan validation shall be supported by repeatable tests. |
+| NFR-06 | The complete Postman demonstration shall be repeatable using deterministic sample data and documented startup steps. |
 
 ## 10. Real-Time Stream-Processing Requirements
 The real-time analysis will be implemented using Spring Cloud Stream with the Kafka Streams binder. This
@@ -360,20 +307,14 @@ StudySessionRecorded stream
 ## 11. Event-Driven Architecture
 Kafka will be used for asynchronous reactions to completed business events. The system will avoid
 unnecessary topics and production-grade messaging infrastructure that is not required for the prototype.
-```text
               Topic                                                     Events
 assessment-events               AssessmentCreated, AssessmentUpdated, AssessmentDeadlineChanged,
-```
 AssessmentCompleted
-```text
 study-activity-events           StudySessionRecorded
 planning-events                 Optional planning-domain events only where they provide clear value.
-```
 
 ### 11.1 Event Envelope
-```text
     {
-```
 "eventId": "550e8400-e29b-41d4-a716-446655440000",
 "eventType": "AssessmentCreated",
 "eventVersion": 1,
@@ -430,42 +371,25 @@ saveStudyPlan(plan)
 return clear errors without storing an invalid plan.
 
 ## 13. Domain-Driven Design
-```text
-    DDD Pattern                    Proposed Examples                                           Purpose
-Entities                Subject, Assessment, StudySession,             Objects with continuing identity and lifecycle.
-```
-StudyPlan
-```text
-Value Objects           SubjectCode, Deadline, EstimatedWorkload,      Immutable concepts defined by value and
-                        StudyDuration, PlanningPeriod                  responsible for their invariants.
-Aggregate Roots         Subject, Assessment, StudySession,             Consistency boundaries modified through business
-                        StudyPlan                                      methods.
-Domain Events           AssessmentCreated, AssessmentCompleted,        Records of meaningful completed business changes.
-```
-StudySessionRecorded
-```text
-Domain Services         WorkloadClassificationService, where           Behaviour spanning values that does not naturally
-                        required                                       belong to one entity.
-```
 
-Business state changes will be expressed through domain methods such as assessment.changeDeadline(...),
-assessment.changeEstimatedWorkload(...), and assessment.markCompleted(), rather than unrestricted
-setters. DDD terminology will only be used where the implementation provides the corresponding
-responsibility.
+| DDD pattern | Proposed examples | Purpose |
+|---|---|---|
+| Entities | Subject, Assessment, StudySession, StudyPlan | Objects with continuing identity and lifecycle. |
+| Value Objects | SubjectCode, Deadline, EstimatedWorkload, StudyDuration, PlanningPeriod | Immutable concepts defined by value and responsible for their invariants. |
+| Aggregate Roots | Subject, Assessment, StudySession, StudyPlan | Consistency boundaries modified through business methods. |
+| Domain Events | AssessmentCreated, AssessmentCompleted, StudySessionRecorded | Records of meaningful completed business changes. |
+| Domain Services | WorkloadClassificationService, where required | Behaviour spanning values that does not naturally belong to one entity. |
+
+Business state changes will be expressed through domain methods such as `assessment.changeDeadline(...)`, `assessment.changeEstimatedWorkload(...)`, and `assessment.markCompleted()`, rather than unrestricted setters. DDD terminology will only be used where the implementation provides the corresponding responsibility.
 
 ## 14. Technical and Repository Conventions
-```text
                 Item                                                      Decision
 Java                              JDK 21
 Mandatory stack                   Spring Boot, Spring Web, Spring Data JPA, H2, Spring Cloud Stream, Apache Kafka,
-```
 LangChain4j
-```text
 Stream processing                 Spring Cloud Stream with the Kafka Streams binder
 Subject target access             Planning Service retrieves weekly study targets from Subject Service through REST and
-```
 caches them in progress projections
-```text
 Database ownership                One H2 database per microservice
 Database IDs                      Long
 Event IDs                         UUID
@@ -474,7 +398,6 @@ Study duration                    Integer minutes
 Ports                             Subject 8081; Assessment 8082; Study Activity 8083; Planning 8084
 Secrets                           Environment variables; .env.example committed; real keys excluded
 Demonstration client              Postman collection and environment
-```
 
 ### 14.1 Repository Structure
 study-leftovers/
@@ -483,21 +406,17 @@ study-leftovers/
 ├── study-activity-service/
 ├── planning-service/
 ├── docs/
-```text
     │   ├── requirements/
     │   ├── use-cases/
     │   ├── domain-model/
     │   ├── architecture/
     │   ├── decisions/
-```
 
-```text
     │   ├── ai-prompts/
     │   ├── ai-decisions/
     │   ├── testing/
     │   ├── meeting-minutes/
     │   └── evidence/
-```
 ├── postman/
 ├── scripts/
 ├── docker-compose.yml
@@ -527,26 +446,16 @@ Examples may include rejecting authentication or a fifth service, modifying an o
 topology, accepting a value-object design, or rejecting an AI-generated plan that violates daily availability.
 
 ## 16. Testing Strategy
-```text
-        Test Level                                              Representative Tests
-Domain unit tests         Reject invalid subject codes, negative workload, zero-duration sessions, duplicate completion,
-```
-invalid planning periods.
-```text
-Application tests         Create assessment, save aggregate, publish event, record session, store validated plan.
-Controller/API tests      Correct status codes and DTOs; 400 for invalid input; 404 for missing resources.
-Event tests               Correct event type and fields; valid consumption; malformed events handled without service crash.
-Stream tests              No duplicate assessment count after updates; completion reduces workload; sessions aggregate
-```
-separately by subject.
-```text
-Agentic AI tests          Completed work excluded; availability respected; dates valid; invalid LLM output rejected;
-```
-regeneration changes outdated plan.
-```text
-End-to-end tests          Normal plan generation; deadline change and regeneration; assessment completion and workload
-```
-reduction.
+
+| Test level | Representative tests |
+|---|---|
+| Domain unit tests | Reject invalid subject codes, negative workload, zero-duration sessions, duplicate completion, invalid planning periods. |
+| Application tests | Create assessment, save aggregate, publish event, record session, store validated plan. |
+| Controller/API tests | Correct status codes and DTOs; 400 for invalid input; 404 for missing resources. |
+| Event tests | Correct event type and fields; valid consumption; malformed events handled without service crash. |
+| Stream tests | No duplicate assessment count after updates; completion reduces workload; sessions aggregate separately by subject. |
+| Agentic AI tests | Completed work excluded; availability respected; dates valid; invalid LLM output rejected; regeneration changes outdated plan. |
+| End-to-end tests | Normal plan generation; deadline change and regeneration; assessment completion and workload reduction. |
 
 ## 17. Requirement Traceability
 A traceability matrix will be maintained throughout development. Each important capability will be connected
@@ -561,7 +470,6 @@ Business objective
 → Test
 → Demonstration evidence
 
-```text
        Traceability Element                                               Example
 Objective                         Help students identify concentrated workload.
 Requirement                       FR-14: update workload from assessment events.
@@ -572,42 +480,32 @@ Domain Object                     WorkloadSummary.
 Endpoint                          GET /api/planning/workload.
 Test                              Completing an assessment reduces outstanding workload.
 Evidence                          Postman output, test result, and event-consumer log.
-```
 
 ## 18. Development Methodology and Team Roles
 The team will use a lightweight Agile process with one-week iterations, a formal weekly meeting, assigned
 owners, small pull requests, peer review, integrated demonstrations, updated action items, and continuing
 traceability. Unnecessary Scrum overhead will be avoided.
-```text
               Role                                              Primary Responsibilities
 Architecture and Integration   Repository conventions, service contracts, architecture, Kafka contracts, Planning Service
 Lead                           integration, system testing, technical consistency.
 Subject and Assessment Lead    Subject Service, Assessment Service, domain modelling, assessment events, related tests
-```
 and evidence.
-```text
 Study Activity and AI Lead     Study Activity Service, LangChain4j workflows, AI validation, related tests and evidence.
 All Members                    Weekly meetings, pull-request review, full-system operation, AI records, student-authored
-```
 report sections, demonstration, contribution sign-off.
 
 ## 19. Milestones and Hard Deadlines
-```text
  Week            Milestone                                 Required Deliverables                                     Hard Gate
 Week 2      Proposal, Scope and      Final proposal; business problem and stakeholders; scope and             No major service
             Architecture             exclusions; 18 functional requirements and 6 non-functional              implementation begins
                                      requirements; four bounded contexts; architecture and context            until boundaries and
                                      map; data ownership; API contracts; event catalogue; stream              contracts are agreed.
-```
 definitions; agent tools; private repository; team allocation; initial
 traceability.
-```text
 Week 3      Service Foundations      Four Spring Boot projects; JDK 21; mandatory dependencies;               All four services start
             and Domain Model         layered packages; H2; error format; health endpoints; complete           and Subject Service is
                                      Subject Service; core Assessment aggregate; initial domain               fully demonstrable.
-```
 tests; local Kafka environment.
-```text
 Week 4      Core REST                Complete Assessment and Study Activity services; Planning                The application works
             Application              foundations; validation; error handling; unit and API tests;             through REST without
                                      Postman collection; updated domain and architecture diagrams.            Kafka or AI.
@@ -618,26 +516,18 @@ Week 5      Event-Driven             Kafka and Spring Cloud Stream configuration
 Week 6      Stream Processing        Workload and study-progress topologies; stateful projections;            Both real-time stories
                                      query endpoints; update/completion/aggregation tests; saved              work from incoming
                                      evidence; updated diagrams.                                              events without manual
-```
 summary changes.
-```text
 Week 7      Agentic AI               LLM configuration; LangChain4j; tools; generation and                    Changing assessment
                                      regeneration; structured output; validation; failure handling; AI        data produces a
                                      tests; decision records.                                                 meaningfully revised
-```
 validated plan.
-```text
 Week 8      Full Integration and     Three end-to-end scenarios; final Postman collection; cleanup;           No new features after
             Development Freeze       secret audit; .env.example; repeatable startup; final diagrams;          Week 8.
-```
 complete technical evidence and traceability.
-```text
 Week 9      Report Evidence and      Final requirements, use cases, UML activity diagrams, domain             Every required report
             Complete Draft           model, architecture, layers, ownership, code evidence, testing           section contains
                                      evidence, streaming evidence, AI evidence, complete first report         substantive content.
-```
 draft.
-```text
 Week 10     Final Report and         Final report, references, README, sample inputs/outputs, slides,         Only proofreading and
             Presentation             video, speaking roles, demo script, contribution descriptions.           minor corrections
             Artefacts                                                                                         remain.
@@ -646,40 +536,27 @@ Week 11     Final Audit and          Clean-environment startup, README test, ful
             Rehearsal                checks, backups and rehearsal.                                           submission.
 Week 12     Submission and           Upload and verify report PDF, repository ZIP, and required media;        No non-essential last-
             Presentation             preserve backups; deliver presentation.                                  minute development.
-```
 
 ## 20. Key Risks and Mitigation
-```text
                  Risk                                                              Mitigation
 AI generates inconsistent services         Freeze shared contracts, package conventions, versions, IDs, dates, ports, and event
-```
 fields before generation.
-```text
 Kafka configuration consumes too           Test Kafka in Week 3; keep topics minimal; avoid advanced production messaging
 much time                                  features.
 Services work separately but not           Integrate every week and maintain end-to-end demonstration scenarios.
-```
 together
 
-```text
                  Risk                                                       Mitigation
 Assessment updates are double-       Key projection state by assessment ID and test create, update, deadline change, and
 counted                              completion.
 AI produces invalid plans            Use structured DTO output and validate all plan constraints before persistence.
 LLM is unavailable during demo       Provide clear failure handling and preserve backup screenshots/video and
-```
 deterministic sample evidence.
-```text
 Scope expands                        Apply the rule: no feature unless it directly strengthens a required architecture, test,
-```
 or report item.
-```text
 Report conflicts with code           Update diagrams and traceability after implementation changes; final audit in Week
-```
 11.
-```text
 Secrets are committed                Use environment variables, .gitignore, .env.example, and a Week 8/11 secret audit.
-```
 
 ## 21. Definition of Completion and Quality Target
 The project is complete only when all four services run, each service has independent persistence, REST
