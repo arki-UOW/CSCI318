@@ -18,15 +18,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class GeminiPlanningTransportTest {
   private final ObjectMapper json = new ObjectMapper();
 
   @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void actualConfiguredSdkPreservesSignaturesAndSendsValidToolDeclarations(boolean regenerate) throws Exception {
+  @CsvSource({"false, false", "true, false", "false, true", "true, true"})
+  void actualConfiguredSdkPreservesSignaturesAndSendsValidToolDeclarations(boolean regenerate, boolean repair) throws Exception {
     List<JsonNode> requests = new ArrayList<>();
     HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     server.createContext("/v1beta/models/test-model:generateContent", exchange -> {
@@ -46,6 +46,19 @@ class GeminiPlanningTransportTest {
         if (!"signed-first-tool-turn".equals(firstCall.path("thoughtSignature").asText())) {
           problem = "Function call is missing its thought_signature";
         }
+      }
+      if (requests.size() > 2) {
+        boolean signedSubmission = false;
+        boolean correctiveFeedback = false;
+        for (JsonNode content : request.path("contents")) {
+          for (JsonNode part : content.path("parts")) {
+            if (part.path("functionCall").path("name").asText().equals("saveStudyPlan")) {
+              signedSubmission = "signed-final-tool-turn".equals(part.path("thoughtSignature").asText());
+            }
+            if (part.has("functionResponse") && part.toString().contains("after its assessment due date")) correctiveFeedback = true;
+          }
+        }
+        if (!signedSubmission || !correctiveFeedback) problem = "Correction lost signed submission or validation feedback";
       }
       Object response;
       if (problem != null) {
@@ -93,10 +106,14 @@ class GeminiPlanningTransportTest {
           new au.edu.uow.csci318.planning.domain.StudyPlan(owner, start, start.plusDays(6), 1, "[]", "Original")));
       var request = new PlanRequest(start, Map.of(start, 120));
       var candidate = new StudyPlanningAgent.Schedule(List.of(), start.plusDays(6), 0, 0);
+      var validations = new java.util.concurrent.atomic.AtomicInteger();
+      java.util.function.Consumer<List<au.edu.uow.csci318.planning.dto.PlanningDtos.PlanItem>> validate = items -> {
+        if (validations.incrementAndGet() == 1 && repair) throw new IllegalArgumentException("Plan item lies after its assessment due date");
+      };
       var advice = regenerate
-          ? advisor.adviseRegenerate(owner, "Bearer fixture", ZoneId.of("Australia/Sydney"), request, planId, candidate)
-          : advisor.adviseGenerate(owner, "Bearer fixture", ZoneId.of("Australia/Sydney"), request, candidate);
-      assertEquals(2, requests.size());
+          ? advisor.adviseRegenerate(owner, "Bearer fixture", ZoneId.of("Australia/Sydney"), request, planId, candidate, validate)
+          : advisor.adviseGenerate(owner, "Bearer fixture", ZoneId.of("Australia/Sydney"), request, candidate, validate);
+      assertEquals(repair ? 3 : 2, requests.size());
       assertTrue(advice.toolsUsed().containsAll(
           List.of("getIncompleteAssessments", "getCurrentWorkload", "getStudyProgress", "saveStudyPlan")));
       assertEquals("Reviewed all required tools.", advice.summary());

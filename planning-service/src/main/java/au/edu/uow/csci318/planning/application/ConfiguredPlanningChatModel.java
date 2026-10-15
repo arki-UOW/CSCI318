@@ -51,7 +51,8 @@ class ConfiguredPlanningChatModel {
               GoogleAiGeminiChatModel.builder()
                   .baseUrl(geminiBaseUrl)
                   .timeout(java.time.Duration.ofSeconds(60))
-                  .maxRetries(1)
+                  // Bounded SDK backoff for intermittent provider failures (three attempts total).
+                  .maxRetries(2)
                   .apiKey(geminiKey)
                   .modelName(geminiModel)
                   // Gemini 3 requires the original signed tool-call metadata on later turns.

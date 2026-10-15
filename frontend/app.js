@@ -344,8 +344,8 @@ async function signOut(callServer = true) {
   state.token = null;
   state.account = null;
   Object.assign(state, { subjects: [], assessments: [], sessions: [], calendarEntries: [],
-    plan: null, planHistory: [], week: null, review: null, reviewQueue: [], uploadItems: [],
-    availability: {}, availabilityMinutes: {}, availabilityReady: false, assistantHistory: [], manualAssessments: [],
+    plan: null, planHistory: [], planPending: false, week: null, review: null, reviewQueue: [], uploadItems: [],
+    availability: {}, availabilityMinutes: {}, availabilityReady: false, availabilityPending: false, assistantHistory: [], manualAssessments: [],
     profilePictureDraft: null, subjectAi: null, planningAi: null, serviceFailures: [] });
   localStorage.removeItem('studyLeftoversToken');
   setAssistantOpen(false);
@@ -359,6 +359,8 @@ async function signOut(callServer = true) {
   ['study-chat-messages', 'chat-messages', 'review', 'manual-assessments'].forEach(id => document.getElementById(id)?.replaceChildren());
   $('#activity-date').value = localDate(new Date());
   $('#plan-start').value = localDate(mondayFor(new Date()));
+  renderAvailability();
+  ['#availability-chat-form button', '#plan-form button', '#refresh-plan-history'].forEach(selector => setBusy($(selector), false));
   render(); renderCalendar(); renderWeek(); renderUploadQueue(); renderProfilePictures(null);
   await logout;
 }
@@ -1136,9 +1138,12 @@ $('#activity-form').addEventListener('submit', async event => {
 });
 
 async function generatePlan(availability, button, availabilitySlots, previousId = null) {
+  if (state.planPending) return;
+  state.planPending = true;
   const accountToken = state.token;
   const start = $('#plan-start').value;
   setBusy(button, true, previousId ? 'Regenerating' : 'Generating');
+  ['#generate-chat-plan', '#regenerate-plan', '#plan-form button'].forEach(selector => { $(selector).disabled = true; });
   feedback('plan-feedback', 'Building a seven-day plan from remaining work, due dates and your availability…', 'info');
   try {
     const generated = await request(`${API.planning}/planning/plans${previousId ? `/${encodeURIComponent(previousId)}/regenerate` : ''}`, {
@@ -1147,15 +1152,22 @@ async function generatePlan(availability, button, availabilitySlots, previousId 
       body: JSON.stringify({ startDate: start, dailyAvailabilityMinutes: availability, availabilitySlots })
     });
     if (state.token !== accountToken) return;
+    state.planSelectionRequest = (state.planSelectionRequest || 0) + 1;
     state.plan = generated;
     state.planHistory = [state.plan, ...(state.planHistory || []).filter(plan => plan.id !== state.plan.id)];
     feedback('plan-feedback', `Version ${state.plan.version} covers seven days through ${state.plan.endDate}.`, 'success');
     render();
   } catch (error) {
-    if (error.staleSession) return;
+    if (error.staleSession || state.token !== accountToken) return;
     feedback('plan-feedback', error.message, 'error');
   } finally {
-    setBusy(button, false);
+    if (state.token === accountToken) {
+      state.planPending = false;
+      setBusy(button, false);
+      $('#plan-form button').disabled = false;
+      $('#regenerate-plan').disabled = !state.plan?.id;
+      $('#generate-chat-plan').disabled = !state.availabilityReady || !Object.values(state.availabilityMinutes || {}).some(minutes => minutes > 0);
+    }
   }
 }
 
@@ -1176,21 +1188,30 @@ $('#plan-form').addEventListener('submit', async event => {
 function renderPlanHistory() {
   const select = $('#plan-history');
   if (!select) return;
+  const failed = state.serviceFailures?.includes('planHistory');
   select.innerHTML = (state.planHistory || []).map(plan =>
     `<option value="${esc(plan.id)}" ${plan.id === state.plan?.id ? 'selected' : ''}>Version ${plan.version} · ${esc(plan.startDate)} to ${esc(plan.endDate)}</option>`).join('');
+  if (!state.planHistory?.length) select.innerHTML = `<option value="">${failed ? 'History could not be loaded' : 'No saved plans yet'}</option>`;
+  const help = $('#plan-history-help');
+  if (help) help.textContent = failed
+    ? 'Saved versions could not be refreshed. Use Refresh versions to retry; any versions shown are from the last successful load.'
+    : state.planHistory?.length
+      ? 'Choose a version to view it. Viewing an older version does not replace the current calendar.'
+      : 'Generate a plan successfully to save your first version. Failed attempts do not create saved plans.';
   select.disabled = !(state.planHistory || []).length;
-  $('#regenerate-plan').disabled = !state.plan?.id;
+  $('#regenerate-plan').disabled = !!state.planPending || !state.plan?.id;
 }
 
 async function selectPlan(id) {
   const accountToken = state.token;
+  const selectionId = state.planSelectionRequest = (state.planSelectionRequest || 0) + 1;
   try {
     const selected = await request(`${API.planning}/planning/plans/${encodeURIComponent(id)}`);
-    if (state.token !== accountToken) return;
+    if (state.token !== accountToken || state.planSelectionRequest !== selectionId) return;
     state.plan = selected;
     render();
   } catch (error) {
-    if (error.staleSession) return;
+    if (error.staleSession || state.token !== accountToken || state.planSelectionRequest !== selectionId) return;
     feedback('plan-feedback', error.message, 'error');
     renderPlanHistory();
   }
@@ -1198,6 +1219,10 @@ async function selectPlan(id) {
 
 async function regenerateSelectedPlan(button) {
   if (!state.plan?.id) return;
+  if (state.availabilityPending || (state.availabilityReady === false && Object.values(state.availabilityMinutes || {}).some(value => value > 0))) {
+    feedback('plan-feedback', 'Finish confirming your availability, or use Start over before choosing a daily amount.', 'info');
+    return;
+  }
   let minutes = state.availabilityMinutes;
   let slots = state.availability;
   if (!Object.values(minutes || {}).some(value => value > 0)) {
@@ -1213,7 +1238,30 @@ async function regenerateSelectedPlan(button) {
   await generatePlan(minutes, button, slots, state.plan.id);
 }
 
+async function refreshPlanHistory(button) {
+  const accountToken = state.token;
+  setBusy(button, true, 'Refreshing');
+  try {
+    const history = await request(`${API.planning}/planning/plans`);
+    if (state.token !== accountToken) return;
+    // Versions are immutable. Keep a version generated while this read was in flight.
+    state.planHistory = [...new Map([...(state.planHistory || []), ...history].map(plan => [plan.id, plan])).values()]
+      .sort((a, b) => b.version - a.version);
+    state.serviceFailures = (state.serviceFailures || []).filter(name => name !== 'planHistory');
+    if (!state.plan && history.length) state.plan = history[0];
+    render();
+  } catch (error) {
+    if (error.staleSession || state.token !== accountToken) return;
+    state.serviceFailures = [...new Set([...(state.serviceFailures || []), 'planHistory'])];
+    renderPlanHistory();
+    feedback('plan-feedback', error.message, 'error');
+  } finally {
+    if (state.token === accountToken) setBusy(button, false);
+  }
+}
+
 $('#plan-history').addEventListener('change', event => selectPlan(event.target.value));
+$('#refresh-plan-history').addEventListener('click', event => refreshPlanHistory(event.currentTarget));
 $('#regenerate-plan').addEventListener('click', event => regenerateSelectedPlan(event.currentTarget));
 
 function appendChatMessage(role, message) {
@@ -1232,10 +1280,32 @@ function renderAvailability() {
     const times = slots.map(slot => `${slot.start.slice(0, 5)}–${slot.end.slice(0, 5)}`).join(', ');
     return `<div class="availability-day"><div><strong>${esc(label)}</strong><small>${esc(times)}</small></div><span>${state.availabilityMinutes[date] || 0} min</span></div>`;
   }).join('') : 'No times added yet.';
-  $('#generate-chat-plan').disabled = !state.availabilityReady || !Object.values(state.availabilityMinutes || {}).some(minutes => minutes > 0);
+  $('#generate-chat-plan').disabled = !!state.planPending || !state.availabilityReady || !Object.values(state.availabilityMinutes || {}).some(minutes => minutes > 0);
+}
+
+function clearAvailability(message = 'Your availability has been cleared. Tell me your new study times.') {
+  state.availabilityRequest = (state.availabilityRequest || 0) + 1;
+  state.availability = {};
+  state.availabilityMinutes = {};
+  state.availabilityReady = false;
+  state.availabilityPending = false;
+  $('#availability-message').value = '';
+  setBusy($('#availability-chat-form button'), false);
+  renderAvailability();
+  feedback('chat-feedback', '');
+  appendChatMessage('assistant', message);
 }
 
 async function sendAvailability(message, button) {
+  if (['start over', 'clear my availability', 'clear all availability', 'clear my availability and let me start again'].includes(message.trim().toLowerCase().replace(/[.!]+$/, ''))) {
+    clearAvailability();
+    return;
+  }
+  const accountToken = state.token;
+  const weekStart = $('#plan-start').value;
+  const requestId = state.availabilityRequest = (state.availabilityRequest || 0) + 1;
+  const current = () => state.token === accountToken && state.availabilityRequest === requestId && $('#plan-start').value === weekStart;
+  state.availabilityPending = true;
   state.availabilityReady = false;
   renderAvailability();
   appendChatMessage('user', message);
@@ -1247,10 +1317,11 @@ async function sendAvailability(message, button) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message,
-        weekStart: $('#plan-start').value,
+        weekStart,
         availability: state.availability
       })
     });
+    if (!current()) return;
     state.availability = result.availability || {};
     state.availabilityMinutes = result.dailyAvailabilityMinutes || {};
     state.availabilityReady = result.readyToPlan === true;
@@ -1258,11 +1329,15 @@ async function sendAvailability(message, button) {
     renderAvailability();
     feedback('chat-feedback', result.readyToPlan ? 'Availability understood. You can generate the plan.' : 'Add the detail requested above.', result.readyToPlan ? 'success' : 'info');
   } catch (error) {
-    if (error.staleSession) return;
+    if (error.staleSession || !current()) return;
+    $('#availability-message').value = message;
     appendChatMessage('assistant', error.message);
     feedback('chat-feedback', error.message, 'error');
   } finally {
-    setBusy(button, false);
+    if (current()) {
+      state.availabilityPending = false;
+      setBusy(button, false);
+    }
   }
 }
 
@@ -1280,13 +1355,8 @@ $$('[data-prompt]').forEach(button => button.addEventListener('click', () => {
   $('#availability-message').focus();
 }));
 
-$('#plan-start').addEventListener('change', () => {
-  state.availability = {};
-  state.availabilityMinutes = {};
-  state.availabilityReady = false;
-  renderAvailability();
-  appendChatMessage('assistant', 'The planning week changed, so I cleared the previous time slots. Tell me your availability for this week.');
-});
+$('#clear-availability').addEventListener('click', () => clearAvailability());
+$('#plan-start').addEventListener('change', () => clearAvailability('The planning week changed, so I cleared the previous time slots. Tell me your availability for this week.'));
 
 $('#generate-chat-plan').addEventListener('click', async event => {
   if (!state.availabilityReady) return;

@@ -1,5 +1,7 @@
 # Completion progress — fresh audit
 
+15 October update: [planning recovery and saved-history corrections](compliance/planning-recovery-corrections.md) records the newly reported failures, implementation changes and current local verification (117 Java tests, 35 frontend tests, 155 HTTP checks and nine additional DOM checks). The table below is the historical 12 October audit, not a claim that later live-provider failures were already covered.
+
 Baseline merged main: `f1ebffe` (PR #15). Correction branch: `agent/zero-work-interface-gaps`. Date: 12 October 2026. The original nine corrections and four follow-up fixes are retained below, with the two final interface corrections.
 
 | Task | Status | Evidence |

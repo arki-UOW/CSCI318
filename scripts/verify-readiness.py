@@ -21,6 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 REPO = Path(__file__).resolve().parents[1]
 MODE = "valid"
 MODEL_CALLS = []
+MODEL_FEEDBACK = []
 TODAY = dt.datetime.now(dt.timezone.utc).date()
 START = TODAY + dt.timedelta(days=1)
 END = START + dt.timedelta(days=6)
@@ -40,6 +41,8 @@ class ModelFixture(BaseHTTPRequestHandler):
             self.wfile.write(b'{"error":{"message":"429 quota PRIVATE_SENTINEL","type":"rate_limit_error"}}')
             return
         messages = payload['messages']
+        rejected = [m.get('content', '') for m in messages if m['role'] == 'tool' and 'Rejected by server validation:' in m.get('content', '')]
+        MODEL_FEEDBACK.extend(rejected)
         if payload.get('tools'):
             goal = next(m['content'] for m in messages if m['role'] == 'user')
             action = 'REGENERATE' if 'Workflow: REGENERATE' in goal else 'GENERATE'
@@ -59,6 +62,10 @@ class ModelFixture(BaseHTTPRequestHandler):
                 if items and MODE == 'string-minute': items[0]['allocatedMinutes'] = str(items[0]['allocatedMinutes'])
                 if MODE == 'invalid' and items:
                     items[0]['date'] = (END + dt.timedelta(days=1)).isoformat()
+                if items and MODE == 'repair-week' and not rejected:
+                    items[0]['date'] = (END + dt.timedelta(days=1)).isoformat()
+                if items and (MODE == 'deadline' or (MODE == 'repair-deadline' and not rejected)):
+                    items[0]['date'] = (START + dt.timedelta(days=3)).isoformat()
                 args = {'action': action, 'summary': 'Reviewed current workload and progress' + (' and revised the previous plan.' if action == 'REGENERATE' else '.'), 'items': items}
                 calls = [{'id': 'save', 'type': 'function', 'function': {'name': 'saveStudyPlan', 'arguments': json.dumps(args)}}]
             message = {'role': 'assistant', 'content': None, 'tool_calls': calls}
@@ -167,6 +174,14 @@ def main():
         check('availability confirmation matches server calendar',
               'Monday 12 Oct' in interpreted['reply'] and 'Wednesday 14 Oct' in interpreted['reply'], True)
         check('valid interpreted availability is ready', interpreted['readyToPlan'], True)
+        before_clear = len(MODEL_CALLS)
+        MODE = 'quota'
+        status, cleared = api(18084, 'planning/availability/chat', token, {
+            'weekStart': '2026-10-12', 'availability': interpreted['availability'],
+            'message': 'Clear my availability and let me start again.'})
+        check('clear availability works during provider outage', (status, sum(cleared['dailyAvailabilityMinutes'].values()), cleared['readyToPlan']), (200, 0, False))
+        check('clear availability makes no provider request', len(MODEL_CALLS), before_clear)
+        MODE = 'valid'
         subject_body = {'code': 'CSCI318', 'name': 'Software Engineering', 'creditPoints': 6, 'weeklyStudyTargetMinutes': 300, 'assessments': []}
         status, subject = api(18081, 'subjects', token, subject_body)
         check('create subject', status, 201)
@@ -211,7 +226,11 @@ def main():
         check('calendar rejects mismatched subject and assessment', status, 400)
         request = {'startDate': START.isoformat(), 'dailyAvailabilityMinutes': {START.isoformat(): 120},
                    'availabilitySlots': {START.isoformat(): [{'start': '14:00', 'end': '16:00'}]}}
+        MODE = 'repair-week'
+        before_generation = len(MODEL_CALLS)
         status, first = api(18084, 'planning/plans', token, request)
+        check('generation repairs an invalid proposal within the same request', len(MODEL_CALLS) - before_generation, 3)
+        MODE = 'valid'
         check('actual SDK tool loop generates plan', status, 201)
         check('exact seven-day horizon', first['endDate'], END.isoformat())
         check('model items are persisted', all(i['title'] == 'Fixture submitted study block' for i in first['items']), True)
@@ -220,7 +239,12 @@ def main():
         generated = [e for e in calendar if e.get('planId') == first['id']]
         check('generated calendar respects exact slots', all(e['startAt'][11:16] >= '14:00' and e['endAt'][11:16] <= '16:00' for e in generated) and bool(generated), True)
         api(18082, 'assessments/' + aid, token, {**body, 'estimatedMinutes': 30, 'dueDate': (START + dt.timedelta(days=2)).isoformat()}, 'PATCH')
+        MODE = 'repair-deadline'
+        before_regeneration = len(MODEL_CALLS)
         status, second = api(18084, f"planning/plans/{first['id']}/regenerate", token, request)
+        check('regeneration repairs a deadline violation within the same request', len(MODEL_CALLS) - before_regeneration, 3)
+        check('model receives the precise deadline validation feedback', any('after its assessment due date' in item for item in MODEL_FEEDBACK), True)
+        MODE = 'valid'
         check('regeneration reflects changed workload', (status, second.get('version'), sum(i['allocatedMinutes'] for i in second.get('items', []))), (201, 2, 30))
         check('regeneration retrieves previous plan', 'getExistingStudyPlan' in second['explanation'], True)
         status, history = api(18084, 'planning/plans', token)
@@ -236,6 +260,12 @@ def main():
         check('out-of-week model output rejected', status, 400)
         check('invalid model output does not create a version', len(api(18084, 'planning/plans', token)[1]), 2)
         check('invalid model output retains calendar', api(18084, f'calendar?from={START}&to={END}', token)[1], before_invalid_calendar)
+        MODE = 'deadline'
+        before_rejections = len(MODEL_CALLS)
+        status, _ = api(18084, f"planning/plans/{second['id']}/regenerate", token, request)
+        check('persistent deadline violations are rejected after bounded corrections', (status, len(MODEL_CALLS) - before_rejections), (400, 4))
+        check('failed deadline correction creates no version', len(api(18084, 'planning/plans', token)[1]), 2)
+        check('failed deadline correction preserves calendar', api(18084, f'calendar?from={START}&to={END}', token)[1], before_invalid_calendar)
         MODE = 'quota'
         status, error = api(18084, 'planning/plans', token, request)
         check('SDK quota error becomes safe 503', status, 503)

@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.springframework.stereotype.Component;
 
 /**
@@ -67,7 +68,13 @@ public class AgenticPlanningAdvisor {
       ZoneId timezone,
       PlanningDtos.PlanRequest request,
       StudyPlanningAgent.Schedule candidate) {
-    return advise(Workflow.GENERATE, ownerId, authorization, timezone, request, null, candidate);
+    return adviseGenerate(ownerId, authorization, timezone, request, candidate, items -> {});
+  }
+
+  public Advice adviseGenerate(
+      UUID ownerId, String authorization, ZoneId timezone, PlanningDtos.PlanRequest request,
+      StudyPlanningAgent.Schedule candidate, Consumer<List<PlanningDtos.PlanItem>> validate) {
+    return advise(Workflow.GENERATE, ownerId, authorization, timezone, request, null, candidate, validate);
   }
 
   public Advice adviseRegenerate(
@@ -77,8 +84,15 @@ public class AgenticPlanningAdvisor {
       PlanningDtos.PlanRequest request,
       UUID existingPlanId,
       StudyPlanningAgent.Schedule candidate) {
+    return adviseRegenerate(ownerId, authorization, timezone, request, existingPlanId, candidate, items -> {});
+  }
+
+  public Advice adviseRegenerate(
+      UUID ownerId, String authorization, ZoneId timezone, PlanningDtos.PlanRequest request,
+      UUID existingPlanId, StudyPlanningAgent.Schedule candidate,
+      Consumer<List<PlanningDtos.PlanItem>> validate) {
     return advise(
-        Workflow.REGENERATE, ownerId, authorization, timezone, request, existingPlanId, candidate);
+        Workflow.REGENERATE, ownerId, authorization, timezone, request, existingPlanId, candidate, validate);
   }
 
   private Advice advise(
@@ -88,7 +102,8 @@ public class AgenticPlanningAdvisor {
       ZoneId timezone,
       PlanningDtos.PlanRequest request,
       UUID existingPlanId,
-      StudyPlanningAgent.Schedule candidate) {
+      StudyPlanningAgent.Schedule candidate,
+      Consumer<List<PlanningDtos.PlanItem>> validate) {
     ConfiguredPlanningChatModel.Selection selection =
         configuredModel
             .selection()
@@ -99,6 +114,8 @@ public class AgenticPlanningAdvisor {
                             + " the Planning Service after adding it."));
     Set<String> used = new LinkedHashSet<>();
     SubmittedDecision[] submitted = new SubmittedDecision[1];
+    IllegalArgumentException lastRejection = null;
+    int rejectedSubmissions = 0;
     List<ChatMessage> messages = new ArrayList<>();
     messages.add(
         systemMessage(
@@ -150,8 +167,9 @@ public class AgenticPlanningAdvisor {
           throw new IllegalStateException("The planning agent did not use its approved tools");
         }
         for (ToolExecutionRequest call : response.aiMessage().toolExecutionRequests()) {
-          String result =
-              execute(
+          String result;
+          try {
+            result = execute(
                   call,
                   workflow,
                   ownerId,
@@ -160,7 +178,16 @@ public class AgenticPlanningAdvisor {
                   request,
                   existingPlanId,
                   used,
-                  submitted);
+                  submitted,
+                  validate);
+          } catch (IllegalArgumentException invalid) {
+            if (!SUBMIT.equals(call.name())) throw invalid;
+            lastRejection = invalid;
+            if (++rejectedSubmissions >= 3) throw invalid;
+            result = "Rejected by server validation: " + invalid.getMessage()
+                + ". Correct the items and call saveStudyPlan again. Use the supplied feasible"
+                + " candidate as a reference; do not move work past assessment deadlines.";
+          }
           messages.add(toolExecutionResultMessage(call, result));
         }
       }
@@ -172,6 +199,7 @@ public class AgenticPlanningAdvisor {
           failure);
     }
     if (submitted[0] == null) {
+      if (lastRejection != null) throw lastRejection;
       throw new IllegalStateException(
           "The planning agent did not submit a decision within " + MAX_TURNS + " tool turns");
     }
@@ -199,7 +227,8 @@ public class AgenticPlanningAdvisor {
       PlanningDtos.PlanRequest request,
       UUID existingPlanId,
       Set<String> used,
-      SubmittedDecision[] submitted)
+      SubmittedDecision[] submitted,
+      Consumer<List<PlanningDtos.PlanItem>> validate)
       throws Exception {
     String name = call.name();
     if (!Set.of(INCOMPLETE, UPCOMING, WORKLOAD, PROGRESS, EXISTING, SUBMIT).contains(name)) {
@@ -229,6 +258,7 @@ public class AgenticPlanningAdvisor {
                 .orElseThrow(() -> new IllegalArgumentException("Existing study plan not found")));
       }
       case SUBMIT -> {
+        if (submitted[0] != null) yield "A validated submission has already been accepted.";
         JsonNode arguments = json.readTree(call.arguments() == null ? "{}" : call.arguments());
         String action = arguments.path("action").asText("").trim().toUpperCase(Locale.ROOT);
         String summary = arguments.path("summary").asText("").trim();
@@ -281,6 +311,7 @@ public class AgenticPlanningAdvisor {
           yield "Rejected: invalid plan item fields. Check dates, UUIDs and whole-minute"
               + " allocations.";
         }
+        validate.accept(parsed);
         submitted[0] = new SubmittedDecision(summary, parsed);
         yield "Submitted for application validation and atomic persistence.";
       }

@@ -52,7 +52,8 @@ public class PlanningApplicationService {
     WeeklyTimeSlots slots = validatePeriod(request);
     StudyPlanningAgent.Schedule candidate = agent.generate(ownerId, request, authorization);
     AgenticPlanningAdvisor.Advice advice =
-        advisor.adviseGenerate(ownerId, authorization, timezone, request, candidate);
+        advisor.adviseGenerate(ownerId, authorization, timezone, request, candidate,
+            items -> submittedSchedule(ownerId, authorization, request, candidate, items));
     writeLock.acquire(ownerId);
     StudyPlanningAgent.Schedule schedule =
         submittedSchedule(ownerId, authorization, request, candidate, advice);
@@ -91,7 +92,8 @@ public class PlanningApplicationService {
     WeeklyTimeSlots slots = validatePeriod(request);
     StudyPlanningAgent.Schedule candidate = agent.generate(ownerId, request, authorization);
     AgenticPlanningAdvisor.Advice advice =
-        advisor.adviseRegenerate(ownerId, authorization, timezone, request, previousId, candidate);
+        advisor.adviseRegenerate(ownerId, authorization, timezone, request, previousId, candidate,
+            items -> submittedSchedule(ownerId, authorization, request, candidate, items));
     writeLock.acquire(ownerId);
     StudyPlanningAgent.Schedule schedule =
         submittedSchedule(ownerId, authorization, request, candidate, advice);
@@ -152,7 +154,12 @@ public class PlanningApplicationService {
       PlanRequest request,
       StudyPlanningAgent.Schedule candidate,
       AgenticPlanningAdvisor.Advice advice) {
-    List<PlanItem> items = advice.items();
+    return submittedSchedule(ownerId, authorization, request, candidate, advice.items());
+  }
+
+  private StudyPlanningAgent.Schedule submittedSchedule(
+      UUID ownerId, String authorization, PlanRequest request,
+      StudyPlanningAgent.Schedule candidate, List<PlanItem> items) {
     validateItems(ownerId, authorization, request, request.startDate().plusDays(6), items);
     int scheduled = items.stream().mapToInt(PlanItem::allocatedMinutes).sum();
     if (scheduled < candidate.scheduledMinutes())
