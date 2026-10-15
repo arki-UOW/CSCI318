@@ -96,6 +96,10 @@ The diagnostic reads the private `.env` (process environment takes precedence), 
 
 ## Local development
 
+Gemini planning uses multiple tool turns. With the current LangChain4j integration, both returnThinking(true) and sendThinking(true) preserve the signed metadata required by Gemini 3. These settings do not display model thinking in the UI. A successful one-message diagnostic does not verify this tool workflow; generation and regeneration also have HTTP transport regression tests.
+
+The availability assistant returns weekday names and time slots. Java resolves dates within the selected seven-day period and produces the confirmation from the same schedule shown in the UI. Model-generated dates are ignored, invalid weekday/slot output is rejected, and generation stays disabled while clarification is needed. The AI badge reports configuration, not a successful live-provider health check.
+
 Requirements: JDK 21, Maven 3.9+, Kafka on port 9092 for domain-event services.
 
 ```powershell
