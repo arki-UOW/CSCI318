@@ -7,7 +7,7 @@
 5. Model-invalid FR-18 cases cannot be reliably forced through a real LLM prompt. After building, run `python scripts/verify-readiness.py`: the actual SDK talks to a localhost protocol fixture that deliberately submits fractional/string/missing/extra/out-of-week values and quota failures. Assertions verify rejection, safe messages and unchanged plan/calendar state. No public test endpoint or real credential is introduced.
 6. Run `mvn clean verify`, `node --test frontend/tests/*.test.cjs` and `pwsh -File scripts/test-launcher.ps1` for repeatable domain/persistence/UI/launcher checks. CI also runs the actual Kafka verification script in disposable Compose volumes.
 
-The file `results.json` from the HTTP fixture and CI run links are machine-verifiable evidence. Screenshots, final presentation and report discussion belong to the student team. Do not label fixture results as successful live Gemini/OpenAI calls. The exact DTO payloads and outputs for all eighteen requirements are in [the use cases](../use-cases/functional-use-cases.md).
+The file `results.json` from the HTTP fixture and CI run links are machine-verifiable evidence. Screenshots, final presentation and report discussion belong to the student team. Do not label fixture results as successful live Gemini/OpenAI calls. The exact DTO payloads and outputs for the fourteen consolidated final requirements are in [the use cases](../use-cases/functional-use-cases.md).
 
 ## Error examples
 

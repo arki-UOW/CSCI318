@@ -165,7 +165,7 @@ See [readiness progress](docs/readiness-progress.md), [requirements traceability
 
 ## Completion evidence
 
-See [the correction checklist](docs/readiness-progress.md), [all eighteen use cases and activity diagrams](docs/use-cases/functional-use-cases.md), [UML domain model](docs/domain-model/domain-model.md), [architecture/layer diagrams](docs/architecture/diagrams.md), [proposal reconciliation](docs/architecture/proposal-reconciliation.md), [implemented AI decisions](docs/ai-decisions/ADR-002-completion-decisions.md), and [demonstration guide](docs/testing/demonstration-guide.md).
+See [the correction checklist](docs/readiness-progress.md), [the fourteen final use cases and activity-diagram references](docs/use-cases/functional-use-cases.md), [UML domain model](docs/domain-model/domain-model.md), [architecture/layer diagrams](docs/architecture/diagrams.md), [proposal reconciliation](docs/architecture/proposal-reconciliation.md), [implemented AI decisions](docs/ai-decisions/ADR-002-completion-decisions.md), and [demonstration guide](docs/testing/demonstration-guide.md).
 
 Generation with no remaining work saves an empty seven-day version without requiring availability and clears obsolete planned AI blocks. This includes incomplete assessments whose estimates are zero or fully covered by completed study. Zero estimates are accepted through import and direct entry. Integer REST fields reject decimal JSON values with 400 before mutation. See the [four follow-up corrections and regression evidence](docs/compliance/edge-case-corrections.md).
 

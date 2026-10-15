@@ -58,34 +58,30 @@ Each service owns an independent file-backed H2 database. Cross-service academic
 
 ## 4. Core requirements and acceptance contracts
 
-The original proposal defined FR-01–FR-18 and NFR-01–NFR-06. These IDs remain the academic coverage baseline. The following table records final observable behaviour without inventing new numbered requirements for supplementary frontend features.
+The initial proposal recorded **18 elementary functional requirements (FR-01–FR-18)** and NFR-01–NFR-06. During final report preparation, related actions were **consolidated into 14 final functional requirements (FR-01–FR-14) and 14 corresponding use cases (UC-01–UC-14)**. This is a renumbered final requirement model, not deletion of four working features. See the [initial specification](initial-software-specification.md) for the untouched historical list and [requirements mapping](../requirements/implemented-requirements.md) for current acceptance evidence.
 
-| ID | Implemented requirement | Key acceptance evidence |
+| Final ID / use case | Consolidated implemented requirement | Primary acceptance condition |
 |---|---|---|
-| FR-01 | Create a subject, optionally with imported assessments | Owned `POST /api/subjects`; validation and HTTP tests |
-| FR-02 | Retrieve a subject | Owner-scoped subject detail; foreign/missing ID rejected |
-| FR-03 | List subjects | Owner-scoped `GET /api/subjects` |
-| FR-04 | Edit subject information and weekly study target | Subject PATCH; target-change event feeds projection |
-| FR-05 | Create an assessment associated with an owned valid subject | Subject REST verification; assessment POST/import |
-| FR-06 | Display assessments | Filterable account-scoped assessment list |
-| FR-07 | Display incomplete assessments | Status-based filtering of owned assessment records |
-| FR-08 | Change an assessment deadline | Validated assessment edit; new event and regeneration context |
-| FR-09 | Change estimated workload | Nonnegative values; explicit zero preserved; null treated separately |
-| FR-10 | Mark assessment complete | Completion transition and event-driven workload update |
-| FR-11 | Record a completed study session | Validated owned study activity and event publication |
-| FR-12 | Retrieve study sessions by subject | Owner-scoped activity queries and subject filter |
-| FR-13 | Report total and weekly study duration | Activity summary and projected progress (defined data sources differ) |
-| FR-14 / RT-01 | Maintain assessment workload from streaming facts | Stateful Kafka Streams workload aggregation and Planning read model |
-| FR-15 / RT-02 | Maintain study progress from activity, subject target and completed-block facts | Stateful keyed Kafka Streams progress aggregation |
-| FR-16 / AI-01 | Generate a seven-day study plan from current application data | Required factual tool calls, structured plan items, validation, persisted version |
-| FR-17 / AI-02 | Regenerate a plan after changes | Existing-plan retrieval, current facts, new unique version, calendar replacement |
-| FR-18 | Reject invalid AI-generated planning output | JSON schema/business validation; failed writes preserve existing records |
+| FR-01 / UC-01 | Import and Confirm Subject Outline | A supported outline is uploaded, extraction reviewed and corrected if needed, and only confirmed academic records are persisted. |
+| FR-02 / UC-02 | Manage Subjects | Account-owned subject records can be created, retrieved, listed and updated. |
+| FR-03 / UC-03 | Manage Assessments | Owned assessments can be created/imported, filtered, edited and completed; invalid subject IDs are rejected. |
+| FR-04 / UC-04 | Record Completed Study Session | A valid subject-owned activity is stored and a study-session event is queued. |
+| FR-05 / UC-05 | Retrieve Study History and Duration Summary | Account-scoped historical sessions and weekly/total duration are returned. |
+| FR-06 / UC-06 | Manage Account, Authentication and Profile | Registration and login establish sessions; profile requests enforce ownership. |
+| FR-07 / UC-07 | Manage Calendar Entries and Availability | Account-owned calendar entries are maintained and validated availability is provided to planning. |
+| FR-08 / UC-08 | Schedule Spaced-Repetition Reviews | Completing an eligible calendar review adds the next applicable interval from 1/3/7/14/30 days. |
+| FR-09 / UC-09 / RT-01 | Update Real-Time Workload Projection | Committed assessment changes update keyed workload state without duplicate/stale inflation. |
+| FR-10 / UC-10 / RT-02 | Update Real-Time Study-Progress Projection | Accepted study activity, target and calendar-completion facts update subject/week progress. |
+| FR-11 / UC-11 / AI-01 | Generate Seven-Day Study Plan | Current academic facts and availability inform a validated seven-day plan; accepted plan is saved. |
+| FR-12 / UC-12 / AI-02 | Regenerate Study Plan | Existing plan plus current facts yield a newly validated version without overwriting prior history. |
+| FR-13 / UC-13 | Validate and Reject Invalid AI-Generated Plan | Malformed or constraint-violating provider output must not change plan history or calendar. |
+| FR-14 / UC-14 | View Academic Dashboard | The owner sees projected workload, progress and upcoming tasks, with eventually consistent updates. |
 
-**Detailed executable input/output cases:** `docs/use-cases/functional-use-cases.md`, `docs/architecture/contracts.md`, `postman/Study-Leftovers.postman_collection.json` and `docs/testing/demonstration-guide.md`. The Postman collection captures account and aggregate IDs and polls for eventual projection convergence. It is not a substitute for live-provider demonstration when a real model is claimed.
+**Executable and detailed evidence:** [consolidated functional use cases](../use-cases/functional-use-cases.md), [REST and event catalogue](../architecture/contracts.md), [Postman collection](../../postman/) and the final report's Chapter 2 UML activity diagrams.
 
 ### 4.1 Supplementary implemented user capabilities
 
-The original FR-01–FR-18 numbering remains unchanged. The `EXT` identifiers below are **documentation identifiers introduced for the final implemented scope**, not requirements retrospectively attributed to the original proposal. Each acceptance statement describes an observable condition rather than guaranteeing all failure modes have been exhausted.
+The 18-item original numbering is retained **only in the original proposal**. The final report uses FR-01–FR-14/UC-01–UC-14. The `EXT` identifiers below record supplementary implemented details and should not be mistaken for additional separate final use cases. Each acceptance statement describes an observable condition rather than guaranteeing all failure modes have been exhausted.
 
 | ID | Supplementary delivered capability | Principal acceptance condition and current evidence |
 |---|---|---|
@@ -101,7 +97,7 @@ The original FR-01–FR-18 numbering remains unchanged. The `EXT` identifiers be
 
 ### 4.2 Requirement ownership and acceptance boundaries
 
-All account and academic data is scoped to the authenticated owner; missing and foreign-owned resources are not returned as other users' records. REST and frontend features require the corresponding service and runtime configuration; AI-backed features additionally require provider credentials, quota and network availability. The complete implementation contract, rather than this overview, is recorded in [`docs/architecture/contracts.md`](https://github.com/arki-UOW/CSCI318/blob/21465e1385e08d74a006666ef416eb3b376e8379/docs/architecture/contracts.md). Detailed original numbered use cases remain in [`docs/use-cases/functional-use-cases.md`](https://github.com/arki-UOW/CSCI318/blob/21465e1385e08d74a006666ef416eb3b376e8379/docs/use-cases/functional-use-cases.md).
+All account and academic data is scoped to the authenticated owner; missing and foreign-owned resources are not returned as other users' records. REST and frontend features require the corresponding service and runtime configuration; AI-backed features additionally require provider credentials, quota and network availability. The complete implementation contract, rather than this overview, is recorded in [`docs/architecture/contracts.md`](https://github.com/arki-UOW/CSCI318/blob/21465e1385e08d74a006666ef416eb3b376e8379/docs/architecture/contracts.md). Detailed final consolidated use cases are recorded in [`docs/use-cases/functional-use-cases.md`](https://github.com/arki-UOW/CSCI318/blob/21465e1385e08d74a006666ef416eb3b376e8379/docs/use-cases/functional-use-cases.md).
 
 ## 5. Non-functional requirements
 
@@ -197,7 +193,7 @@ Typical quick start: install Docker Desktop; keep actual provider secrets in pri
 
 - `README.md` — feature overview, configuration, startup, model prerequisites and demonstration.
 - `docs/requirements/implemented-requirements.md` — FR/NFR acceptance coverage.
-- `docs/use-cases/functional-use-cases.md` — 18 use cases, flows and activity diagrams.
+- `docs/use-cases/functional-use-cases.md` — 14 consolidated use cases and links to final-report activity diagrams.
 - `docs/architecture/architecture.md` and `docs/architecture/diagrams.md` — contexts, layering, workflows and diagrams.
 - `docs/architecture/contracts.md` — complete REST and Kafka contracts.
 - `docs/architecture/proposal-reconciliation.md` — explicit design changes.
