@@ -305,35 +305,35 @@ StudySessionRecorded stream
 → expose through planning query endpoints
 
 ## 11. Event-Driven Architecture
-Kafka will be used for asynchronous reactions to completed business events. The system will avoid
-unnecessary topics and production-grade messaging infrastructure that is not required for the prototype.
-              Topic                                                     Events
-assessment-events               AssessmentCreated, AssessmentUpdated, AssessmentDeadlineChanged,
-AssessmentCompleted
-study-activity-events           StudySessionRecorded
-planning-events                 Optional planning-domain events only where they provide clear value.
+Kafka will be used for asynchronous reactions to completed business events. The system will avoid unnecessary topics and production-grade messaging infrastructure that is not required for the prototype.
+
+| Topic | Events |
+|---|---|
+| `assessment-events` | AssessmentCreated, AssessmentUpdated, AssessmentDeadlineChanged, AssessmentCompleted |
+| `study-activity-events` | StudySessionRecorded |
+| `planning-events` | Optional planning-domain events only where they provide clear value. |
 
 ### 11.1 Event Envelope
-    {
-"eventId": "550e8400-e29b-41d4-a716-446655440000",
-"eventType": "AssessmentCreated",
-"eventVersion": 1,
-"eventTimestamp": "2026-08-20T10:30:00Z",
-"sourceService": "assessment-service",
-"payload": {
-"assessmentId": 10,
 
-"subjectId": 2,
-"dueDate": "2026-08-27",
-"estimatedHours": 5,
-"priority": "HIGH",
-"status": "INCOMPLETE"
+```json
+{
+  "eventId": "550e8400-e29b-41d4-a716-446655440000",
+  "eventType": "AssessmentCreated",
+  "eventVersion": 1,
+  "eventTimestamp": "2026-08-20T10:30:00Z",
+  "sourceService": "assessment-service",
+  "payload": {
+    "assessmentId": 10,
+    "subjectId": 2,
+    "dueDate": "2026-08-27",
+    "estimatedHours": 5,
+    "priority": "HIGH",
+    "status": "INCOMPLETE"
+  }
 }
-}
+```
 
-Assessment events will normally be keyed by assessment ID. Study-session events may be keyed by subject
-ID for subject-level aggregation. Events will describe something that has already occurred and will include
-event ID, type, version, timestamp, source, and required business payload.
+Assessment events will normally be keyed by assessment ID. Study-session events may be keyed by subject ID for subject-level aggregation. Events will describe something that has already occurred and will include event ID, type, version, timestamp, source, and required business payload.
 
 ## 12. Agentic AI Design
 One LangChain4j planning agent will support two user stories. The component will be genuinely agentic
@@ -383,46 +383,48 @@ return clear errors without storing an invalid plan.
 Business state changes will be expressed through domain methods such as `assessment.changeDeadline(...)`, `assessment.changeEstimatedWorkload(...)`, and `assessment.markCompleted()`, rather than unrestricted setters. DDD terminology will only be used where the implementation provides the corresponding responsibility.
 
 ## 14. Technical and Repository Conventions
-                Item                                                      Decision
-Java                              JDK 21
-Mandatory stack                   Spring Boot, Spring Web, Spring Data JPA, H2, Spring Cloud Stream, Apache Kafka,
-LangChain4j
-Stream processing                 Spring Cloud Stream with the Kafka Streams binder
-Subject target access             Planning Service retrieves weekly study targets from Subject Service through REST and
-caches them in progress projections
-Database ownership                One H2 database per microservice
-Database IDs                      Long
-Event IDs                         UUID
-Dates and timestamps              ISO dates; ISO-8601 timestamps; UTC for event timestamps where practical
-Study duration                    Integer minutes
-Ports                             Subject 8081; Assessment 8082; Study Activity 8083; Planning 8084
-Secrets                           Environment variables; .env.example committed; real keys excluded
-Demonstration client              Postman collection and environment
+
+| Item | Proposed decision |
+|---|---|
+| Java | JDK 21 |
+| Mandatory stack | Spring Boot, Spring Web, Spring Data JPA, H2, Spring Cloud Stream, Apache Kafka, LangChain4j |
+| Stream processing | Spring Cloud Stream with the Kafka Streams binder |
+| Subject target access | Planning Service retrieves weekly study targets from Subject Service through REST and caches them in progress projections |
+| Database ownership | One H2 database per microservice |
+| Database IDs | Long |
+| Event IDs | UUID |
+| Dates and timestamps | ISO dates; ISO-8601 timestamps; UTC for event timestamps where practical |
+| Study duration | Integer minutes |
+| Ports | Subject 8081; Assessment 8082; Study Activity 8083; Planning 8084 |
+| Secrets | Environment variables; .env.example committed; real keys excluded |
+| Demonstration client | Postman collection and environment |
 
 ### 14.1 Repository Structure
+
+```text
 study-leftovers/
 ├── subject-service/
 ├── assessment-service/
 ├── study-activity-service/
 ├── planning-service/
 ├── docs/
-    │   ├── requirements/
-    │   ├── use-cases/
-    │   ├── domain-model/
-    │   ├── architecture/
-    │   ├── decisions/
-
-    │   ├── ai-prompts/
-    │   ├── ai-decisions/
-    │   ├── testing/
-    │   ├── meeting-minutes/
-    │   └── evidence/
+│   ├── requirements/
+│   ├── use-cases/
+│   ├── domain-model/
+│   ├── architecture/
+│   ├── decisions/
+│   ├── ai-prompts/
+│   ├── ai-decisions/
+│   ├── testing/
+│   ├── meeting-minutes/
+│   └── evidence/
 ├── postman/
 ├── scripts/
 ├── docker-compose.yml
 ├── .env.example
 ├── .gitignore
 └── README.md
+```
 
 ## 15. AI-Assisted Development Process
 Generative AI will be used extensively for requirements proposals, domain modelling, architectural
@@ -495,47 +497,20 @@ All Members                    Weekly meetings, pull-request review, full-system
 report sections, demonstration, contribution sign-off.
 
 ## 19. Milestones and Hard Deadlines
- Week            Milestone                                 Required Deliverables                                     Hard Gate
-Week 2      Proposal, Scope and      Final proposal; business problem and stakeholders; scope and             No major service
-            Architecture             exclusions; 18 functional requirements and 6 non-functional              implementation begins
-                                     requirements; four bounded contexts; architecture and context            until boundaries and
-                                     map; data ownership; API contracts; event catalogue; stream              contracts are agreed.
-definitions; agent tools; private repository; team allocation; initial
-traceability.
-Week 3      Service Foundations      Four Spring Boot projects; JDK 21; mandatory dependencies;               All four services start
-            and Domain Model         layered packages; H2; error format; health endpoints; complete           and Subject Service is
-                                     Subject Service; core Assessment aggregate; initial domain               fully demonstrable.
-tests; local Kafka environment.
-Week 4      Core REST                Complete Assessment and Study Activity services; Planning                The application works
-            Application              foundations; validation; error handling; unit and API tests;             through REST without
-                                     Postman collection; updated domain and architecture diagrams.            Kafka or AI.
-Week 5      Event-Driven             Kafka and Spring Cloud Stream configuration; assessment and              The team
-            Integration              study-session producers; Planning consumers; versioned                   demonstrates events
-                                     schemas; event IDs and timestamps; producer/consumer tests;              moving between
-                                     event demonstration.                                                     services.
-Week 6      Stream Processing        Workload and study-progress topologies; stateful projections;            Both real-time stories
-                                     query endpoints; update/completion/aggregation tests; saved              work from incoming
-                                     evidence; updated diagrams.                                              events without manual
-summary changes.
-Week 7      Agentic AI               LLM configuration; LangChain4j; tools; generation and                    Changing assessment
-                                     regeneration; structured output; validation; failure handling; AI        data produces a
-                                     tests; decision records.                                                 meaningfully revised
-validated plan.
-Week 8      Full Integration and     Three end-to-end scenarios; final Postman collection; cleanup;           No new features after
-            Development Freeze       secret audit; .env.example; repeatable startup; final diagrams;          Week 8.
-complete technical evidence and traceability.
-Week 9      Report Evidence and      Final requirements, use cases, UML activity diagrams, domain             Every required report
-            Complete Draft           model, architecture, layers, ownership, code evidence, testing           section contains
-                                     evidence, streaming evidence, AI evidence, complete first report         substantive content.
-draft.
-Week 10     Final Report and         Final report, references, README, sample inputs/outputs, slides,         Only proofreading and
-            Presentation             video, speaking roles, demo script, contribution descriptions.           minor corrections
-            Artefacts                                                                                         remain.
-Week 11     Final Audit and          Clean-environment startup, README test, full Postman demo,               All artefacts are ready
-            Submission               test execution, compliance audit, signatures, ZIP/PDF/video              for immediate
-            Rehearsal                checks, backups and rehearsal.                                           submission.
-Week 12     Submission and           Upload and verify report PDF, repository ZIP, and required media;        No non-essential last-
-            Presentation             preserve backups; deliver presentation.                                  minute development.
+
+| Week | Milestone | Required deliverables | Hard gate |
+|---|---|---|---|
+| 2 | Proposal, Scope and Architecture | Final proposal; business problem and stakeholders; scope and exclusions; 18 functional requirements and 6 non-functional requirements; four bounded contexts; architecture and context map; data ownership; API contracts; event catalogue; stream definitions; agent tools; private repository; team allocation; initial traceability. | No major service implementation begins until boundaries and contracts are agreed. |
+| 3 | Service Foundations and Domain Model | Four Spring Boot projects; JDK 21; mandatory dependencies; layered packages; H2; error format; health endpoints; complete Subject Service; core Assessment aggregate; initial domain tests; local Kafka environment. | All four services start and Subject Service is fully demonstrable. |
+| 4 | Core REST Application | Complete Assessment and Study Activity services; Planning foundations; validation; error handling; unit and API tests; Postman collection; updated domain and architecture diagrams. | The application works through REST without Kafka or AI. |
+| 5 | Event-Driven Integration | Kafka and Spring Cloud Stream configuration; assessment and study-session producers; Planning consumers; versioned schemas; event IDs and timestamps; producer/consumer tests; event demonstration. | The team demonstrates events moving between services. |
+| 6 | Stream Processing | Workload and study-progress topologies; stateful projections; query endpoints; update/completion/aggregation tests; saved evidence; updated diagrams. | Both real-time stories work from incoming events without manual summary changes. |
+| 7 | Agentic AI | LLM configuration; LangChain4j; tools; generation and regeneration; structured output; validation; failure handling; tests; decision records. | Changing assessment data produces a meaningfully revised validated plan. |
+| 8 | Full Integration and Development Freeze | Three end-to-end scenarios; final Postman collection; cleanup; secret audit; .env.example; repeatable startup; final diagrams; complete technical evidence and traceability. | No new features after Week 8. |
+| 9 | Report Evidence and Complete Draft | Final requirements, use cases, UML activity diagrams, domain model, architecture, layers, ownership, code evidence, testing evidence, streaming evidence, AI evidence, complete first report draft. | Every required report section contains substantive content. |
+| 10 | Final Report and Presentation Artefacts | Final report, references, README, sample inputs/outputs, slides, video, speaking roles, demo script, contribution descriptions. | Only proofreading and minor corrections remain. |
+| 11 | Final Audit and Submission Rehearsal | Clean-environment startup, README test, full Postman demo, test execution, compliance audit, signatures, ZIP/PDF/video checks, backups and rehearsal. | All artefacts are ready for immediate submission. |
+| 12 | Submission and Presentation | Upload and verify report PDF, repository ZIP, and required media; preserve backups; deliver presentation. | No non-essential last-minute development. |
 
 ## 20. Key Risks and Mitigation
                  Risk                                                              Mitigation
