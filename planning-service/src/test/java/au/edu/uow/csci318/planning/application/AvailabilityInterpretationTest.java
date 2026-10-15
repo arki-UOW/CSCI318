@@ -16,6 +16,20 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class AvailabilityInterpretationTest {
+  @Test
+  void clearCommandWorksWithoutCallingOrConfiguringAProvider() {
+    var configured = mock(ConfiguredPlanningChatModel.class);
+    var assistant = new AvailabilityAssistant(new ObjectMapper(), configured);
+    LocalDate monday = LocalDate.of(2026, 10, 12);
+    var current = Map.of(monday, List.of(new TimeSlot(LocalTime.of(9, 0), LocalTime.of(10, 0))));
+    var result = assistant.assist(new AvailabilityChatRequest(
+        "Clear my availability and let me start again.", monday, current));
+    assertFalse(result.readyToPlan());
+    assertTrue(result.availability().values().stream().allMatch(List::isEmpty));
+    assertEquals(0, result.dailyAvailabilityMinutes().values().stream().mapToInt(Integer::intValue).sum());
+    verifyNoInteractions(configured);
+  }
+
   private AvailabilityAssistant assistant(String response) {
     var model = mock(ChatModel.class);
     when(model.chat(anyString())).thenReturn(response);

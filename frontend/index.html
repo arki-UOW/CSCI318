@@ -185,7 +185,7 @@
           <div class="prompt-chips">
             <button type="button" data-prompt="I'm free Monday and Wednesday from 6pm to 8pm.">Mon &amp; Wed evenings</button>
             <button type="button" data-prompt="I can study every weekday from 7pm to 8:30pm.">Weekday evenings</button>
-            <button type="button" data-prompt="Clear my availability and let me start again.">Start over</button>
+            <button type="button" id="clear-availability">Start over</button>
           </div>
           <form id="availability-chat-form" class="chat-form">
             <label class="sr-only" for="availability-message">Availability message</label>
@@ -209,9 +209,11 @@
       </div>
       <div id="plan-feedback" class="feedback" aria-live="polite"></div>
       <div class="panel-head">
-        <label>Saved plan versions<select id="plan-history" aria-label="Saved plan versions" disabled></select></label>
+        <label>Saved plan versions<select id="plan-history" aria-label="Saved plan versions" aria-describedby="plan-history-help" disabled><option value="">No saved plans yet</option></select></label>
+        <button id="refresh-plan-history" class="secondary" type="button">Refresh versions</button>
         <button id="regenerate-plan" class="secondary" type="button" disabled>Regenerate selected plan</button>
       </div>
+      <p id="plan-history-help" class="hint" aria-live="polite">Generate a plan successfully to save your first version.</p>
       <p class="hint">Regeneration rechecks assessments and progress using the start date and availability above. If no time slots are entered, it uses the quick setup daily minutes. Older versions remain available here.</p>
       <div id="plan-list" class="plan-board"></div>
     </section>

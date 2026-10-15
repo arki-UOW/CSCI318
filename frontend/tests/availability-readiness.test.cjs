@@ -49,4 +49,35 @@ test('successful interpretation enables planning; failed update cannot reuse rea
   await context.sendAvailability('Change Wednesday', {});
   assert.equal(elements.get('#generate-chat-plan').disabled, true);
   assert.equal(context.state.availabilityMinutes['2026-10-14'], 120);
+  assert.equal(elements.get('#availability-message').value, 'Change Wednesday');
 });
+
+test('Start over clears locally without a provider request', async () => {
+  let calls = 0;
+  const {context, elements} = harness(() => {calls++; throw new Error('503');});
+  await context.sendAvailability('Clear my availability and let me start again.', {});
+  assert.equal(calls, 0);
+  assert.equal(Object.keys(context.state.availability).length, 0);
+  assert.equal(elements.get('#generate-chat-plan').disabled, true);
+});
+
+for (const change of ['clear', 'week', 'account', 'new request']) {
+  test('late availability cannot overwrite ' + change, async () => {
+    let resolve;
+    const {context, elements} = harness(() => new Promise(done => {resolve = done;}));
+    const pending = context.sendAvailability('Monday evenings', {});
+    const finish = resolve;
+    if (change === 'clear') context.clearAvailability();
+    if (change === 'week') {elements.get('#plan-start').value = '2026-10-19'; context.clearAvailability();}
+    if (change === 'account') {context.state.token = 'new-account'; context.state.availability = {};}
+    if (change === 'new request') {
+      const newer = context.sendAvailability('Wednesday evenings', {});
+      resolve({availability: {'2026-10-14': [{start: '18:00', end: '20:00'}]}, dailyAvailabilityMinutes: {'2026-10-14': 120}, readyToPlan: true});
+      await newer;
+    }
+    finish({availability: {'2026-10-12': [{start: '18:00', end: '20:00'}]}, dailyAvailabilityMinutes: {'2026-10-12': 120}, readyToPlan: true});
+    await pending;
+    assert.equal(context.state.availability['2026-10-12'], undefined);
+    if (change === 'new request') assert.equal(context.state.availabilityMinutes['2026-10-14'], 120);
+  });
+}

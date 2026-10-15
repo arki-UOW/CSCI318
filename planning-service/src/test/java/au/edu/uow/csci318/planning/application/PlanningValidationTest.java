@@ -54,7 +54,7 @@ class PlanningValidationTest {
   @ParameterizedTest
   @MethodSource("invalidItems")
   void invalidCandidateNeverReachesPersistence(PlanItem item) {
-    when(advisor.adviseGenerate(any(), any(), any(), any(), any()))
+    when(advisor.adviseGenerate(any(), any(), any(), any(), any(), any()))
         .thenReturn(
             new AgenticPlanningAdvisor.Advice("test", "test", "test", List.of(), List.of(item)));
     when(scheduler.generate(any(), any(), any()))
@@ -92,7 +92,7 @@ class PlanningValidationTest {
     when(scheduler.generate(any(), any(), any()))
         .thenReturn(new StudyPlanningAgent.Schedule(List.of(), START.plusDays(6), 30, 30));
     when(scheduler.completedMinutes(OWNER)).thenReturn(Map.of(ASSESSMENT, 30));
-    when(advisor.adviseGenerate(any(), any(), any(), any(), any()))
+    when(advisor.adviseGenerate(any(), any(), any(), any(), any(), any()))
         .thenReturn(
             new AgenticPlanningAdvisor.Advice("test", "test", "test", List.of(), List.of(item)));
     when(tools.getIncompleteAssessments(any()))
@@ -139,7 +139,7 @@ class PlanningValidationTest {
 
   @Test
   void providerFailureCannotWriteAPlanOrChangeCalendar() {
-    when(advisor.adviseGenerate(any(), any(), any(), any(), any()))
+    when(advisor.adviseGenerate(any(), any(), any(), any(), any(), any()))
         .thenThrow(new IllegalStateException("Provider unavailable"));
     assertThrows(
         IllegalStateException.class,

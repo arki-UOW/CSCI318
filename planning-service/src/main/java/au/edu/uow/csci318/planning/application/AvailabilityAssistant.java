@@ -30,6 +30,14 @@ class AvailabilityAssistant {
   }
 
   AvailabilityChatResponse assist(AvailabilityChatRequest request) {
+    String command = request.message().trim().toLowerCase(Locale.ROOT).replaceAll("[.!]+$", "");
+    if (Set.of("start over", "clear my availability", "clear all availability",
+        "clear my availability and let me start again").contains(command)) {
+      Map<LocalDate, List<TimeSlot>> empty = normalise(request.weekStart(), Map.of(), List.of());
+      return new AvailabilityChatResponse(
+          "Your availability has been cleared. Tell me your new study times.",
+          empty, dailyMinutes(empty), false, "Application");
+    }
     ConfiguredPlanningChatModel.Selection selection =
         configuredModel
             .selection()

@@ -59,7 +59,7 @@ test('overnight entries span month boundaries and midnight ends are exclusive', 
 test('sign-out clears private DOM and memory before the logout network response', async () => {
   const logout = deferred(); const nodes = new Map();
   const node = id => {
-    if (!nodes.has(id)) nodes.set(id, {textContent:'private A', value:'private A', hidden:false,
+    if (!nodes.has(id)) nodes.set(id, {textContent:'private A', value:'private A', hidden:false, classList:{toggle(){}},
       replaceChildren(){this.textContent='';}, reset(){this.value='';}, close(){this.closed=true;}});
     return nodes.get(id);
   };
@@ -67,9 +67,10 @@ test('sign-out clears private DOM and memory before the logout network response'
     dashboardStream:{stop(){}}, request:()=>logout.promise, API:{accounts:'/accounts'},
     localStorage:{removeItem(){}}, setAssistantOpen(){}, setAuthMode(){},
     document:{body:{classList:{add(){}}},querySelectorAll:selector=>[node(selector)],getElementById:node},
-    $:node, localDate:()=> '2026-10-11',mondayFor:d=>d,
+    $:node, localDate:()=> '2026-10-11',mondayFor:d=>d, setBusy(button, busy){button.disabled=busy;},
     render(){},renderCalendar(){},renderWeek(){},renderUploadQueue(){},renderProfilePictures(){}};
   vm.createContext(c);
+  vm.runInContext(app.slice(app.indexOf('function renderAvailability()'), app.indexOf('function clearAvailability(')), c);
   vm.runInContext(app.slice(app.indexOf('async function signOut('),app.indexOf("$('#signup-tab').addEventListener")),c);
   const pending = c.signOut();
   assert.equal(c.state.token,null); assert.equal(c.state.sessionEpoch,2);
@@ -78,6 +79,9 @@ test('sign-out clears private DOM and memory before the logout network response'
     assert.equal(node(id).textContent,'',id);
   }
   assert.equal(node('form').value,''); assert.equal(node('dialog[open]').closed,true);
+  assert.equal(node('#availability-summary').innerHTML, 'No times added yet.');
+  assert.equal(node('#generate-chat-plan').disabled, true);
+  assert.equal(node('#availability-chat-form button').disabled, false);
   logout.resolve(); await pending;
 });
 
