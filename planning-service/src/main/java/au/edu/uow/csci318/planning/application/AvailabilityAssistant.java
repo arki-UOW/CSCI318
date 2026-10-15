@@ -5,12 +5,18 @@ import au.edu.uow.csci318.planning.dto.PlanningDtos.AvailabilityChatResponse;
 import au.edu.uow.csci318.planning.dto.PlanningDtos.TimeSlot;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -39,9 +45,11 @@ class AvailabilityAssistant {
           availability into a complete updated weekly schedule. Return ONLY one JSON object with:
           reply, days, readyToPlan.
 
-          days is an array containing objects with date and slots. Each slot has start and end in 24-hour
+          days is an array containing objects with dayOfWeek and slots. dayOfWeek must be one of
+          MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY. Never calculate or return dates.
+          The server maps each weekday to the supplied seven-day calendar. Each slot has start and end in 24-hour
           HH:mm format. Keep unchanged slots from the current schedule unless the user changes or clears
-          them. Resolve weekday names against the supplied Monday-to-Sunday period. Never create times the
+          them. Use the weekday names stated by the user. Never create times the
           user did not state. If a time is ambiguous, ask a short follow-up in reply and set readyToPlan
           false. Set readyToPlan true when at least one usable slot exists and no clarification is needed.
           Keep reply friendly and under 45 words.
@@ -50,6 +58,8 @@ class AvailabilityAssistant {
               + request.weekStart()
               + " to "
               + request.weekStart().plusDays(6)
+              + "\nAuthoritative calendar (weekday to date): "
+              + calendar(request.weekStart())
               + "\nCurrent availability: "
               + json.writeValueAsString(request.availability())
               + "\nUser message: "
@@ -62,11 +72,15 @@ class AvailabilityAssistant {
               .replaceFirst("(?s)\\s*```$", "");
       AssistantPayload payload = json.readValue(raw, AssistantPayload.class);
       Map<LocalDate, List<TimeSlot>> availability =
-          normalise(request.weekStart(), request.availability(), payload.days());
+          normalise(request.weekStart(), request.availability(),
+              resolveDays(request.weekStart(), payload.readyToPlan() ? payload.days()
+                  : payload.days() == null ? List.of() : payload.days().stream()
+                      .filter(day -> day != null && day.slots() != null && day.slots().isEmpty())
+                      .toList()));
       Map<LocalDate, Integer> minutes = dailyMinutes(availability);
       boolean ready =
           payload.readyToPlan() && minutes.values().stream().mapToInt(Integer::intValue).sum() > 0;
-      String reply =
+      String reply = ready ? describe(availability) :
           payload.reply() == null || payload.reply().isBlank()
               ? "I updated your availability. Add another time or generate the plan when it looks"
                     + " right."
@@ -79,6 +93,46 @@ class AvailabilityAssistant {
               selection, exception, "understand that availability"),
           exception);
     }
+  }
+
+  private static Map<DayOfWeek, LocalDate> calendar(LocalDate start) {
+    Map<DayOfWeek, LocalDate> dates = new LinkedHashMap<>();
+    for (int day = 0; day < 7; day++) {
+      LocalDate date = start.plusDays(day);
+      dates.put(date.getDayOfWeek(), date);
+    }
+    return dates;
+  }
+
+  private static List<AvailabilityDay> resolveDays(LocalDate start, List<WeekdayAvailability> days) {
+    if (days == null || days.size() > 7) {
+      throw new IllegalArgumentException("Availability must contain up to seven named weekdays");
+    }
+    Map<DayOfWeek, LocalDate> dates = calendar(start);
+    Set<DayOfWeek> seen = new HashSet<>();
+    List<AvailabilityDay> resolved = new ArrayList<>();
+    for (WeekdayAvailability day : days) {
+      if (day == null || day.dayOfWeek() == null || day.slots() == null) {
+        throw new IllegalArgumentException("Availability needs weekday names and time slots");
+      }
+      DayOfWeek weekday = DayOfWeek.valueOf(day.dayOfWeek().trim().toUpperCase(Locale.ROOT));
+      if (!seen.add(weekday) || validSlots(day.slots()).size() != day.slots().size()) {
+        throw new IllegalArgumentException("Availability contains repeated weekdays or invalid time slots");
+      }
+      resolved.add(new AvailabilityDay(dates.get(weekday), day.slots()));
+    }
+    return resolved;
+  }
+
+  private static String describe(Map<LocalDate, List<TimeSlot>> availability) {
+    DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("EEEE d MMM", Locale.ENGLISH);
+    DateTimeFormatter timeFormat = DateTimeFormatter.ofPattern("HH:mm");
+    return "Your availability: " + availability.entrySet().stream()
+        .filter(entry -> !entry.getValue().isEmpty())
+        .map(entry -> entry.getKey().format(dateFormat) + " " + entry.getValue().stream()
+            .map(slot -> slot.start().format(timeFormat) + "–" + slot.end().format(timeFormat))
+            .collect(Collectors.joining(", ")))
+        .collect(Collectors.joining("; ")) + ". Review these times before building your plan.";
   }
 
   static Map<LocalDate, List<TimeSlot>> normalise(
@@ -141,7 +195,10 @@ class AvailabilityAssistant {
     return List.copyOf(nonOverlapping);
   }
 
-  record AssistantPayload(String reply, List<AvailabilityDay> days, boolean readyToPlan) {}
+  record AssistantPayload(String reply, List<WeekdayAvailability> days, boolean readyToPlan) {}
+
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+  record WeekdayAvailability(String dayOfWeek, List<TimeSlot> slots) {}
 
   record AvailabilityDay(LocalDate date, List<TimeSlot> slots) {}
 }

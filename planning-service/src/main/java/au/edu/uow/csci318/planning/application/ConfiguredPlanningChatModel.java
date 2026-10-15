@@ -23,6 +23,9 @@ class ConfiguredPlanningChatModel {
   @Value("${study.ai.openai.base-url:https://api.openai.com/v1}")
   private String openAiBaseUrl = "https://api.openai.com/v1";
 
+  @Value("${study.ai.gemini.base-url:https://generativelanguage.googleapis.com/v1beta}")
+  private String geminiBaseUrl = "https://generativelanguage.googleapis.com/v1beta";
+
   ConfiguredPlanningChatModel(
       @Value("${study.ai.provider:auto}") String provider,
       @Value("${study.ai.gemini.api-key:}") String geminiKey,
@@ -46,10 +49,14 @@ class ConfiguredPlanningChatModel {
               "Gemini",
               geminiModel,
               GoogleAiGeminiChatModel.builder()
+                  .baseUrl(geminiBaseUrl)
                   .timeout(java.time.Duration.ofSeconds(60))
                   .maxRetries(1)
                   .apiKey(geminiKey)
                   .modelName(geminiModel)
+                  // Gemini 3 requires the original signed tool-call metadata on later turns.
+                  .returnThinking(true)
+                  .sendThinking(true)
                   .build()));
     }
     if ((provider.equals("auto") || provider.equals("openai")) && !openAiKey.isBlank()) {

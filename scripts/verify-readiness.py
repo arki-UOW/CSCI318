@@ -63,6 +63,13 @@ class ModelFixture(BaseHTTPRequestHandler):
                 calls = [{'id': 'save', 'type': 'function', 'function': {'name': 'saveStudyPlan', 'arguments': json.dumps(args)}}]
             message = {'role': 'assistant', 'content': None, 'tool_calls': calls}
             finish = 'tool_calls'
+        elif any('study-planning availability assistant' in (m.get('content') or '') for m in messages):
+            # Deliberately wrong model dates must not override the named weekdays.
+            interpreted = {'reply': 'Monday and Wednesday', 'readyToPlan': True, 'days': [
+                {'dayOfWeek': 'MONDAY', 'date': '2026-10-13', 'slots': [{'start': '18:00', 'end': '20:00'}]},
+                {'dayOfWeek': 'WEDNESDAY', 'date': '2026-10-15', 'slots': [{'start': '18:00', 'end': '20:00'}]}]}
+            message = {'role': 'assistant', 'content': json.dumps(interpreted)}
+            finish = 'stop'
         else:
             # An outline extraction fixture exercises document parsing, SDK transport and confirmation.
             extraction = {'subjectCode': 'CSCI319', 'subjectName': 'Acceptance Fixture', 'creditPoints': 6,
@@ -147,6 +154,19 @@ def main():
         status, account = api(18085, 'auth/register', body={'username': 'ready_' + uuid.uuid4().hex[:8], 'password': 'FixtureOnly-1234', 'displayName': 'Readiness', 'timezone': 'UTC'})
         check('register account', status, 201)
         token = account['token']
+        status, interpreted = api(18084, 'planning/availability/chat', token, {
+            'weekStart': '2026-10-12', 'availability': {},
+            'message': "I'm free Monday and Wednesday from 6pm to 8pm."})
+        check('availability chat accepts named weekdays', status, 200)
+        check('Monday is October 12, not October 13', (
+            interpreted['dailyAvailabilityMinutes']['2026-10-12'],
+            interpreted['dailyAvailabilityMinutes']['2026-10-13']), (120, 0))
+        check('Wednesday is October 14, not October 15', (
+            interpreted['dailyAvailabilityMinutes']['2026-10-14'],
+            interpreted['dailyAvailabilityMinutes']['2026-10-15']), (120, 0))
+        check('availability confirmation matches server calendar',
+              'Monday 12 Oct' in interpreted['reply'] and 'Wednesday 14 Oct' in interpreted['reply'], True)
+        check('valid interpreted availability is ready', interpreted['readyToPlan'], True)
         subject_body = {'code': 'CSCI318', 'name': 'Software Engineering', 'creditPoints': 6, 'weeklyStudyTargetMinutes': 300, 'assessments': []}
         status, subject = api(18081, 'subjects', token, subject_body)
         check('create subject', status, 201)

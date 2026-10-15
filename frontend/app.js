@@ -24,6 +24,7 @@ const state = {
   serviceFailures: [],
   availability: {},
   availabilityMinutes: {},
+  availabilityReady: false,
   manualAssessments: [],
   sessions: [],
   calendarEntries: [],
@@ -344,7 +345,7 @@ async function signOut(callServer = true) {
   state.account = null;
   Object.assign(state, { subjects: [], assessments: [], sessions: [], calendarEntries: [],
     plan: null, planHistory: [], week: null, review: null, reviewQueue: [], uploadItems: [],
-    availability: {}, availabilityMinutes: {}, assistantHistory: [], manualAssessments: [],
+    availability: {}, availabilityMinutes: {}, availabilityReady: false, assistantHistory: [], manualAssessments: [],
     profilePictureDraft: null, subjectAi: null, planningAi: null, serviceFailures: [] });
   localStorage.removeItem('studyLeftoversToken');
   setAssistantOpen(false);
@@ -545,7 +546,7 @@ function renderSystemStatus() {
   const planningReady = state.planningAi?.configured;
   const subjectStatusUnavailable = state.serviceFailures.includes('subjectAi');
   const planningOffline = state.serviceFailures.some(name => ['week', 'plan', 'planningAi'].includes(name));
-  const subjectLabel = subjectReady ? '● Gemini ready'
+  const subjectLabel = subjectReady ? '● AI key configured'
     : subjectStatusUnavailable ? '○ Gemini status unavailable' : '○ Gemini not loaded';
   status.innerHTML = `
     <span class="status-chip ${subjectReady ? 'ready' : subjectStatusUnavailable ? 'offline' : 'warning'}" title="${esc(state.subjectAi?.message || 'Subject AI status unavailable')}">${subjectLabel}</span>
@@ -553,7 +554,8 @@ function renderSystemStatus() {
     <span class="status-chip ${state.streamConnection === 'live' ? 'ready' : 'warning'}" title="${esc(state.streamStatus?.updatedAt ? `Kafka projection updated ${state.streamStatus.updatedAt}` : 'Waiting for Kafka-derived projections')}">${state.streamConnection === 'live' ? (state.streamStatus?.initialized ? '● Live dashboard' : '○ Waiting for events') : state.streamConnection === 'offline' ? '○ Live updates reconnecting' : '○ Connecting live updates'}</span>`;
   const plannerBadge = $('#planner-ai-badge');
   if (plannerBadge) {
-    plannerBadge.textContent = planningReady ? `${state.planningAi.provider} ready` : planningOffline ? 'Planner offline' : 'AI key not loaded';
+    plannerBadge.textContent = planningReady ? `${state.planningAi.provider} key configured` : planningOffline ? 'Planner offline' : 'AI key not loaded';
+    plannerBadge.title = planningReady ? `Model: ${state.planningAi.model}. Configuration detected; live requests may still fail.` : '';
     plannerBadge.className = `status-chip ${planningReady ? 'ready' : planningOffline ? 'offline' : 'warning'}`;
   }
 }
@@ -1230,10 +1232,12 @@ function renderAvailability() {
     const times = slots.map(slot => `${slot.start.slice(0, 5)}–${slot.end.slice(0, 5)}`).join(', ');
     return `<div class="availability-day"><div><strong>${esc(label)}</strong><small>${esc(times)}</small></div><span>${state.availabilityMinutes[date] || 0} min</span></div>`;
   }).join('') : 'No times added yet.';
-  $('#generate-chat-plan').disabled = !Object.values(state.availabilityMinutes || {}).some(minutes => minutes > 0);
+  $('#generate-chat-plan').disabled = !state.availabilityReady || !Object.values(state.availabilityMinutes || {}).some(minutes => minutes > 0);
 }
 
 async function sendAvailability(message, button) {
+  state.availabilityReady = false;
+  renderAvailability();
   appendChatMessage('user', message);
   setBusy(button, true, 'Thinking');
   feedback('chat-feedback', 'Gemini is interpreting those time slots…', 'info');
@@ -1249,6 +1253,7 @@ async function sendAvailability(message, button) {
     });
     state.availability = result.availability || {};
     state.availabilityMinutes = result.dailyAvailabilityMinutes || {};
+    state.availabilityReady = result.readyToPlan === true;
     appendChatMessage('assistant', result.reply);
     renderAvailability();
     feedback('chat-feedback', result.readyToPlan ? 'Availability understood. You can generate the plan.' : 'Add the detail requested above.', result.readyToPlan ? 'success' : 'info');
@@ -1278,11 +1283,13 @@ $$('[data-prompt]').forEach(button => button.addEventListener('click', () => {
 $('#plan-start').addEventListener('change', () => {
   state.availability = {};
   state.availabilityMinutes = {};
+  state.availabilityReady = false;
   renderAvailability();
   appendChatMessage('assistant', 'The planning week changed, so I cleared the previous time slots. Tell me your availability for this week.');
 });
 
 $('#generate-chat-plan').addEventListener('click', async event => {
+  if (!state.availabilityReady) return;
   await generatePlan(state.availabilityMinutes, event.currentTarget, state.availability);
 });
 
