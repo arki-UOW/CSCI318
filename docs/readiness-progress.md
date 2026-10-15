@@ -16,7 +16,7 @@ Baseline merged main: `f1ebffe` (PR #15). Correction branch: `agent/zero-work-in
 | 7. Outline provider status mapping | Done | Safe 503 through actual SDK protocol fixture |
 | 8. Fractional/malformed model allocations | Done | Strict schema before mapping; invalid output cannot modify history/calendar |
 | 9. Windows startup false success | Done | Native exit checks and readiness polling; three executable launcher scenarios |
-| UML/domain/layer/activity diagrams and 18 use cases | Done | docs/domain-model, architecture/diagrams, use-cases |
+| UML/domain/layer/activity diagrams and 14 final consolidated use cases | Done | docs/domain-model, architecture/diagrams, use-cases |
 | Accepted/modified/rejected AI decision record | Done | ADR-002 records current decisions, no invented team approvals |
 | Examples for all 18 FRs and six NFRs | Done | Demonstration guide, Postman, requirements and executable checks |
 | Design/proposal differences explained | Done | Target events versus REST, authenticated UUID contracts, seven-day plans |
