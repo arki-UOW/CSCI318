@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Study Leftovers - authenticated end-to-end demo",
-    "description": "Ordered FR-01\u2013FR-17 demonstration and invalid-input gate. Requires Kafka and a privately configured provider for AI requests. Full malformed-model FR-18 checks use scripts/verify-readiness.py, whose local fixture controls the model output. Optional file upload is disabled unless runOutlineUpload=true and a local file is selected.",
+    "description": "Historical operation-level FR-01\u2013FR-18 demonstration steps from the original 18-item proposal. These Postman labels are NOT the consolidated final report requirement IDs (FR-01\u2013FR-14 / UC-01\u2013UC-14); use docs/use-cases/functional-use-cases.md for the active mapping. Ordered demonstration and invalid-input gate. Requires Kafka and a privately configured provider for AI requests. Full malformed-model FR-18 checks use scripts/verify-readiness.py, whose local fixture controls the model output. Optional file upload is disabled unless runOutlineUpload=true and a local file is selected.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
