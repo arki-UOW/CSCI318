@@ -2,6 +2,8 @@
 
 Verification date: 12 October 2026. Baseline: `f1ebffe` (merged PR #15). Final interface changes are on `agent/zero-work-interface-gaps`.
 
+**Numbering notice (16 October 2026):** This completion audit originally indexed individual test evidence using the original 18-operation proposal IDs. The final assessed report consolidates requirements into FR-01–FR-14 and use cases into UC-01–UC-14. In the historical table below, old FR-14/RT-01 maps to final FR-09/UC-09/RT-01; old FR-15/RT-02 maps to final FR-10/UC-10/RT-02; old FR-16/AI-01 maps to final FR-11/UC-11/AI-01; old FR-17/AI-02 maps to final FR-12/UC-12/AI-02; old FR-18 maps to final FR-13/UC-13. The test results remain unchanged and the original ID labels below identify their historical provenance; use [current requirements](../requirements/implemented-requirements.md) for active requirement IDs.
+
 This is an engineering artifact for the repository. It is not the student-authored assessed report or presentation. Requirements were taken from the professor's **CSCI318 Project Specification Spring 2026 (4).pdf**, pages 3–7, and the team's **CSCI318_Study_Leftovers_Project_Proposal_Updated (4).pdf**, especially FR-01–FR-18, NFR-01–NFR-06, RT-01/02 and AI-01/02. Earlier repository claims of unconditional completion are superseded by this verification.
 
 ## Result and limits
