@@ -78,13 +78,11 @@ public class StudySession {
     LocalDate checkedDate = date;
     if (checkedDate.isAfter(Objects.requireNonNull(today)))
       throw new IllegalArgumentException("Study date cannot be in the future");
-    if (description == null || description.isBlank())
-      throw new IllegalArgumentException("Activity description is required");
-    if (description.length() > 2000)
+    if (description != null && description.length() > 2000)
       throw new IllegalArgumentException("Activity description must be at most 2000 characters");
     this.durationMinutes = minutes;
     this.studyDate = checkedDate;
-    this.description = description.trim();
+    this.description = description == null || description.isBlank() ? "Study session" : description.trim();
     this.eventRevision = Math.max(1, eventRevision) + 1;
   }
 

@@ -273,10 +273,23 @@ function updateLiveClock() {
 }
 
 function populateTimezones() {
-  const zones = typeof Intl.supportedValuesOf === 'function'
-    ? Intl.supportedValuesOf('timeZone') : ['Australia/Sydney', 'UTC'];
-  $('#timezone-options').innerHTML = zones.map(zone => `<option value="${esc(zone)}"></option>`).join('');
+  const selected = $('#profile-timezone').value || state.account?.timezone || BrowserTimezone.detected();
+  const query = $('#timezone-search').value.trim().toLowerCase();
+  const zones = StudentControls.zones(selected).filter(zone => `${zone} ${StudentControls.zoneLabel(zone)}`.toLowerCase().includes(query));
+  $('#profile-timezone').innerHTML = zones.map(zone => `<option value="${esc(zone)}">${esc(StudentControls.zoneLabel(zone))}</option>`).join('');
+  if (zones.includes(selected)) $('#profile-timezone').value = selected;
+  else if (zones.length) $('#profile-timezone').value = zones[0];
+  previewTimezone();
 }
+function previewTimezone() {
+  const zone = $('#profile-timezone').value;
+  $('#timezone-preview').textContent = zone ? `Selected: ${zone}. Local time: ${new Intl.DateTimeFormat('en-AU', {timeZone:zone,dateStyle:'medium',timeStyle:'short'}).format(new Date())}. Save your profile to apply.` : 'No matching locations. Try a city or region.';
+}
+$('#timezone-search').addEventListener('input', populateTimezones);
+$('#profile-timezone').addEventListener('change', previewTimezone);
+$('#detect-timezone').addEventListener('click', () => {
+  $('#timezone-search').value = '';populateTimezones();$('#profile-timezone').value = BrowserTimezone.detected();previewTimezone();
+});
 
 function populateAccount() {
   const account = state.account;
@@ -292,7 +305,10 @@ function populateAccount() {
   $('#profile-institution').value = account.institution || '';
   $('#profile-course').value = account.course || '';
   $('#profile-goal').value = account.studyGoal || '';
-  $('#profile-timezone').value = account.timezone || 'Australia/Sydney';
+  $('#timezone-search').value = '';
+  populateTimezones();
+  $('#profile-timezone').value = accountTimezone();
+  previewTimezone();
   $('#theme-primary').value = account.primaryColor;
   $('#theme-accent').value = account.accentColor;
   $('#theme-background').value = account.backgroundColor;
@@ -672,6 +688,15 @@ function bindEditAssessments() {
   });
 }
 
+function deadlineHint(input) {
+  let hint = input.parentElement.querySelector('.deadline-hint');
+  if (!hint) { hint = document.createElement('small');hint.className = 'deadline-hint';input.parentElement.append(hint); }
+  hint.textContent = input.value && input.value < accountToday() ? 'Past deadline: check the year. This stays visible as overdue and will not receive new study blocks. Keep it only if it is the real deadline.' : '';
+}
+document.addEventListener('input', event => {
+  if (event.target.matches('.due-date, #assessment-due-date')) deadlineHint(event.target);
+});
+
 function openAssessmentDialog(assessment = null) {
   if (!assessment && !state.subjects.length) {
     feedback('assessment-feedback', 'Add a subject before creating an assessment.', 'error');
@@ -685,6 +710,7 @@ function openAssessmentDialog(assessment = null) {
   $('#assessment-weight').value = assessment?.weighting ?? '';
   $('#assessment-priority').value = assessment?.priority || 'MEDIUM';
   $('#assessment-due-date').value = assessment?.dueDate || '';
+  deadlineHint($('#assessment-due-date'));
   $('#assessment-due-week').value = assessment?.dueWeek ?? '';
   $('#assessment-minutes').value = assessment?.estimatedMinutes ?? '';
   $('#assessment-description').value = assessment?.description || '';
@@ -1261,22 +1287,25 @@ async function generatePlan(availability, button, availabilitySlots, previousId 
   }
 }
 
-$('#plan-form').addEventListener('submit', async event => {
+$('#plan-form').addEventListener('submit', event => {
   event.preventDefault();
-  const button = event.submitter || event.currentTarget.querySelector('button');
+  if (state.planPending || state.availabilityPending) return;
   const start = $('#plan-start').value;
   const minutes = Number($('#plan-minutes').value);
   const availability = {};
   for (let day = 0; day < 7; day++) {
     const date = new Date(`${start}T00:00:00`);
     date.setDate(date.getDate() + day);
-    availability[localDate(date)] = minutes;
+    const key = localDate(date);
+    const now = StudentWorkflow.now(accountTimezone());
+    const left = Math.max(0, 1439 - Number(now.slice(11,13))*60 - Number(now.slice(14,16)));
+    availability[key] = key === now.slice(0,10) ? Math.min(minutes, left) : minutes;
   }
   state.availability = null;
   state.availabilityMinutes = availability;
   state.availabilityReady = true;
   renderAvailability();
-  await generatePlan(availability, button, null, state.plan?.id || null);
+  feedback('chat-feedback', 'Daily amounts added. Today is limited to the time remaining. Review the dates, then build or update your plan.', 'success');
 });
 
 function renderPlanHistory() {
@@ -1378,11 +1407,21 @@ function renderAvailability() {
   $('#availability-summary').classList.toggle('empty', rows.length === 0);
   $('#availability-summary').innerHTML = rows.length ? rows.map(([date, slots]) => {
     const label = new Date(`${date}T00:00:00`).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short' });
-    const times = slots.map(slot => `${slot.start.slice(0, 5)}–${slot.end.slice(0, 5)}`).join(', ');
-    return `<div class="availability-day"><div><strong>${esc(label)}</strong><small>${esc(times)}</small></div><span>${state.availabilityMinutes[date] || 0} min</span></div>`;
+    const times = slots.map((slot, index) => `<span class="availability-slot">${esc(slot.start.slice(0, 5))}–${esc(slot.end.slice(0, 5))}<button type="button" class="link" data-remove-slot="${esc(date)}" data-slot-index="${index}" aria-label="Remove ${esc(date)} ${esc(slot.start.slice(0,5))}">Remove</button></span>`).join('');
+    return `<div class="availability-day"><div><strong>${esc(label)}</strong><small>${times}</small></div><span>${state.availabilityMinutes[date] || 0} min</span></div>`;
   }).join('') : state.availability === null && Object.keys(state.availabilityMinutes || {}).length ? Object.entries(state.availabilityMinutes).map(([date, minutes]) => `<div class="availability-day"><strong>${esc(date)}</strong><span>${minutes} min · flexible time</span></div>`).join('') : 'No times added yet.';
   $('#generate-chat-plan').disabled = !!state.planPending || !state.availabilityReady || !Object.values(state.availabilityMinutes || {}).some(minutes => minutes > 0);
 }
+
+$('#availability-summary').addEventListener('click', event => {
+  const button = event.target.closest('[data-remove-slot]');
+  if (!button || state.availabilityPending || state.planPending) return;
+  const date = button.dataset.removeSlot;
+  state.availability[date].splice(Number(button.dataset.slotIndex), 1);
+  state.availabilityMinutes[date] = state.availability[date].reduce((total, slot) => total + (Number(slot.end.slice(0,2))*60+Number(slot.end.slice(3,5)))-(Number(slot.start.slice(0,2))*60+Number(slot.start.slice(3,5))),0);
+  state.availabilityReady = Object.values(state.availabilityMinutes).some(value=>value>0);
+  renderAvailability();feedback('chat-feedback', 'Study time removed. Review the remaining times.', 'info');
+});
 
 function clearAvailability(message = 'Your availability has been cleared. Tell me your new study times.') {
   state.availabilityRequest = (state.availabilityRequest || 0) + 1;
@@ -1727,7 +1766,8 @@ function appendStudyChat(role, content) {
   state.assistantHistory.push({ role, content });
   const bubble = document.createElement('div');
   bubble.className = `chat-bubble ${role}`;
-  bubble.textContent = content;
+  if (role === 'assistant') StudentControls.renderReply(bubble, content);
+  else bubble.textContent = content;
   $('#study-chat-messages').append(bubble);
   renderAssistantMath(bubble);
   bubble.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -1750,7 +1790,7 @@ $('#study-chat-form').addEventListener('submit', async event => {
   const button = event.submitter;
   const input = $('#study-chat-message');
   const message = input.value.trim();
-  const history = state.assistantHistory.slice(-12);
+  const history = state.assistantHistory.slice(-12).map(item => ({...item, content: item.content.slice(0, 4000)}));
   input.value = '';
   appendStudyChat('user', message);
   setBusy(button, true, 'Thinking');

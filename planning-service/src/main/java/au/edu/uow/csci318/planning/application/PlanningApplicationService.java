@@ -138,7 +138,8 @@ public class PlanningApplicationService {
   public AvailabilityChatResponse updateAvailability(AvailabilityChatRequest request, ZoneId zone) {
     LocalDateTime now = LocalDateTime.now(clock.withZone(zone));
     PlanningTimePolicy.requireFutureStart(request.weekStart(), now);
-    AvailabilityChatResponse result = availabilityAssistant.assist(request);
+    AvailabilityChatResponse result = AvailabilityAssistant.futureOnly(availabilityAssistant.assist(request),
+        LocalDateTime.now(clock.withZone(zone)));
     if (result.readyToPlan()) PlanningTimePolicy.validate(
         new PlanRequest(request.weekStart(), result.dailyAvailabilityMinutes(), result.availability()),
         LocalDateTime.now(clock.withZone(zone)));
