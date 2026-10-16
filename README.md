@@ -4,7 +4,7 @@ Study Leftovers is a personal academic workspace that turns subject-outline docu
 
 ## What works
 
-- Up to 10 PDF, DOCX, JPG or JPEG outlines per batch, local text/OCR extraction, and a review queue before confirmation
+- Up to 10 PDF, DOCX, TXT, JPG or JPEG outlines per batch, local text/OCR extraction, and a review queue before confirmation
 - LangChain4j/Gemini analysis of cleaned extracted text and tool-using agentic planning, with optional OpenAI compatibility
 - manual subject and assessment entry, plus later editing, when no document is available
 - five independently persisted Spring Boot services with clear data ownership
@@ -47,7 +47,7 @@ The command-line equivalent is:
 
 Open <http://localhost:3000>. Create an account on the welcome screen; its login remains valid for 30 days unless you sign out. Kafka and all five services start together. On a first start, allow roughly two minutes for images, Maven dependencies and Kafka initialisation.
 
-To enable Gemini-backed extraction and planning, set `GEMINI_API_KEY` in the private `.env` file—not in `.env.example`. The backend first extracts and normalises PDF/DOCX text or runs OCR for JPG/JPEG, then Gemini receives that cleaned text. This keeps provider input bounded and makes incorrect policy/SLO rows easier to reject.
+To enable Gemini-backed extraction and planning, set `GEMINI_API_KEY` in the private `.env` file—not in `.env.example`. The backend first extracts and normalises PDF/DOCX/TXT text or runs OCR for JPG/JPEG, then Gemini receives that cleaned text. This keeps provider input bounded and makes incorrect policy/SLO rows easier to reject.
 
 ## Gemini API key setup
 
@@ -116,7 +116,7 @@ Serve `frontend/` with any static server. The UI expects the documented localhos
 ## Demo path
 
 1. Create an account or sign back in to restore your profile, data and theme.
-2. Upload or drop up to 10 PDF, DOCX, JPG or JPEG files together, or choose **Enter manually**.
+2. Upload or drop up to 10 PDF, DOCX, TXT, JPG or JPEG files together, or choose **Enter manually**.
 3. Review and confirm each queued subject; subjects are stored by Subject Service and assessments by Assessment Service.
 4. Tell the planning assistant your weekly time slots and generate a spaced plan for exactly the requested seven days.
 5. Open Schedule and switch between the monthly overview and weekly detail to edit generated blocks or add your own tasks and sessions.
@@ -131,7 +131,7 @@ Minutes-only planning also avoids existing commitments. It prefers free evening 
 
 ## Tests and evidence
 
-Run `mvn clean verify` and `node --test frontend/tests/*.test.cjs`. Tests cover domain rules, outbox rollback/retry, Kafka Streams replay/corrections/account isolation, persistent projections and authenticated dashboard push parsing. No LLM key is required.
+Run `mvn clean verify`, then `pnpm install --dir frontend --frozen-lockfile` and `node --test frontend/tests/*.test.cjs` (Node 22 and pnpm 11.25.0). Tests cover domain rules, outbox rollback/retry, Kafka Streams replay/corrections/account isolation, persistent projections and authenticated dashboard push parsing. No LLM key is required.
 
 CI starts a real Kafka broker, executes `python3 scripts/verify-streaming.py --skip-ai-planning`, checks both live calculations and SSE, then stops Assessment/Activity to verify dashboard query independence from upstream REST. The flag keeps CI secret-free; running the script without it also verifies live agentic plan generation and therefore requires a configured provider key. The script creates two demo accounts. See [testing strategy](docs/testing/testing-strategy.md) and [traceability matrix](docs/traceability.md).
 
@@ -155,7 +155,7 @@ This repository contains technical project documentation, not the team’s final
 
 ### Readiness acceptance and plan history
 
-`GET /api/planning/plans` lists this account's saved versions; `GET /api/planning/plans/{id}` retrieves one. The Study plan screen has a version selector and **Regenerate selected plan** button. Regeneration uses the currently entered start date and availability, retrieves previous state through the agent tool, and saves a new version. Explicit zero workload is respected; missing estimates default to 120 minutes.
+`GET /api/planning/plans` lists this account's saved versions; `GET /api/planning/plans/{id}` retrieves one. The Study plan page shows the current plan. **Profile → Plan history** has interactive version cards and read-only snapshots. Viewing a version does not replace the current plan or calendar. **Use these study times for a new plan** explicitly reloads saved availability onto matching weekdays in the next seven days; elapsed slots are excluded. Legacy versions without saved availability ask for new times. **Update my plan** requires confirmed availability and creates a new version through the agent workflow; it never silently substitutes a daily amount. Explicit zero workload is respected; missing estimates default to 120 minutes.
 
 After `mvn --batch-mode clean verify`, run `python scripts/verify-readiness.py`. It starts five isolated JARs on ports 18081–18085 with in-memory databases and a local OpenAI-protocol fixture. It tests actual SDK tool calls, HTTP validation, persistence, ownership, seven-day generation/regeneration and safe failures without using a real key. Supply `--java /path/to/java` if needed. Its logs/results are written to a temporary directory (or `--output DIR`). Kafka is tested separately by the Docker CI job.
 
@@ -172,3 +172,9 @@ Generation with no remaining work saves an empty seven-day version without requi
 Plan writes are serialized per account in the database, with a unique owner/version index. On startup, only owners with legacy duplicate plan versions are renumbered chronologically; IDs, plan content, dates and calendar links remain intact. Normal unique histories retain their numbers.
 
 The Windows launcher checks Docker's exit code and waits for service endpoints before opening the site. The optional outline request is skipped in the ordered Postman run unless explicitly enabled. Private provider keys remain runtime configuration.
+
+## Student workflow corrections (16 October 2026)
+
+New planning starts today in the account timezone and rejects past dates or elapsed time. Overdue unfinished assessments stay visible for correction/completion; they do not turn a blocked plan into an empty successful version. Eligible work can still be planned. Calendar views combine editable assessment deadlines, scheduled blocks and date-only activity from their source records. Recent activity appears on Dashboard, Activity and Profile. An optional assessment link on a recorded session contributes to that assessment’s remaining workload after Kafka processing. General study contributes to subject progress only. Completed calendar blocks already count; do not record the same work again.
+
+See the [progress checklist](docs/student-workflow-progress.md) and [fresh UC-01–UC-14 evidence](docs/testing/student-workflow-evidence.md). Historical audit counts remain historical.

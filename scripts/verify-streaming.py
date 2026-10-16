@@ -165,6 +165,25 @@ def main():
         api(8082, f"assessments/{assessment['id']}/complete", token, method='POST')
         observer.wait('Completing the assessment pushes a reduced workload',
                       lambda data: data['week']['workload']['incompleteAssessments'] == 0)
+        overdue = api(8082, 'assessments', token, {'subjectId': subject['id'], 'title': 'Overdue review',
+            'dueDate': (today - dt.timedelta(days=3)).isoformat(), 'estimatedMinutes': 30, 'priority': 'HIGH'})
+        observer.wait('UC-09/14: overdue work remains visible in streamed dashboard',
+                      lambda data: any(item['id'] == overdue['id'] for item in data['week'].get('overdue', [])))
+        api(8082, f"assessments/{overdue['id']}", token, method='DELETE')
+        observer.wait('UC-09/14: removed overdue work clears from projection',
+                      lambda data: data['week']['workload']['incompleteAssessments'] == 0 and not data['week'].get('overdue'))
+        linked = api(8083, 'study-sessions', token, {'subjectId': subject['id'], 'assessmentId': assessment['id'],
+            'durationMinutes': 25, 'studyDate': today.isoformat(), 'description': 'Linked report study'})
+        assert linked['assessmentId'] == assessment['id']
+        observer.wait('UC-04/10: linked session contributes once to progress',
+                      lambda data: data['week']['studyProgress'][0]['studiedMinutes'] == 100)
+        api(8083, f"study-sessions/{linked['id']}", token, {'durationMinutes':35,
+            'studyDate':today.isoformat(), 'description':'Corrected linked study'}, method='PATCH')
+        observer.wait('UC-05/10: correction replaces the prior session contribution',
+                      lambda data: data['week']['studyProgress'][0]['studiedMinutes'] == 110)
+        api(8083, f"study-sessions/{linked['id']}", token, method='DELETE')
+        observer.wait('UC-05/10: deleted session reverses its contribution',
+                      lambda data: data['week']['studyProgress'][0]['studiedMinutes'] == 75)
         other = api(8085, 'auth/register', body={'username': 'other_' + suffix,
             'password': 'Demo-Only-Password-456', 'displayName': 'Other Student'})['token']
         assert api(8084, 'planning/workload', other)['incompleteAssessments'] == 0

@@ -23,7 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Component
 class DocumentTextExtractor implements SubjectDocumentReader {
   static final long MAX_FILE_BYTES = 15_000_000;
-  static final Set<String> SUPPORTED_EXTENSIONS = Set.of("pdf", "docx", "jpg", "jpeg");
+  static final Set<String> SUPPORTED_EXTENSIONS = Set.of("pdf", "docx", "txt", "jpg", "jpeg");
 
   private final PdfTextExtractor pdf;
   private final String tesseractCommand;
@@ -43,6 +43,7 @@ class DocumentTextExtractor implements SubjectDocumentReader {
           switch (extension) {
             case "pdf" -> pdf.extract(bytes);
             case "docx" -> extractDocx(bytes);
+            case "txt" -> extractPlainText(bytes);
             case "jpg", "jpeg" -> extractImage(bytes, extension);
             default -> throw new IllegalArgumentException("Unsupported document type");
           };
@@ -60,12 +61,12 @@ class DocumentTextExtractor implements SubjectDocumentReader {
 
   private void validate(MultipartFile file) {
     if (file == null || file.isEmpty()) {
-      throw new IllegalArgumentException("Choose a non-empty PDF, DOCX, JPG or JPEG file");
+      throw new IllegalArgumentException("Choose a non-empty PDF, DOCX, TXT, JPG or JPEG file");
     }
     if (file.getOriginalFilename() == null
         || !SUPPORTED_EXTENSIONS.contains(extension(file.getOriginalFilename()))) {
       throw new IllegalArgumentException(
-          "Only PDF, DOCX, JPG and JPEG subject outlines are supported");
+          "Only PDF, DOCX, TXT, JPG and JPEG subject outlines are supported");
     }
     if (file.getSize() > MAX_FILE_BYTES) {
       throw new IllegalArgumentException("The document must be 15 MB or smaller");
@@ -93,6 +94,18 @@ class DocumentTextExtractor implements SubjectDocumentReader {
       document.getFooterList().forEach(footer -> appendLine(text, footer.getText()));
     }
     return text.toString();
+  }
+
+  private String extractPlainText(byte[] bytes) throws IOException {
+    try {
+      String text = StandardCharsets.UTF_8.newDecoder()
+          .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+          .decode(java.nio.ByteBuffer.wrap(bytes)).toString().replaceFirst("^\uFEFF", "");
+      if (text.indexOf('\0') >= 0) throw new IllegalArgumentException("TXT files must contain readable text, not binary data.");
+      return text;
+    } catch (java.nio.charset.CharacterCodingException invalid) {
+      throw new IllegalArgumentException("Save the TXT outline using UTF-8 encoding and upload it again.");
+    }
   }
 
   private String extractImage(byte[] bytes, String extension) throws IOException {

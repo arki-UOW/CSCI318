@@ -35,6 +35,22 @@ public class StudyPlan {
   @Column(nullable = false)
   private Instant createdAt;
 
+  @Lob
+  @Column(columnDefinition = "CLOB")
+  private String availabilityJson;
+
+  private Integer unscheduledMinutes;
+
+  public Integer getUnscheduledMinutes() { return unscheduledMinutes; }
+
+  public void rememberUnscheduledMinutes(int minutes) { this.unscheduledMinutes = minutes; }
+
+  public void rememberAvailability(String availabilityJson) {
+    this.availabilityJson = Objects.requireNonNull(availabilityJson);
+  }
+
+  public String getAvailabilityJson() { return availabilityJson; }
+
   protected StudyPlan() {}
 
   public StudyPlan(

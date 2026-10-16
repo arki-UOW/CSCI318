@@ -36,7 +36,7 @@ class StudyActivityControllerApiTest {
     when(identity.require("Bearer test")).thenReturn(owner);
     when(service.record(
             eq(owner), eq("Bearer test"), eq(request), eq(ZoneId.of("Australia/Sydney"))))
-        .thenReturn(new Response(session, subject, 45, date, "Review", Instant.now()));
+        .thenReturn(new Response(session, subject, 45, date, "Review", Instant.now(), null));
     MockMvc api =
         MockMvcBuilders.standaloneSetup(new StudyActivityController(service, identity)).build();
 

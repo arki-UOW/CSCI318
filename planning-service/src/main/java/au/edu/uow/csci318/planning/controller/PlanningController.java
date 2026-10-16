@@ -31,9 +31,10 @@ public class PlanningController {
   @PostMapping("/availability/chat")
   public AvailabilityChatResponse updateAvailability(
       @RequestHeader("Authorization") String authorization,
+      @RequestHeader(value = "X-Study-Timezone", defaultValue = "UTC") String timezone,
       @Valid @RequestBody AvailabilityChatRequest request) {
     identity.require(authorization);
-    return service.updateAvailability(request);
+    return service.updateAvailability(request, ZoneId.of(timezone));
   }
 
   @GetMapping("/plans")

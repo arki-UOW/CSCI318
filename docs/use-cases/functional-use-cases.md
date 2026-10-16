@@ -151,7 +151,7 @@ The authenticated owner initiates user-facing cases, while system-driven Kafka a
 
 **Alternative / exception flow:** Reject invalid data or foreign-owned references without mutating unrelated accounts' records. Unavailable providers or invalid proposal output must not produce an invalid persisted plan.
 
-**Implementation and evidence:** AI-01, StudyPlanningAgent. **Representative contracts:** `POST /api/planning/generate; LangChain4j tool calls; plan/version persistence`. Consult the final report Chapter 2 (UC-11) for the authoritative detailed narrative and activity diagram.
+**Implementation and evidence:** AI-01, StudyPlanningAgent. **Representative contracts:** `POST /api/planning/plans; LangChain4j tool calls; plan/version persistence`. Consult the final report Chapter 2 (UC-11) for the authoritative detailed narrative and activity diagram.
 
 ## UC-12 — Regenerate Study Plan
 
@@ -163,7 +163,7 @@ The authenticated owner initiates user-facing cases, while system-driven Kafka a
 
 **Alternative / exception flow:** Reject invalid data or foreign-owned references without mutating unrelated accounts' records. Unavailable providers or invalid proposal output must not produce an invalid persisted plan.
 
-**Implementation and evidence:** AI-02, planning persistence. **Representative contracts:** `POST /api/planning/regenerate; GET /api/planning/plans`. Consult the final report Chapter 2 (UC-12) for the authoritative detailed narrative and activity diagram.
+**Implementation and evidence:** AI-02, planning persistence. **Representative contracts:** `POST /api/planning/plans/{id}/regenerate; GET /api/planning/plans`. Consult the final report Chapter 2 (UC-12) for the authoritative detailed narrative and activity diagram.
 
 ## UC-13 — Validate and Reject Invalid AI-Generated Plan
 
@@ -188,3 +188,5 @@ The authenticated owner initiates user-facing cases, while system-driven Kafka a
 **Alternative / exception flow:** Reject invalid data or foreign-owned references without mutating unrelated accounts' records. Missing owned data returns an appropriate absent/empty result; unavailable dependencies are reported rather than silently succeeding.
 
 **Implementation and evidence:** Planning projections, DashboardPushHub. **Representative contracts:** `Planning dashboard REST/SSE, GET /api/planning/dashboard/stream`. Consult the final report Chapter 2 (UC-14) for the authoritative detailed narrative and activity diagram.
+
+Current student workflow verification uses the same final 14 requirement/use-case IDs. See [fresh workflow evidence](../testing/student-workflow-evidence.md) for actual inputs, outputs, automated coverage and limits. Historical operation examples and past test results are unchanged.

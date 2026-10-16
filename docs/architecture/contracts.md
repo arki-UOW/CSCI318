@@ -11,7 +11,7 @@
 | Account | `PATCH /api/profile/password` | Verify the current password, replace it and revoke other sessions |
 | Account | `PATCH /api/settings/theme` | Save the profile's theme and navigation-state colours |
 | Account | `PATCH /api/settings/navigation` | Save a complete, validated order for the draggable main tabs |
-| Subject | `POST /api/subject-outlines` | Upload and extract one PDF/DOCX/JPG/JPEG; the web client queues up to 10 and submits them sequentially |
+| Subject | `POST /api/subject-outlines` | Upload and extract one PDF/DOCX/TXT/JPG/JPEG; the web client queues up to 10 and submits them sequentially |
 | Subject | `GET /api/subject-outlines/{id}` | Retrieve review state |
 | Subject | `POST /api/subject-outlines/{id}/confirm` | Confirm corrected extraction |
 | Subject | `GET /api/subjects` | Subject overview |
@@ -25,7 +25,7 @@
 | Assessment | `PATCH /api/assessments/{id}` | Edit title, type, deadline, workload, description and priority |
 | Assessment | `POST /api/assessments/{id}/complete` | Mark complete |
 | Assessment | `DELETE /api/assessments/{id}` | Remove an incorrect assessment |
-| Activity | `POST /api/study-sessions` | Record activity |
+| Activity | `POST /api/study-sessions` | Record activity; optional `assessmentId` must belong to the selected owned subject |
 | Activity | `PATCH /api/study-sessions/{id}` | Correct an owned study session |
 | Activity | `DELETE /api/study-sessions/{id}` | Remove an owned study session |
 | Activity | `GET /api/study-sessions?subjectId=` | Display all sessions or only those for a selected subject |
@@ -43,6 +43,7 @@
 | Planning | `POST /api/planning/availability/chat` | Convert natural-language availability into time slots |
 | Planning | `GET /api/planning/ai/status` | Report planning AI configuration |
 | Planning | `GET /api/calendar?from=&to=` | Profile-scoped monthly or weekly calendar range |
+| Planning | `GET /api/calendar/completed` | All owned completed calendar records, independent of the displayed date range |
 | Planning | `POST /api/calendar` | Create a manual task, session or review |
 | Planning | `PATCH /api/calendar/{id}` | Edit a calendar item |
 | Planning | `POST /api/calendar/{id}/complete` | Complete an item and schedule its next spaced review |
@@ -92,3 +93,12 @@ Malformed, legacy owner-less and unsupported envelopes never enter query state. 
 ## Fresh-audit contract clarifications
 
 An empty seven-day plan is valid when no outstanding work remains; regeneration saves the next version and clears obsolete planned AI blocks while retaining history. Concurrent plan commits are serialized per owner; versions are unique. Invalid model item fields (including fractional minutes) return 400 without changing plan/calendar state. Outline-provider outages return 503. Calendar date ranges use interval overlap, so overnight entries appear on continuation days and midnight endpoints are exclusive. Profile lengths are limited to 80 characters for display name, 255 for institution/course and 800 for study goal. Nested null assessment items return 400.
+
+## Student workflow contract additions — final FR/UC numbering
+
+- **UC-07/11/12:** new starts must be today or later in `X-Study-Timezone`. Past slots and excessive remaining minutes today return 400. Calendar placement rechecks the clock after model execution, so elapsed time cannot become a backdated block.
+- **UC-11/12/13:** overdue-only positive workload returns 400 with corrective guidance and leaves the existing version/calendar untouched. Mixed workloads plan eligible work. A valid zero-work plan still clears obsolete AI blocks. Responses add nullable `availability` (the exact accepted request) and `unscheduledMinutes`; null means legacy metadata is unavailable.
+- **UC-03/04/05/07:** the browser composes assessment deadlines and recorded sessions into the calendar from their authoritative APIs, with source links and date-only labels. It does not create duplicate writable deadlines or fictional activity times. The calendar endpoint continues to own only actual calendar records.
+- **UC-04/05/10:** optional activity `assessmentId` is verified against Assessment Service with the same bearer token and included in outbox snapshots. PATCH preserves the link. Correction/deletion replaces/reverses that session’s progress contribution. Existing subject-only calls remain supported. Completed calendar items are immutable: remove an incorrect one before recording its correction, avoiding duplicate progress.
+- **UC-09/14:** `ThisWeek.overdue` contains projected unfinished assessments dated before today; `dueThisWeek` contains dates from today through Sunday. Dashboard totals remain Kafka-derived; browser deadline/history lists use their source APIs.
+- **UC-01:** `.txt` accepts UTF-8 (optional BOM), with the same size/review/confirmation rules; invalid text/binary data is rejected.

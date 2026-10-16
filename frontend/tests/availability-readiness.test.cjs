@@ -10,9 +10,9 @@ function harness(response) {
   const elements = new Map();
   const context = {
     state: {availability: {'2026-10-12': [{start: '18:00', end: '20:00'}]}, availabilityMinutes: {'2026-10-12': 120}, availabilityReady: true},
-    API: {planning: '/api'}, Date,
+    API: {planning: '/api'}, Date, StudentWorkflow: require('../student-workflow.js'),
     $: selector => {
-      if (!elements.has(selector)) elements.set(selector, {value: '2026-10-12', classList: {toggle() {}}});
+      if (!elements.has(selector)) elements.set(selector, {value: '2026-10-12', classList: {toggle() {}}, addEventListener() {}});
       return elements.get(selector);
     },
     esc: value => value, appendChatMessage() {}, setBusy() {}, feedback() {},

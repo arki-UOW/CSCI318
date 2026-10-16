@@ -66,7 +66,9 @@ public final class PlanningDtos {
       int version,
       List<PlanItem> items,
       String explanation,
-      Instant createdAt) {}
+      Instant createdAt,
+      PlanRequest availability,
+      Integer unscheduledMinutes) {}
 
   public record TimeSlot(@NotNull LocalTime start, @NotNull LocalTime end) {}
 
@@ -131,5 +133,12 @@ public final class PlanningDtos {
       List<AssessmentView> upcoming,
       WorkloadSummary workload,
       List<StudyProgress> studyProgress,
-      List<PlanItem> planItems) {}
+      List<PlanItem> planItems,
+      List<AssessmentView> overdue) {
+    public ThisWeek(LocalDate weekStart, LocalDate weekEnd, List<AssessmentView> dueThisWeek,
+        List<AssessmentView> upcoming, WorkloadSummary workload, List<StudyProgress> studyProgress,
+        List<PlanItem> planItems) {
+      this(weekStart, weekEnd, dueThisWeek, upcoming, workload, studyProgress, planItems, List.of());
+    }
+  }
 }

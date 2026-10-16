@@ -86,14 +86,14 @@
         <div>
           <p id="live-date" class="eyebrow">YOUR STUDY WORKSPACE</p>
           <h2>Welcome to Study Leftovers</h2>
-          <p>Upload your subject outlines and we’ll build your semester automatically.</p>
+          <p>Review your deadlines, see what needs attention, and choose your next study session.</p>
         </div>
         <div id="load-badge" class="load low">LOW WORKLOAD</div>
       </div>
       <div class="metrics">
         <article><small>Due this week</small><strong id="due-count">0</strong></article>
         <article><small>Upcoming</small><strong id="upcoming-count">0</strong></article>
-        <article><small>Study minutes</small><strong id="study-count">0</strong></article>
+        <article><small>Study minutes this week</small><strong id="study-count">0</strong></article>
         <article><small>Incomplete</small><strong id="incomplete-count">0</strong></article>
       </div>
       <div class="grid">
@@ -105,12 +105,12 @@
           <div id="dashboard-assessments" class="list empty">No upcoming assessments yet.</div>
         </article>
         <article class="panel">
-          <h3>Study progress</h3>
+          <h3>Study progress this week</h3><p id="progress-period" class="hint"></p>
           <div id="dashboard-progress" class="list empty">Record a session to see progress.</div>
         </article>
         <article class="panel wide">
           <div class="panel-head">
-            <h3>Deadline study plan</h3>
+            <h3>Your next study sessions</h3>
             <button class="link" data-view="plan">Open plan</button>
           </div>
           <div id="dashboard-plan" class="list empty">Generate a plan after adding assessments.</div>
@@ -119,6 +119,7 @@
           <div class="panel-head"><h3>Next calendar items</h3><button class="link" data-view="calendar">Open calendar</button></div>
           <div id="dashboard-calendar" class="list empty">Nothing scheduled yet.</div>
         </article>
+        <article class="panel wide"><div class="panel-head"><h3>Recent study activity</h3><button class="link" data-view="activity">View all activity</button></div><div id="dashboard-sessions" class="list"></div></article>
       </div>
     </section>
 
@@ -132,10 +133,10 @@
           </div>
         </div>
         <div id="upload-panel" class="method-panel">
-          <div class="method-heading"><div><h3>Import up to 10 outlines together</h3><p>Text is extracted locally first, then Gemini identifies each subject and its genuine assessment rows.</p></div><span class="format-list">PDF · DOCX · JPG · JPEG</span></div>
+          <div class="method-heading"><div><h3>Import up to 10 outlines together</h3><p>Text is extracted locally first, then Gemini identifies each subject and its genuine assessment rows.</p></div><span class="format-list">PDF · DOCX · TXT · JPG · JPEG</span></div>
           <label id="outline-drop" class="drop" tabindex="0" role="button" aria-controls="outline-file" aria-describedby="drop-help">
-            <input id="outline-file" type="file" multiple accept=".pdf,.docx,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg">
-            <span class="drop-icon" aria-hidden="true">⇧</span><strong>Drop your outlines here</strong><span>or browse your device to select several</span><small id="drop-help">Up to 10 files · maximum 15 MB each · PDF, DOCX, JPG or JPEG</small>
+            <input id="outline-file" type="file" multiple accept=".pdf,.docx,.txt,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,image/jpeg">
+            <span class="drop-icon" aria-hidden="true">⇧</span><strong>Drop your outlines here</strong><span>or browse your device to select several</span><small id="drop-help">Up to 10 files · maximum 15 MB each · PDF, DOCX, TXT, JPG or JPEG</small>
           </label>
           <div id="file-summary" class="file-summary-list" hidden></div>
           <div class="actions"><button id="extract-btn" class="primary" disabled>Analyse with Gemini</button><button id="clear-file-btn" class="secondary" type="button" hidden>Clear files</button></div>
@@ -178,7 +179,7 @@
       <div class="planner-layout">
         <article class="panel chat-card">
           <div class="panel-head"><div><p class="eyebrow">AVAILABILITY ASSISTANT</p><h3>When can you study?</h3></div><span id="planner-ai-badge" class="status-chip">Checking AI…</span></div>
-          <label class="week-label">Week starts<input id="plan-start" type="date" required></label>
+          <label class="week-label">Plan from<input id="plan-start" type="date" required></label>
           <div id="chat-messages" class="chat-messages" aria-live="polite">
             <div class="chat-bubble assistant">Tell me your free times, for example: “Monday 6–8pm and Wednesday after 4pm.”</div>
           </div>
@@ -196,8 +197,15 @@
         </article>
         <article class="panel availability-card">
           <p class="eyebrow">INTERPRETED SCHEDULE</p>
-          <h3>Your availability this week</h3>
+          <h3>Your availability for these seven days</h3>
           <div id="availability-summary" class="availability-summary empty">No times added yet.</div>
+          <details class="quick-setup"><summary>Add study times yourself</summary>
+            <form id="availability-slot-form" class="compact-form">
+              <label>Date<input id="slot-date" type="date" required></label>
+              <div class="dialog-grid"><label>From<input id="slot-start" type="time" value="18:00" required></label><label>Until<input id="slot-end" type="time" value="20:00" required></label></div>
+              <button class="secondary">Add time</button>
+            </form>
+          </details>
           <button id="generate-chat-plan" class="primary full" disabled>Build my weekly plan</button>
           <details class="quick-setup"><summary>Prefer a simple daily amount?</summary>
             <form id="plan-form" class="compact-form">
@@ -208,13 +216,8 @@
         </article>
       </div>
       <div id="plan-feedback" class="feedback" aria-live="polite"></div>
-      <div class="panel-head">
-        <label>Saved plan versions<select id="plan-history" aria-label="Saved plan versions" aria-describedby="plan-history-help" disabled><option value="">No saved plans yet</option></select></label>
-        <button id="refresh-plan-history" class="secondary" type="button">Refresh versions</button>
-        <button id="regenerate-plan" class="secondary" type="button" disabled>Regenerate selected plan</button>
-      </div>
-      <p id="plan-history-help" class="hint" aria-live="polite">Generate a plan successfully to save your first version.</p>
-      <p class="hint">Regeneration rechecks assessments and progress using the start date and availability above. If no time slots are entered, it uses the quick setup daily minutes. Older versions remain available here.</p>
+      <div class="panel-head"><h3>Current plan</h3><div class="row-actions"><button id="regenerate-plan" class="secondary" type="button" disabled>Update my plan</button><button class="link" data-view="profile">Plan history</button></div></div>
+      <p class="hint">Choose your availability above before updating. Your previous plan stays in place if an update cannot be completed.</p>
       <div id="plan-list" class="plan-board"></div>
     </section>
 
@@ -225,8 +228,8 @@
       </div>
       <p class="lede">See deadlines, study blocks and spaced reviews together. Select a day to add something yourself.</p>
       <div id="calendar-feedback" class="feedback" aria-live="polite"></div>
-      <div class="month-weekdays" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
-      <div id="month-grid" class="month-grid" aria-label="Monthly calendar"></div>
+      <div class="calendar-scroll"><div class="month-weekdays" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+      <div id="month-grid" class="month-grid" aria-label="Monthly calendar"></div></div>
     </section>
 
     <section id="week" class="view">
@@ -243,13 +246,14 @@
       <p class="eyebrow">STUDY ACTIVITY</p>
       <h2>Record a study session</h2>
       <form id="activity-form" class="form">
-        <label>Subject<select id="activity-subject" required></select></label>
+        <label>Subject<select id="activity-subject" required></select></label><label>Assessment (optional)<select id="activity-assessment"><option value="">General subject study</option></select></label>
         <label>Date<input id="activity-date" type="date" required></label>
         <label>Minutes<input id="activity-minutes" type="number" min="1" max="1440" value="45" required></label>
         <label class="grow">What did you work on?<input id="activity-description" maxlength="2000" required placeholder="e.g. Drafted report introduction"></label>
         <button class="primary">Record session</button>
       </form>
       <div id="activity-feedback" class="feedback" aria-live="polite"></div>
+      <article class="panel"><h3>Recorded activity</h3><p class="hint">Completed calendar blocks already count toward progress. To correct a completed block, remove it first and record the corrected session.</p><div id="activity-history" class="list"></div></article>
     </section>
 
     <section id="profile" class="view">
@@ -269,6 +273,11 @@
           <button class="primary">Save profile</button><div id="profile-feedback" class="feedback" aria-live="polite"></div>
         </form>
         <article class="panel"><div class="panel-head"><h3>Recent sessions</h3><button class="link" data-view="activity">Record one</button></div><div id="session-history" class="list empty">No study sessions recorded yet.</div></article>
+        <article class="panel plan-history-panel"><div class="panel-head"><h3>Plan history</h3><button id="refresh-plan-history" class="secondary" type="button">Refresh history</button></div>
+          <p id="plan-history-help" class="hint" aria-live="polite"></p>
+          <div id="plan-history" class="history-cards"></div><div id="history-feedback" class="feedback" aria-live="polite"></div>
+          <div id="history-preview"></div>
+        </article>
         <form id="password-form" class="panel profile-form security-card">
           <h3>Password and session</h3>
           <label>Current password<input id="current-password" type="password" autocomplete="current-password" required></label>
@@ -345,6 +354,14 @@
     </form>
   </dialog>
 
+  <dialog id="session-dialog" class="calendar-dialog"><form id="session-form" method="dialog">
+    <div class="panel-head"><h2>Edit recorded session</h2><button id="close-session-dialog" type="button" class="icon-button" aria-label="Close">×</button></div>
+    <input id="session-id" type="hidden"><p id="session-subject-label"></p>
+    <div class="dialog-grid"><label>Date<input id="session-date" type="date" required></label><label>Minutes<input id="session-minutes" type="number" min="1" max="1440" required></label></div>
+    <label>What did you work on?<textarea id="session-description" required maxlength="2000"></textarea></label>
+    <div id="session-feedback" class="feedback" aria-live="polite"></div><div class="dialog-actions"><button id="delete-session" type="button" class="secondary danger-button">Remove session</button><button class="primary">Save changes</button></div>
+  </form></dialog>
+  <script src="student-workflow.js"></script>
   <script src="browser-timezone.js"></script>
   <script src="dashboard-stream.js"></script>
   <script type="module" src="app.js"></script>

@@ -8,6 +8,10 @@
 
 > **Document purpose.** This specification records the **implemented software** and its verifiable acceptance criteria. It supplements, but does not replace or retrospectively rewrite, the original *Study Leftovers Group Project Proposal* (Spring 2026). Historical plans and final behaviour are deliberately distinguished. Source paths below refer to the project repository.
 
+## Current workflow addendum — 16 October 2026
+
+The historical evidence baseline below remains unchanged. The current student workflow adds TXT import, forward-only account-local planning, visible overdue work, source-linked calendar deadlines/activity, assessment-linked study records, and interactive history under Profile. No final FR/UC or original operation was removed. Detailed contracts and newly executed evidence are in [contracts](../architecture/contracts.md#student-workflow-contract-additions--final-fruc-numbering) and [student workflow evidence](../testing/student-workflow-evidence.md).
+
 ## 1. Business context and objectives
 
 Students often manage subject outlines, assessments, due dates, work estimates, study sessions and calendar commitments in disconnected places. Study Leftovers provides a local academic workspace in which a student can capture subject information, monitor workload and progress, record study activity, and generate or regenerate a practical seven-day study plan grounded in current application data. A browser client makes the workflows accessible; REST APIs remain the authoritative service interfaces.
@@ -23,7 +27,7 @@ The system is an academic prototype, not a hosted university information system 
 ### 2.1 Delivered capabilities
 
 - Account registration, sign-in, remembered sessions, profile and password management, and account-scoped academic data.
-- Manual subject creation/editing, plus outline import from PDF/DOCX/JPG/JPEG with extraction and a human confirmation step; the frontend queues up to 10 documents per batch.
+- Manual subject creation/editing, plus outline import from PDF/DOCX/TXT/JPG/JPEG with extraction and a human confirmation step; the frontend queues up to 10 documents per batch.
 - Assessment creation, import, editing, completion, deletion, workload estimates and due dates, with Subject Service verification of references.
 - Study-session creation, correction, deletion and subject-based summaries.
 - Two independent Kafka Streams materialised computations: assessment workload and weekly subject progress.
@@ -87,7 +91,7 @@ The 18-item original numbering is retained **only in the original proposal**. Th
 |---|---|---|
 | EXT-01 | Registration, authentication and remembered sessions | Account registration/login returns an authenticated session; protected service requests require an account-scoped bearer token. `account-service/`, `docs/architecture/contracts.md`. |
 | EXT-02 | Profile, password and appearance settings | Owned profile/password updates and saved theme/navigation choices are available; password changes revoke other sessions. Account API tests, `frontend/tests/`. |
-| EXT-03 | Subject-outline ingestion and review | Subject Service accepts PDF, DOCX, JPG/JPEG outline input, exposes review state, and requires user confirmation before assessment import. `POST /api/subject-outlines`, `GET /api/subject-outlines/{id}`, `POST /api/subject-outlines/{id}/confirm`; Subject tests. |
+| EXT-03 | Subject-outline ingestion and review | Subject Service accepts PDF, DOCX, TXT, JPG/JPEG outline input, exposes review state, and requires user confirmation before assessment import. `POST /api/subject-outlines`, `GET /api/subject-outlines/{id}`, `POST /api/subject-outlines/{id}/confirm`; Subject tests. |
 | EXT-04 | Multi-file outline queue in browser | Frontend can queue up to 10 supported outline files for sequential submission; server upload endpoint handles one file per call. `README.md`, `frontend/`. |
 | EXT-05 | Calendar operations and version history | Owned calendar entries can be viewed, created, edited and completed; saved plan versions can be listed and retrieved. `GET/POST /api/calendar`, `PATCH /api/calendar/{id}`, `GET /api/planning/plans`. |
 | EXT-06 | Conversational availability | Natural-language weekday/time expressions are translated into a reviewable availability schedule; invalid or ambiguous slots require clarification or rejection. `POST /api/planning/availability/chat`, availability tests. |

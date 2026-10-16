@@ -24,21 +24,37 @@ public class StudyActivityApplicationService implements SnapshotSource {
   private final StudySessionRepository repo;
   private final EventPublisher events;
   private final RestClient subjects;
+  private final RestClient assessments;
 
   public StudyActivityApplicationService(
       StudySessionRepository repo,
       EventPublisher events,
       RestClient.Builder builder,
-      @Value("${services.subject-url}") String url) {
+      @Value("${services.subject-url}") String url,
+      @Value("${services.assessment-url:http://localhost:8082}") String assessmentUrl) {
     this.repo = repo;
     this.events = events;
     this.subjects = builder.baseUrl(url).build();
+    this.assessments = builder.clone().baseUrl(assessmentUrl).build();
   }
 
   @Transactional
   public Response record(
       UUID ownerId, String authorization, CreateRequest request, ZoneId timezone) {
     verify(authorization, request.subjectId());
+    if (request.assessmentId() != null) {
+      AssessmentReference reference;
+      try {
+        reference = assessments.get().uri("/api/assessments/{id}", request.assessmentId())
+            .header("Authorization", authorization).retrieve().body(AssessmentReference.class);
+      } catch (HttpClientErrorException.NotFound exception) {
+        throw new IllegalArgumentException("Assessment does not exist for this account");
+      } catch (Exception exception) {
+        throw new DependencyException("Could not verify the assessment. Please retry.", exception);
+      }
+      if (reference == null || !request.subjectId().equals(reference.subjectId()))
+        throw new IllegalArgumentException("Assessment must belong to the selected subject");
+    }
     StudySession session =
         repo.save(
             new StudySession(
@@ -48,6 +64,7 @@ public class StudyActivityApplicationService implements SnapshotSource {
                 request.studyDate(),
                 request.description(),
                 LocalDate.now(timezone)));
+    session.linkAssessment(request.assessmentId());
     publish("StudySessionRecorded", session);
     return response(session);
   }
@@ -147,14 +164,21 @@ public class StudyActivityApplicationService implements SnapshotSource {
         session.getDurationMinutes(),
         session.getStudyDate(),
         session.getDescription(),
-        session.getRecordedAt());
+        session.getRecordedAt(), session.getAssessmentId());
   }
 
   public record CreateRequest(
       @NotNull UUID subjectId,
       @Min(1) @Max(1440) int durationMinutes,
       @NotNull LocalDate studyDate,
-      @NotBlank @Size(max = 2000) String description) {}
+      @NotBlank @Size(max = 2000) String description,
+      UUID assessmentId) {
+    public CreateRequest(UUID subjectId, int durationMinutes, LocalDate studyDate, String description) {
+      this(subjectId, durationMinutes, studyDate, description, null);
+    }
+  }
+
+  public record AssessmentReference(UUID subjectId) {}
 
   public record UpdateRequest(
       @Min(1) @Max(1440) int durationMinutes,
@@ -167,7 +191,7 @@ public class StudyActivityApplicationService implements SnapshotSource {
       int durationMinutes,
       LocalDate studyDate,
       String description,
-      Instant recordedAt) {}
+      Instant recordedAt, UUID assessmentId) {}
 
   public record Summary(
       UUID subjectId, LocalDate weekStart, LocalDate weekEnd, int totalMinutes, int sessionCount) {}
