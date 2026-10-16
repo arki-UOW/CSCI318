@@ -40,12 +40,21 @@ public class StudyPlanningAgent {
                         item.status(),
                         item.updatedAt()))
             .toList();
+    var completed = history.completedAssessmentMinutes(ownerId);
+    boolean overdueWork = assessments.stream().anyMatch(item -> item.dueDate() != null
+        && item.dueDate().isBefore(request.startDate())
+        && (item.estimatedMinutes() == null ? 120 : item.estimatedMinutes()) > completed.getOrDefault(item.id(), 0));
     DeadlineScheduler.Schedule result =
         scheduler.schedule(
             request.startDate(),
             WeeklyAvailability.from(request.startDate(), request.dailyAvailabilityMinutes()),
             assessments,
-            history.completedAssessmentMinutes(ownerId));
+            completed);
+    if (result.scheduledMinutes() == 0 && (result.requestedMinutes() > 0 || overdueWork)) {
+      throw new IllegalArgumentException(result.requestedMinutes() > 0
+          ? "No study time fits before your assessment deadlines. Add earlier availability or review the deadlines. Your current plan is unchanged."
+          : "Your unfinished work is overdue for this planning period. Review its deadlines or mark completed work as done. Your current plan is unchanged.");
+    }
     List<PlanItem> items =
         result.items().stream()
             .map(

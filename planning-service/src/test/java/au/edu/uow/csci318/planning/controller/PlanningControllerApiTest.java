@@ -42,7 +42,7 @@ class PlanningControllerApiTest {
             eq(request)))
         .thenReturn(
             new PlanResponse(
-                plan, start, start.plusDays(7), 1, List.of(), "Agent validated", Instant.now()));
+                plan, start, start.plusDays(6), 1, List.of(), "Agent validated", Instant.now(), request, 0));
     MockMvc api = MockMvcBuilders.standaloneSetup(new PlanningController(service, identity)).build();
 
     api.perform(

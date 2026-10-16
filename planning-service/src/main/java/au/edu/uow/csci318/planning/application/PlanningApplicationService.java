@@ -9,6 +9,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +25,7 @@ public class PlanningApplicationService {
   private final ConfiguredPlanningChatModel configuredModel;
   private final CalendarApplicationService calendar;
   private final ObjectMapper json;
+  private final Clock clock;
   private final au.edu.uow.csci318.planning.infrastructure.PlanWriteLock writeLock;
 
   public PlanningApplicationService(
@@ -34,7 +37,7 @@ public class PlanningApplicationService {
       ConfiguredPlanningChatModel configuredModel,
       CalendarApplicationService calendar,
       ObjectMapper json,
-      au.edu.uow.csci318.planning.infrastructure.PlanWriteLock writeLock) {
+      au.edu.uow.csci318.planning.infrastructure.PlanWriteLock writeLock, Clock clock) {
     this.plans = plans;
     this.agent = agent;
     this.advisor = advisor;
@@ -44,12 +47,14 @@ public class PlanningApplicationService {
     this.calendar = calendar;
     this.json = json;
     this.writeLock = writeLock;
+    this.clock = clock;
   }
 
   @Transactional
   public PlanResponse generate(
       UUID ownerId, String authorization, ZoneId timezone, PlanRequest request) {
     WeeklyTimeSlots slots = validatePeriod(request);
+    PlanningTimePolicy.validate(request, LocalDateTime.now(clock.withZone(timezone)));
     StudyPlanningAgent.Schedule candidate = agent.generate(ownerId, request, authorization);
     AgenticPlanningAdvisor.Advice advice =
         advisor.adviseGenerate(ownerId, authorization, timezone, request, candidate,
@@ -73,7 +78,9 @@ public class PlanningApplicationService {
                   version,
                   json.writeValueAsString(schedule.items()),
                   explanation));
-      calendar.replaceAiPlan(ownerId, saved.getId(), schedule.items(), slots);
+      saved.rememberAvailability(json.writeValueAsString(request));
+      saved.rememberUnscheduledMinutes(schedule.unscheduledMinutes());
+      calendar.replaceAiPlan(ownerId, saved.getId(), schedule.items(), slots, LocalDateTime.now(clock.withZone(timezone)));
       return response(saved);
     } catch (IllegalArgumentException exception) {
       throw exception;
@@ -90,6 +97,7 @@ public class PlanningApplicationService {
             .findByIdAndOwnerId(previousId, ownerId)
             .orElseThrow(() -> new NoSuchElementException("Study plan not found"));
     WeeklyTimeSlots slots = validatePeriod(request);
+    PlanningTimePolicy.validate(request, LocalDateTime.now(clock.withZone(timezone)));
     StudyPlanningAgent.Schedule candidate = agent.generate(ownerId, request, authorization);
     AgenticPlanningAdvisor.Advice advice =
         advisor.adviseRegenerate(ownerId, authorization, timezone, request, previousId, candidate,
@@ -116,7 +124,9 @@ public class PlanningApplicationService {
                       .orElse(1),
                   json.writeValueAsString(schedule.items()),
                   explanation));
-      calendar.replaceAiPlan(ownerId, saved.getId(), schedule.items(), slots);
+      saved.rememberAvailability(json.writeValueAsString(request));
+      saved.rememberUnscheduledMinutes(schedule.unscheduledMinutes());
+      calendar.replaceAiPlan(ownerId, saved.getId(), schedule.items(), slots, LocalDateTime.now(clock.withZone(timezone)));
       return response(saved);
     } catch (IllegalArgumentException exception) {
       throw exception;
@@ -125,8 +135,14 @@ public class PlanningApplicationService {
     }
   }
 
-  public AvailabilityChatResponse updateAvailability(AvailabilityChatRequest request) {
-    return availabilityAssistant.assist(request);
+  public AvailabilityChatResponse updateAvailability(AvailabilityChatRequest request, ZoneId zone) {
+    LocalDateTime now = LocalDateTime.now(clock.withZone(zone));
+    PlanningTimePolicy.requireFutureStart(request.weekStart(), now);
+    AvailabilityChatResponse result = availabilityAssistant.assist(request);
+    if (result.readyToPlan()) PlanningTimePolicy.validate(
+        new PlanRequest(request.weekStart(), result.dailyAvailabilityMinutes(), result.availability()),
+        LocalDateTime.now(clock.withZone(zone)));
+    return result;
   }
 
   public AiStatus aiStatus() {
@@ -323,7 +339,9 @@ public class PlanningApplicationService {
           plan.getVersion(),
           json.readValue(plan.getItemsJson(), new TypeReference<>() {}),
           plan.getExplanation(),
-          plan.getCreatedAt());
+          plan.getCreatedAt(),
+          plan.getAvailabilityJson() == null ? null : json.readValue(plan.getAvailabilityJson(), PlanRequest.class),
+          plan.getUnscheduledMinutes());
     } catch (Exception exception) {
       throw new IllegalStateException("Stored plan is unreadable", exception);
     }

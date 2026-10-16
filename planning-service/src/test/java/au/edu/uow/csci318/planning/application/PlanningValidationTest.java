@@ -34,7 +34,8 @@ class PlanningValidationTest {
           mock(ConfiguredPlanningChatModel.class),
           calendar,
           new ObjectMapper(),
-          mock(au.edu.uow.csci318.planning.infrastructure.PlanWriteLock.class));
+          mock(au.edu.uow.csci318.planning.infrastructure.PlanWriteLock.class),
+          Clock.fixed(Instant.parse("2026-10-11T00:00:00Z"), ZoneOffset.UTC));
 
   static Stream<PlanItem> invalidItems() {
     return Stream.of(

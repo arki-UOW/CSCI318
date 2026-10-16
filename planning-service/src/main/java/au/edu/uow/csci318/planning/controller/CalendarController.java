@@ -31,6 +31,11 @@ public class CalendarController {
     return service.list(identity.require(authorization), from, to);
   }
 
+  @GetMapping("/completed")
+  public List<EntryResponse> completed(@RequestHeader("Authorization") String authorization) {
+    return service.completed(identity.require(authorization));
+  }
+
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
   public EntryResponse create(

@@ -20,6 +20,12 @@ public class StudySession {
   @Column(nullable = false)
   private UUID subjectId;
 
+  private UUID assessmentId;
+
+  public UUID getAssessmentId() { return assessmentId; }
+
+  public void linkAssessment(UUID assessmentId) { this.assessmentId = assessmentId; }
+
   @Column(nullable = false)
   private int durationMinutes;
 

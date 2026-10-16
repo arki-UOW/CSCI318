@@ -36,7 +36,7 @@ public class DashboardQueryService implements StudyHistory {
     List<AssessmentSnapshot> outstanding = workload.outstanding();
     List<AssessmentView> due =
         outstanding.stream()
-            .filter(item -> between(item.dueDate(), monday, sunday))
+            .filter(item -> between(item.dueDate(), today, sunday))
             .sorted(Comparator.comparing(AssessmentSnapshot::dueDate))
             .map(this::view)
             .toList();
@@ -80,7 +80,9 @@ public class DashboardQueryService implements StudyHistory {
             "KAFKA_STREAMS",
             workload.revision() > 0 || progressRevision > 0);
     return new StreamSnapshot(
-        new ThisWeek(monday, sunday, due, upcoming, summary, study, planned), status);
+        new ThisWeek(monday, sunday, due, upcoming, summary, study, planned,
+            outstanding.stream().filter(item -> item.dueDate() != null && item.dueDate().isBefore(today))
+                .sorted(Comparator.comparing(AssessmentSnapshot::dueDate)).map(this::view).toList()), status);
   }
 
   public WorkloadSummary workload(UUID ownerId, ZoneId zone) {

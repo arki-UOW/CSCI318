@@ -26,6 +26,31 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class CalendarApplicationServiceTest {
   @Mock CalendarEntryRepository entries;
 
+  @Test
+  void sameDayMinutesNeverPlaceInElapsedTime() {
+    UUID owner = UUID.randomUUID();
+    LocalDate day = LocalDate.of(2026, 10, 16);
+    when(entries.findOverlapping(eq(owner), any(), any())).thenReturn(List.of());
+    var service = new CalendarApplicationService(entries, mock(CompletedStudyBlockEvents.class), mock(CalendarReferences.class));
+    service.replaceAiPlan(owner, UUID.randomUUID(), List.of(new PlanItem(day, UUID.randomUUID(), UUID.randomUUID(), "Report", 30)), null, day.atTime(22, 30, 15));
+    var saved = ArgumentCaptor.forClass(CalendarEntry.class);
+    verify(entries).save(saved.capture());
+    assertEquals(day.atTime(22, 31), saved.getValue().getStartAt());
+    assertEquals(day.atTime(23, 1), saved.getValue().getEndAt());
+  }
+
+  @Test
+  void timePassingDuringModelCallCannotEraseTheCurrentPlan() {
+    UUID owner = UUID.randomUUID();
+    LocalDate day = LocalDate.of(2026, 10, 16);
+    when(entries.findOverlapping(eq(owner), any(), any())).thenReturn(List.of());
+    var service = new CalendarApplicationService(entries, mock(CompletedStudyBlockEvents.class), mock(CalendarReferences.class));
+    assertThrows(IllegalArgumentException.class, () -> service.replaceAiPlan(owner, UUID.randomUUID(),
+        List.of(new PlanItem(day, UUID.randomUUID(), UUID.randomUUID(), "Report", 60)), null, day.atTime(23, 30)));
+    verify(entries, never()).save(any());
+    verify(entries, never()).deleteByOwnerIdAndOriginAndStatus(any(), any(), any());
+  }
+
   private CalendarEntry busy(UUID owner, LocalDateTime from, LocalDateTime to) {
     return new CalendarEntry(
         owner,

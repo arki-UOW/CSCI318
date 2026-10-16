@@ -25,6 +25,9 @@ MODEL_FEEDBACK = []
 TODAY = dt.datetime.now(dt.timezone.utc).date()
 START = TODAY + dt.timedelta(days=1)
 END = START + dt.timedelta(days=6)
+AVAIL_START = START + dt.timedelta(days=(4 - START.weekday()) % 7)
+MONDAY = AVAIL_START + dt.timedelta(days=3)
+WEDNESDAY = AVAIL_START + dt.timedelta(days=5)
 
 
 class ModelFixture(BaseHTTPRequestHandler):
@@ -162,22 +165,22 @@ def main():
         check('register account', status, 201)
         token = account['token']
         status, interpreted = api(18084, 'planning/availability/chat', token, {
-            'weekStart': '2026-10-12', 'availability': {},
+            'weekStart': AVAIL_START.isoformat(), 'availability': {},
             'message': "I'm free Monday and Wednesday from 6pm to 8pm."})
         check('availability chat accepts named weekdays', status, 200)
-        check('Monday is October 12, not October 13', (
-            interpreted['dailyAvailabilityMinutes']['2026-10-12'],
-            interpreted['dailyAvailabilityMinutes']['2026-10-13']), (120, 0))
-        check('Wednesday is October 14, not October 15', (
-            interpreted['dailyAvailabilityMinutes']['2026-10-14'],
-            interpreted['dailyAvailabilityMinutes']['2026-10-15']), (120, 0))
+        check('Friday planning maps Monday to the upcoming Monday', (
+            interpreted['dailyAvailabilityMinutes'][MONDAY.isoformat()],
+            interpreted['dailyAvailabilityMinutes'][(MONDAY + dt.timedelta(days=1)).isoformat()]), (120, 0))
+        check('Friday planning maps Wednesday to the upcoming Wednesday', (
+            interpreted['dailyAvailabilityMinutes'][WEDNESDAY.isoformat()],
+            interpreted['dailyAvailabilityMinutes'][(WEDNESDAY + dt.timedelta(days=1)).isoformat()]), (120, 0))
         check('availability confirmation matches server calendar',
-              'Monday 12 Oct' in interpreted['reply'] and 'Wednesday 14 Oct' in interpreted['reply'], True)
+              f'Monday {MONDAY.day} {MONDAY:%b}' in interpreted['reply'] and f'Wednesday {WEDNESDAY.day} {WEDNESDAY:%b}' in interpreted['reply'], True)
         check('valid interpreted availability is ready', interpreted['readyToPlan'], True)
         before_clear = len(MODEL_CALLS)
         MODE = 'quota'
         status, cleared = api(18084, 'planning/availability/chat', token, {
-            'weekStart': '2026-10-12', 'availability': interpreted['availability'],
+            'weekStart': AVAIL_START.isoformat(), 'availability': interpreted['availability'],
             'message': 'Clear my availability and let me start again.'})
         check('clear availability works during provider outage', (status, sum(cleared['dailyAvailabilityMinutes'].values()), cleared['readyToPlan']), (200, 0, False))
         check('clear availability makes no provider request', len(MODEL_CALLS), before_clear)
@@ -443,6 +446,49 @@ def main():
         # Hours and percentages remain decimal fields; only integer fields reject decimal JSON.
         status, half_hour = api(18082, 'assessments/import', edge_token, {'subjectId': edge_subject['id'], 'assessments': [{'title': 'Half hour', 'estimatedHours': 0.5}]})
         check('fractional hours still convert to whole minutes', (status, half_hour[0]['estimatedMinutes']), (201, 30))
+        # Final UC-01/03/04/05/06/07/11/12/13: forward planning and source-record journeys.
+        status, learner = api(18085, 'auth/register', body={'username': 'journey_' + uuid.uuid4().hex[:8], 'password': 'FixtureOnly-1234', 'displayName': 'Student journey', 'timezone': 'UTC'})
+        learner_token = learner['token']
+        status, learner_subject = api(18081, 'subjects', learner_token, subject_body)
+        learner_sid = learner_subject['id']
+        eligible_body = {**body, 'subjectId': learner_sid, 'title': 'Eligible report', 'estimatedMinutes': 60, 'dueDate': END.isoformat()}
+        status, eligible = api(18082, 'assessments', learner_token, eligible_body)
+        status, overdue = api(18082, 'assessments', learner_token, {**eligible_body, 'title': 'Overdue report', 'dueDate': (TODAY - dt.timedelta(days=3)).isoformat()})
+        check('overdue remains in assessment list', overdue['id'] in [a['id'] for a in api(18082, 'assessments', learner_token)[1]], True)
+        status, learner_plan = api(18084, 'planning/plans', learner_token, request)
+        check('mixed overdue and eligible workload plans eligible work', (status, {i['assessmentId'] for i in learner_plan.get('items', [])}), (201, {eligible['id']}))
+        check('plan persists exact availability', learner_plan['availability'], {**request, 'availabilitySlots': {START.isoformat(): [{'start':'14:00:00','end':'16:00:00'}]}})
+        check('plan exposes structured unallocated workload', learner_plan['unscheduledMinutes'], 0)
+        before_plan = api(18084, 'planning/plans', learner_token)[1]
+        before_calendar = api(18084, f'calendar?from={START}&to={END}', learner_token)[1]
+        yesterday = (TODAY - dt.timedelta(days=1)).isoformat()
+        check('past planning start rejected before model call', api(18084, 'planning/plans', learner_token, {'startDate': yesterday, 'dailyAvailabilityMinutes': {yesterday: 60}})[0], 400)
+        api(18082, 'assessments/' + eligible['id'], learner_token, {**eligible_body, 'dueDate': yesterday}, 'PATCH')
+        status, blocked = api(18084, 'planning/plans/' + learner_plan['id'] + '/regenerate', learner_token, request)
+        check('overdue-only update is blocked with a useful message', (status, 'overdue' in blocked.get('message','')), (400, True))
+        check('blocked update preserves history', api(18084, 'planning/plans', learner_token)[1], before_plan)
+        check('blocked update preserves calendar', api(18084, f'calendar?from={START}&to={END}', learner_token)[1], before_calendar)
+        linked_body = {'subjectId': learner_sid, 'assessmentId': eligible['id'], 'studyDate': TODAY.isoformat(), 'durationMinutes': 25, 'description': 'Drafted report'}
+        status, linked = api(18083, 'study-sessions', learner_token, linked_body)
+        check('record optional assessment-linked activity', (status, linked.get('assessmentId')), (201, eligible['id']))
+        status, corrected = api(18083, 'study-sessions/' + linked['id'], learner_token, {**linked_body, 'durationMinutes': 35}, 'PATCH')
+        check('session correction retains assessment link', (status, corrected.get('durationMinutes'), corrected.get('assessmentId')), (200, 35, eligible['id']))
+        check('session summary includes correction once', api(18083, f'study-sessions/summary?subjectId={learner_sid}', learner_token)[1]['totalMinutes'], 35)
+        check('foreign assessment cannot be linked to owned subject', api(18083, 'study-sessions', learner_token, {**linked_body, 'assessmentId': aid})[0], 400)
+        status, mismatch_subject = api(18081, 'subjects', learner_token, {**subject_body, 'code':'OTHER318'})
+        check('mismatched assessment and subject rejected', api(18083, 'study-sessions', learner_token, {**linked_body, 'subjectId':mismatch_subject['id']})[0], 400)
+        check('other account cannot edit recorded session', api(18083, 'study-sessions/' + linked['id'], other_token, linked_body, 'PATCH')[0], 404)
+        check('remove recorded session', api(18083, 'study-sessions/' + linked['id'], learner_token, method='DELETE')[0], 204)
+        check('removed session disappears from history', api(18083, 'study-sessions', learner_token)[1], [])
+        check('completed calendar history is available independent of visible month', created['id'] in [e['id'] for e in api(18084, 'calendar/completed', token)[1]], True)
+        check('completed calendar history is account isolated', api(18084, 'calendar/completed', learner_token)[1], [])
+        txt_boundary = 'TextOutlineBoundary'
+        txt_upload = ('--' + txt_boundary + '\r\nContent-Disposition: form-data; name="file"; filename="outline.txt"\r\nContent-Type: text/plain\r\n\r\nSubject Code: CSCI319\nSubject Name: Acceptance Fixture\nAssessment: Report 30%\r\n--' + txt_boundary + '--\r\n').encode()
+        status, text_review = api(18081, 'subject-outlines', learner_token, txt_upload, content_type='multipart/form-data; boundary=' + txt_boundary)
+        check('TXT passes through document reader and model to review', (status, text_review.get('extraction',{}).get('subjectCode')), (201, 'CSCI319'))
+        check('TXT extraction does not create unconfirmed subjects', len(api(18081, 'subjects', learner_token)[1]), 2)
+        status, text_confirm = api(18081, 'subject-outlines/' + text_review['importId'] + '/confirm', learner_token, {'weeklyStudyTargetMinutes':240, 'extraction':text_review['extraction']})
+        check('TXT review confirmation saves subject', status, 201)
         check('no private provider account used', bool(MODEL_CALLS), True)
         print(f'All {len(results)} readiness checks passed. This fixture is not live-provider or Kafka evidence.', flush=True)
     finally:

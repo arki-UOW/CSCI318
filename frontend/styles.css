@@ -746,3 +746,25 @@ body.about-page { display: block; min-height: 100vh; background: radial-gradient
   .about-hero img { margin: auto; }
   .about-content { grid-template-columns: 1fr; }
 }
+/* Student workflow: history is secondary, source records stay directly accessible. */
+.history-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.history-card { display: flex; flex-direction: column; gap: 8px; text-align: left; background: var(--surface); border: 1px solid #bdd0c7; border-radius: 12px; padding: 16px; color: var(--text); }
+.history-card:hover, .history-card.selected { border-color: var(--green); background: #edf5ef; }
+.plan-history-panel { grid-column: 1 / -1; }
+#history-preview { margin-top: 20px; }
+.calendar-event.deadline { background: #fff3db; border-left: 3px solid #bb7b12; color: #684400; }
+.calendar-event.recorded { background: #e4f0fa; border-left: 3px solid #4680a8; color: #244d6b; }
+.month-events { max-height: 180px; overflow-y: auto; }
+#activity-history, #dashboard-sessions { margin-top: 16px; }
+.plan-board { display: block; }
+.calendar-scroll { overflow-x: auto; }
+.sr-only { min-width: 0 !important; width: 1px !important; }
+.calendar-scroll .month-grid { overflow: hidden; }
+.calendar-scroll .month-grid, .calendar-scroll .month-weekdays { min-width: 735px; }
+.history-card, .row .body, .calendar-event { overflow-wrap: anywhere; }
+.compact-form .dialog-grid input { min-width: 0; width: 100%; }
+@media (max-width: 600px) {
+  .panel-head { flex-wrap: wrap; gap: 10px; }
+  .form label, .form .grow { min-width: 0; width: 100%; }
+  .form input, .form select { min-width: 0; width: 100%; }
+}

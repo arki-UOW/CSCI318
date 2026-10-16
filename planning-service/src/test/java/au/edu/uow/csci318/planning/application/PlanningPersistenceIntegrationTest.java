@@ -41,6 +41,8 @@ class PlanningPersistenceIntegrationTest {
   })
   static class Config {
     @Bean
+    Clock clock() { return Clock.fixed(Instant.parse("2026-10-11T00:00:00Z"), ZoneOffset.UTC); }
+    @Bean
     ObjectMapper json() {
       return new ObjectMapper().findAndRegisterModules();
     }
@@ -97,6 +99,7 @@ class PlanningPersistenceIntegrationTest {
     assertTrue(saved.getExplanation().length() > 750);
     assertTrue(saved.getExplanation().contains("beyond this plan: 60 minutes"));
     assertEquals(first.explanation(), saved.getExplanation());
+    assertEquals(request, service.get(owner, first.id()).availability());
     assertEquals(60, first.items().stream().mapToInt(PlanItem::allocatedMinutes).sum());
     assertEquals(LocalTime.of(9, 0), calendar.findAll().getFirst().getStartAt().toLocalTime());
 

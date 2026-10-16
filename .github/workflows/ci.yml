@@ -17,8 +17,12 @@ jobs:
         run: mvn --batch-mode clean verify
       - uses: actions/setup-node@v4
         with: {node-version: '22'}
+      - uses: pnpm/action-setup@v4
+        with: {version: '11.25.0'}
       - name: Verify authenticated browser stream client
-        run: node --test frontend/tests/*.test.cjs
+        run: |
+          pnpm install --dir frontend --frozen-lockfile
+          node --test frontend/tests/*.test.cjs
       - name: Verify Windows launcher failure and readiness handling
         shell: pwsh
         run: ./scripts/test-launcher.ps1
@@ -43,6 +47,8 @@ jobs:
         env: {AI_PROVIDER: auto}
       - name: Verify live workload, progress, isolation and browser push without upstream REST
         run: python3 scripts/verify-streaming.py --isolate-upstream --skip-ai-planning --compose-project study-leftovers-ci
+      - name: Verify all outline formats with real Docker OCR
+        run: python3 scripts/verify-document-formats.py
       - name: Capture service diagnostics
         if: always()
         run: docker compose -p study-leftovers-ci logs --no-color --tail 250

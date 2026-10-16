@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 public interface CalendarEntryRepository extends JpaRepository<CalendarEntry, UUID> {
+  List<CalendarEntry> findByOwnerIdAndStatusOrderByStartAtDesc(UUID ownerId, EntryStatus status);
   List<CalendarEntry> findByOwnerIdAndStartAtBetweenOrderByStartAt(
       UUID ownerId, LocalDateTime from, LocalDateTime to);
 

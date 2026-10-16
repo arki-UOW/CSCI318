@@ -57,7 +57,7 @@ services:
   study-activity-service:
     build: {context: ., dockerfile: study-activity-service/Dockerfile}
     ports: ["8083:8083"]
-    environment: {SUBJECT_SERVICE_URL: "http://subject-service:8081", ACCOUNT_SERVICE_URL: "http://account-service:8085", KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"}
+    environment: {SUBJECT_SERVICE_URL: "http://subject-service:8081", ASSESSMENT_SERVICE_URL: "http://assessment-service:8082", ACCOUNT_SERVICE_URL: "http://account-service:8085", KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"}
     volumes: ["activity-data:/data"]
     depends_on:
       kafka: {condition: service_healthy}

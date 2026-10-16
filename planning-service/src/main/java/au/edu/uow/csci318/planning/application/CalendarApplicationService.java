@@ -45,6 +45,11 @@ public class CalendarApplicationService {
         .toList();
   }
 
+  public List<EntryResponse> completed(UUID ownerId) {
+    return entries.findByOwnerIdAndStatusOrderByStartAtDesc(ownerId, EntryStatus.COMPLETED)
+        .stream().map(this::response).toList();
+  }
+
   @Transactional
   public EntryResponse create(UUID ownerId, String authorization, SaveRequest request) {
     references.verify(authorization, request.subjectId(), request.assessmentId());
@@ -110,11 +115,17 @@ public class CalendarApplicationService {
   @Transactional
   public void replaceAiPlan(
       UUID ownerId, UUID planId, List<PlanItem> items, WeeklyTimeSlots slots) {
-    replaceWithinAvailability(ownerId, planId, items, slots);
+    replaceWithinAvailability(ownerId, planId, items, slots, null);
+  }
+
+  @Transactional
+  public void replaceAiPlan(UUID ownerId, UUID planId, List<PlanItem> items,
+      WeeklyTimeSlots slots, LocalDateTime now) {
+    replaceWithinAvailability(ownerId, planId, items, slots, now);
   }
 
   private void replaceWithinAvailability(
-      UUID ownerId, UUID planId, List<PlanItem> items, WeeklyTimeSlots slots) {
+      UUID ownerId, UUID planId, List<PlanItem> items, WeeklyTimeSlots slots, LocalDateTime now) {
     if (items.isEmpty()) {
       entries.deleteByOwnerIdAndOriginAndStatus(ownerId, Origin.AI_PLAN, EntryStatus.PLANNED);
       return;
@@ -130,6 +141,15 @@ public class CalendarApplicationService {
                     entry.getOrigin() != Origin.AI_PLAN || entry.getStatus() != EntryStatus.PLANNED)
             .map(entry -> new WeeklyTimeSlots.Interval(entry.getStartAt(), entry.getEndAt()))
             .toList();
+    if (now != null) {
+      if (first.isBefore(now.toLocalDate())) throw new IllegalArgumentException("The planning date has passed. Start a new plan from today.");
+      occupied = new ArrayList<>(occupied);
+      if (first.equals(now.toLocalDate())) {
+        LocalDateTime cutoff = now.truncatedTo(ChronoUnit.MINUTES).plusMinutes(1);
+        occupied.add(new WeeklyTimeSlots.Interval(first.atStartOfDay(), cutoff));
+      }
+    }
+    final List<WeeklyTimeSlots.Interval> commitments = occupied;
     Map<LocalDate, Deque<WeeklyTimeSlots.Interval>> free = new HashMap<>();
     Map<LocalDate, Integer> dayMinutes = new HashMap<>();
     items.forEach(item -> dayMinutes.merge(item.date(), item.allocatedMinutes(), Integer::sum));
@@ -141,8 +161,8 @@ public class CalendarApplicationService {
               date ->
                   new ArrayDeque<>(
                       slots == null
-                          ? freeDay(date, dayMinutes.get(date), occupied)
-                          : slots.free(date, occupied)));
+                          ? freeDay(date, dayMinutes.get(date), commitments)
+                          : slots.free(date, commitments)));
       int remaining = item.allocatedMinutes();
       while (remaining > 0 && !windows.isEmpty()) {
         WeeklyTimeSlots.Interval window = windows.removeFirst();

@@ -4,13 +4,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const app = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
+const errorCode = app.slice(app.indexOf('function studentError('), app.indexOf('function setAuthMode('));
 const requestCode = app.slice(app.indexOf('async function request('), app.indexOf('function setAuthMode('));
 const calendarCode = app.slice(app.indexOf('async function loadCalendar('), app.indexOf('function calendarEvent('));
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return {promise, resolve}; };
 function networkContext(fetch) {
   const context = { state: {token: 'A', sessionEpoch: 1}, Headers, accountTimezone: () => 'UTC', fetch,
     signOut: () => { context.signedOut = context.state.token; } };
-  vm.createContext(context); vm.runInContext(requestCode, context); return context;
+  vm.createContext(context); vm.runInContext(errorCode + requestCode, context); return context;
 }
 test('old response bodies cannot overwrite a new account, even after headers arrived', async () => {
   const body = deferred();
@@ -36,8 +37,8 @@ function calendarContext() {
   const pending = []; const c = {state:{token:'A', calendarEntries:[], calendarWeek: new Date(2026,9,12)},
     API:{planning:'/api'}, monthRange:()=>({from:new Date(2026,9,1),to:new Date(2026,10,1)}),
     mondayFor:d=>d,addDays:(d,n)=>new Date(d.getTime()+n*86400000),localDate:d=>d.toISOString().slice(0,10),
-    request:()=>{const p=deferred();pending.push(p);return p.promise;},renderCalendar(){},renderWeek(){},render(){},feedback(){}};
-  vm.createContext(c);vm.runInContext(calendarCode,c);return {c,pending};
+    request:url=>{if(url.endsWith('/completed')) return Promise.resolve([]);const p=deferred();pending.push(p);return p.promise;},renderCalendar(){},renderWeek(){},render(){},feedback(){}};
+  c.calendarItems=()=>c.state.calendarEntries;vm.createContext(c);vm.runInContext(calendarCode,c);return {c,pending};
 }
 test('later calendar navigation wins when responses arrive out of order', async () => {
   const {c,pending}=calendarContext();const first=c.loadCalendar();const second=c.loadCalendar();
@@ -67,7 +68,7 @@ test('sign-out clears private DOM and memory before the logout network response'
     dashboardStream:{stop(){}}, request:()=>logout.promise, API:{accounts:'/accounts'},
     localStorage:{removeItem(){}}, setAssistantOpen(){}, setAuthMode(){},
     document:{body:{classList:{add(){}}},querySelectorAll:selector=>[node(selector)],getElementById:node},
-    $:node, localDate:()=> '2026-10-11',mondayFor:d=>d, setBusy(button, busy){button.disabled=busy;},
+    $:node, StudentWorkflow: require('../student-workflow.js'), accountToday:()=> '2026-10-11', localDate:()=> '2026-10-11',mondayFor:d=>d, setBusy(button, busy){button.disabled=busy;},
     render(){},renderCalendar(){},renderWeek(){},renderUploadQueue(){},renderProfilePictures(){}};
   vm.createContext(c);
   vm.runInContext(app.slice(app.indexOf('function renderAvailability()'), app.indexOf('function clearAvailability(')), c);
