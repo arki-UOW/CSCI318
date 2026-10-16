@@ -58,7 +58,7 @@ def main():
         extraction=review['extraction']
         assert extraction['subjectCode']=='CSCI319', (extension,extraction)
         # Distinct codes exercise confirmation without triggering duplicate-subject conflicts.
-        extraction['subjectCode']='FORMAT'+str(index)
+        extraction['subjectCode']='FORMAT'+str(100+index)
         confirmed=api(8081,'subject-outlines/'+review['importId']+'/confirm',token,{'weeklyStudyTargetMinutes':240,'extraction':extraction})
         assert confirmed, extension
         print('PASS: UC-01 '+extension.upper()+' read, reviewed and confirmed through Docker',flush=True)
