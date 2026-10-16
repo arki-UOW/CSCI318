@@ -41,7 +41,7 @@ def main():
                 with urllib.request.urlopen(f'http://localhost:{port}/api/{route}', timeout=5) as response:
                     if response.status == 200: break
             except urllib.error.HTTPError as error:
-                if error.code == 401: break  # The authenticated route is ready.
+                if error.code in (400, 401): break  # Missing required auth header / unauthenticated.
             except (OSError, ValueError):
                 pass
             if time.monotonic() >= deadline: raise RuntimeError(f'Service {port} did not become ready')
