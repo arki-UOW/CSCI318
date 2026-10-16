@@ -8,6 +8,7 @@ import io
 import json
 from pathlib import Path
 import urllib.request
+import urllib.error
 import uuid
 import zipfile
 import importlib.util
@@ -33,12 +34,14 @@ def docx(text):
 
 def main():
     # Streaming verification restarts its isolated upstream services before returning.
-    for port in [8081, 8082, 8083, 8085]:
+    for port, route in [(8081, 'subjects'), (8082, 'assessments'), (8083, 'study-sessions'), (8085, 'auth/session')]:
         deadline = time.monotonic() + 120
         while True:
             try:
-                with urllib.request.urlopen(f'http://localhost:{port}/actuator/health', timeout=5) as response:
-                    if json.load(response).get('status') == 'UP': break
+                with urllib.request.urlopen(f'http://localhost:{port}/api/{route}', timeout=5) as response:
+                    if response.status == 200: break
+            except urllib.error.HTTPError as error:
+                if error.code == 401: break  # The authenticated route is ready.
             except (OSError, ValueError):
                 pass
             if time.monotonic() >= deadline: raise RuntimeError(f'Service {port} did not become ready')
