@@ -103,6 +103,29 @@ class AvailabilityAssistant {
     }
   }
 
+  static AvailabilityChatResponse futureOnly(AvailabilityChatResponse result, java.time.LocalDateTime now) {
+    Map<LocalDate, List<TimeSlot>> future = new LinkedHashMap<>();
+    java.time.LocalDateTime cutoff = now.truncatedTo(java.time.temporal.ChronoUnit.MINUTES).plusMinutes(1);
+    result.availability().forEach((date, slots) -> {
+      List<TimeSlot> kept = new ArrayList<>();
+      for (TimeSlot slot : slots) {
+        java.time.LocalDateTime start = date.atTime(slot.start());
+        java.time.LocalDateTime end = date.atTime(slot.end());
+        if (start.isBefore(cutoff)) start = cutoff;
+        if (start.toLocalDate().equals(date) && Duration.between(start, end).toMinutes() >= 15)
+          kept.add(new TimeSlot(start.toLocalTime(), slot.end()));
+      }
+      future.put(date, List.copyOf(kept));
+    });
+    boolean changed = !future.equals(result.availability());
+    Map<LocalDate, Integer> minutes = dailyMinutes(future);
+    boolean ready = result.readyToPlan() && minutes.values().stream().anyMatch(value -> value > 0);
+    String reply = ready ? describe(future) : result.reply();
+    if (changed) reply = "Elapsed time was removed; only future study times are kept. "
+        + (ready ? reply : "Add a future slot or clarify your availability to continue.");
+    return new AvailabilityChatResponse(reply, future, minutes, ready, result.provider());
+  }
+
   private static Map<DayOfWeek, LocalDate> calendar(LocalDate start) {
     Map<DayOfWeek, LocalDate> dates = new LinkedHashMap<>();
     for (int day = 0; day < 7; day++) {
@@ -132,7 +155,7 @@ class AvailabilityAssistant {
     return resolved;
   }
 
-  private static String describe(Map<LocalDate, List<TimeSlot>> availability) {
+  static String describe(Map<LocalDate, List<TimeSlot>> availability) {
     DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("EEEE d MMM", Locale.ENGLISH);
     DateTimeFormatter timeFormat = DateTimeFormatter.ofPattern("HH:mm");
     return "Your availability: " + availability.entrySet().stream()

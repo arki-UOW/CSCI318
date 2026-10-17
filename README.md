@@ -178,3 +178,9 @@ The Windows launcher checks Docker's exit code and waits for service endpoints b
 New planning starts today in the account timezone and rejects past dates or elapsed time. Overdue unfinished assessments stay visible for correction/completion; they do not turn a blocked plan into an empty successful version. Eligible work can still be planned. Calendar views combine editable assessment deadlines, scheduled blocks and date-only activity from their source records. Recent activity appears on Dashboard, Activity and Profile. An optional assessment link on a recorded session contributes to that assessment’s remaining workload after Kafka processing. General study contributes to subject progress only. Completed calendar blocks already count; do not record the same work again.
 
 See the [progress checklist](docs/student-workflow-progress.md) and [fresh UC-01–UC-14 evidence](docs/testing/student-workflow-evidence.md). Historical audit counts remain historical.
+
+## Usability follow-up (17 October 2026)
+
+Profile now offers searchable timezone locations, UTC offsets, a local-time preview and device detection. Study-assistant answers use locally bundled equation rendering and readable paragraphs; malformed provider JSON gets one format-repair attempt instead of appearing as raw text. Conversational availability keeps usable future time when today's proposed start has elapsed. Manual slots can be removed, and quick daily-minute setup shows the proposed amounts for review before an explicit build/update action.
+
+Real past deadlines remain valid for accurate imports and overdue tracking, with warnings when edited. They do not permit backdated planning. Session notes are optional under final UC-04; omitted notes display as “Study session”. See the [follow-up fixes, executed tests and report reconciliation](docs/testing/usability-followup-evidence.md).

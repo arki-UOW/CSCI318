@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Study Leftovers</title>
   <link rel="icon" type="image/png" href="assets/study-leftovers-logo.png">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css" integrity="sha384-u1zONI5gPXUx0UKI62c75/zww972y0v2rSK5ZYlVdS6xEuWDeZWUI66v6t1gvlXJ" crossorigin="anonymous">
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js" integrity="sha384-ykMNcWQhhTUb0YV9SPpPUFURHZ+tWmubkakGBP+OgNK/UXdO2gtzglWx0Rj9hnO3" crossorigin="anonymous"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/contrib/auto-render.min.js" integrity="sha384-bjyGPfbij8/NDKJhSGZNP/khQVgtHUE5exjm4Ydllo42FwIgYsdLO2lXGmRBf5Mz" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="vendor/katex/katex.min.css">
+  <script defer src="vendor/katex/katex.min.js"></script>
+  <script defer src="vendor/katex/auto-render.min.js"></script>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -249,7 +249,7 @@
         <label>Subject<select id="activity-subject" required></select></label><label>Assessment (optional)<select id="activity-assessment"><option value="">General subject study</option></select></label>
         <label>Date<input id="activity-date" type="date" required></label>
         <label>Minutes<input id="activity-minutes" type="number" min="1" max="1440" value="45" required></label>
-        <label class="grow">What did you work on?<input id="activity-description" maxlength="2000" required placeholder="e.g. Drafted report introduction"></label>
+        <label class="grow">What did you work on? (optional)<input id="activity-description" maxlength="2000" placeholder="e.g. Drafted report introduction"></label>
         <button class="primary">Record session</button>
       </form>
       <div id="activity-feedback" class="feedback" aria-live="polite"></div>
@@ -269,7 +269,10 @@
           <label>Institution<input id="profile-institution" maxlength="255" placeholder="University of Wollongong"></label>
           <label>Course<input id="profile-course" maxlength="255" placeholder="Bachelor of Computer Science"></label>
           <label>Study goal<textarea id="profile-goal" maxlength="800" rows="4" placeholder="What are you working towards?"></textarea></label>
-          <label>Timezone<input id="profile-timezone" list="timezone-options" required value="Australia/Sydney"><datalist id="timezone-options"></datalist></label>
+          <label for="timezone-search">Find your timezone<input id="timezone-search" type="search" placeholder="Search city or region, e.g. Kolkata" autocomplete="off"></label>
+          <label>Location<select id="profile-timezone" size="5" required aria-describedby="timezone-preview"></select></label>
+          <button id="detect-timezone" type="button" class="secondary">Use this device’s timezone</button>
+          <small id="timezone-preview" aria-live="polite"></small>
           <button class="primary">Save profile</button><div id="profile-feedback" class="feedback" aria-live="polite"></div>
         </form>
         <article class="panel"><div class="panel-head"><h3>Recent sessions</h3><button class="link" data-view="activity">Record one</button></div><div id="session-history" class="list empty">No study sessions recorded yet.</div></article>
@@ -358,11 +361,12 @@
     <div class="panel-head"><h2>Edit recorded session</h2><button id="close-session-dialog" type="button" class="icon-button" aria-label="Close">×</button></div>
     <input id="session-id" type="hidden"><p id="session-subject-label"></p>
     <div class="dialog-grid"><label>Date<input id="session-date" type="date" required></label><label>Minutes<input id="session-minutes" type="number" min="1" max="1440" required></label></div>
-    <label>What did you work on?<textarea id="session-description" required maxlength="2000"></textarea></label>
+    <label>What did you work on? (optional)<textarea id="session-description" maxlength="2000"></textarea></label>
     <div id="session-feedback" class="feedback" aria-live="polite"></div><div class="dialog-actions"><button id="delete-session" type="button" class="secondary danger-button">Remove session</button><button class="primary">Save changes</button></div>
   </form></dialog>
   <script src="student-workflow.js"></script>
   <script src="browser-timezone.js"></script>
+  <script src="student-controls.js"></script>
   <script src="dashboard-stream.js"></script>
   <script type="module" src="app.js"></script>
 </body>

@@ -171,7 +171,7 @@ public class StudyActivityApplicationService implements SnapshotSource {
       @NotNull UUID subjectId,
       @Min(1) @Max(1440) int durationMinutes,
       @NotNull LocalDate studyDate,
-      @NotBlank @Size(max = 2000) String description,
+      @Size(max = 2000) String description,
       UUID assessmentId) {
     public CreateRequest(UUID subjectId, int durationMinutes, LocalDate studyDate, String description) {
       this(subjectId, durationMinutes, studyDate, description, null);
@@ -183,7 +183,7 @@ public class StudyActivityApplicationService implements SnapshotSource {
   public record UpdateRequest(
       @Min(1) @Max(1440) int durationMinutes,
       @NotNull LocalDate studyDate,
-      @NotBlank @Size(max = 2000) String description) {}
+      @Size(max = 2000) String description) {}
 
   public record Response(
       UUID id,

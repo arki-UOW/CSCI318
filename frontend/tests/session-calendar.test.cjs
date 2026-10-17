@@ -60,7 +60,7 @@ test('overnight entries span month boundaries and midnight ends are exclusive', 
 test('sign-out clears private DOM and memory before the logout network response', async () => {
   const logout = deferred(); const nodes = new Map();
   const node = id => {
-    if (!nodes.has(id)) nodes.set(id, {textContent:'private A', value:'private A', hidden:false, classList:{toggle(){}},
+    if (!nodes.has(id)) nodes.set(id, {textContent:'private A', value:'private A', hidden:false, classList:{toggle(){}}, addEventListener(){},
       replaceChildren(){this.textContent='';}, reset(){this.value='';}, close(){this.closed=true;}});
     return nodes.get(id);
   };

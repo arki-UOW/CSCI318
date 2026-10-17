@@ -768,3 +768,12 @@ body.about-page { display: block; min-height: 100vh; background: radial-gradient
   .form label, .form .grow { min-width: 0; width: 100%; }
   .form input, .form select { min-width: 0; width: 100%; }
 }
+
+/* Keep avatars circular even when account text competes for sidebar space. */
+#account-avatar { flex: 0 0 36px; min-width: 36px; aspect-ratio: 1; overflow: hidden; }
+#profile-timezone { width: 100%; min-width: 0; padding: 8px; }
+#profile-timezone option { padding: 8px; }
+.study-chat-messages .chat-bubble > p { margin: 0 0 .7em; }
+.study-chat-messages .chat-bubble > p:last-child { margin-bottom: 0; }
+.deadline-hint { display: block; color: #805000; font-size: 12px; }
+.availability-slot { display: flex; align-items: center; gap: 8px; }

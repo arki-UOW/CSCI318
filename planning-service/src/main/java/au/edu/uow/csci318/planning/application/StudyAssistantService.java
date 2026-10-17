@@ -58,6 +58,7 @@ public class StudyAssistantService {
           use \\( ... \\) for inline equations and \\[ ... \\] for displayed equations. Never place
           LaTeX equations inside code fences.
 
+          Use short paragraphs and numbered steps. Double every LaTeX backslash inside JSON strings.
           Return ONLY JSON in this exact shape: {"reply":"your helpful answer"}.
           """
               + "\nSubjects: "
@@ -70,23 +71,23 @@ public class StudyAssistantService {
               + json.writeValueAsString(history)
               + "\nStudent question: "
               + json.writeValueAsString(request.message());
-      String raw =
-          selection
-              .model()
-              .chat(prompt)
-              .replaceFirst("(?s)^```(?:json)?\\s*", "")
-              .replaceFirst("(?s)\\s*```$", "");
-      String reply;
-      try {
-        JsonNode parsed = json.readTree(raw);
-        reply = parsed.path("reply").asText("").trim();
-      } catch (Exception ignored) {
-        reply = raw.trim();
+      String reply = null;
+      for (int attempt = 0; attempt < 2; attempt++) {
+        String raw = selection.model().chat(prompt);
+        try {
+          reply = readReply(raw, json);
+          break;
+        } catch (java.io.IOException | IllegalArgumentException malformed) {
+          if (attempt == 1) throw new ProviderUnavailableException(
+              "The study assistant returned an unreadable answer. Please retry your question.", malformed);
+          prompt += "\nYour previous answer was not valid JSON. Reply with exactly one JSON object"
+              + " containing a non-empty string field named reply. Escape every LaTeX backslash"
+              + " as two backslashes inside that JSON string. Use short paragraphs and a worked example.";
+        }
       }
-      if (reply.isBlank())
-        throw new IllegalStateException("The assistant returned an empty answer");
       return new ChatResponse(reply, selection.provider(), selection.modelName(), Instant.now());
     } catch (Exception exception) {
+      if (exception instanceof ProviderUnavailableException unavailable) throw unavailable;
       if (exception instanceof IllegalStateException state
           && state.getMessage() != null
           && state.getMessage().startsWith("The assistant returned")) throw state;
@@ -95,4 +96,21 @@ public class StudyAssistantService {
           exception);
     }
   }
+  static String readReply(String raw, ObjectMapper json) throws java.io.IOException {
+    if (raw == null) throw new IllegalArgumentException("Missing answer");
+    String value = raw.trim().replaceFirst("(?s)^```(?:json)?\\s*", "").replaceFirst("(?s)\\s*```$", "");
+    // Unwrap a mistakenly nested reply envelope, never display protocol JSON to the student.
+    for (int depth = 0; depth < 3; depth++) {
+      JsonNode parsed = json.readTree(value);
+      if (parsed == null || !parsed.isObject() || !parsed.path("reply").isTextual())
+        throw new IllegalArgumentException("Missing reply text");
+      value = parsed.path("reply").textValue().trim();
+      if (value.startsWith("{") && value.contains("\"reply\"")) continue;
+      if (value.isBlank() || value.chars().anyMatch(c -> c < 32 && c != 10 && c != 13 && c != 9))
+        throw new IllegalArgumentException("Unreadable reply text");
+      return value;
+    }
+    throw new IllegalArgumentException("Nested reply envelopes");
+  }
+
 }

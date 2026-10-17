@@ -16,8 +16,8 @@ test('UC-03/04/05/07/11/12/14: student workflow through the complete document an
     w.fetch=async (url, options)=>respond(url, options);
     const NativeDate=w.Date;
     w.Date=class extends NativeDate {constructor(...args){super(...(args.length?args:['2026-10-15T17:30:00Z']));}static now(){return new NativeDate('2026-10-15T17:30:00Z').getTime();}};
-    w.eval(['student-workflow.js','browser-timezone.js','dashboard-stream.js','app.js'].map(f=>fs.readFileSync(path.join(root,f),'utf8')).join('\n')+
-      '\nwindow.audit={state,render,renderCalendar,renderWeek,renderAvailability,generatePlan,sendAvailability,signOut,populateAccount,loadCalendar};');
+    w.eval(['student-workflow.js','browser-timezone.js','student-controls.js','vendor/katex/katex.min.js','vendor/katex/auto-render.min.js','dashboard-stream.js','app.js'].map(f=>fs.readFileSync(path.join(root,f),'utf8')).join('\n')+
+      '\nwindow.audit={state,render,renderCalendar,renderWeek,renderAvailability,generatePlan,sendAvailability,signOut,populateAccount,loadCalendar,appendStudyChat};');
     const a=w.audit, s=a.state, $=selector=>w.document.querySelector(selector);
     const reply=(value,status=200)=>({ok:status<400,status,headers:new Headers({'Content-Type':'application/json'}),json:async()=>value});
     const tick=()=>new Promise(resolve=>setImmediate(resolve));
@@ -29,6 +29,16 @@ test('UC-03/04/05/07/11/12/14: student workflow through the complete document an
       sessions:[{id:'r',subjectId:'s',description:'Draft report',studyDate:'2026-10-16',durationMinutes:45}],
       week:{weekStart:'2026-10-12',weekEnd:'2026-10-18',overdue:[{id:'late',subjectId:'s',title:'Overdue exam',dueDate:'2026-10-02',status:'INCOMPLETE'}],studyProgress:[{subjectId:'s',studiedMinutes:45,targetMinutes:240,state:'BEHIND_TARGET'}]}});
     a.populateAccount();a.render();a.renderCalendar();a.renderWeek();
+    $('#timezone-search').value='kolkata';$('#timezone-search').dispatchEvent(new w.Event('input'));
+    assert.ok([...$('#profile-timezone').options].some(option=>option.value==='Asia/Kolkata'));
+    $('#profile-timezone').value='Asia/Kolkata';$('#profile-timezone').dispatchEvent(new w.Event('change'));
+    assert.match($('#timezone-preview').textContent,/Asia\/Kolkata/);
+    $('#timezone-search').value='';$('#timezone-search').dispatchEvent(new w.Event('input'));
+    assert.ok($('#profile-timezone').options.length > 100);
+    a.appendStudyChat('assistant', 'A **quadratic** has the form \\(ax^2 + bx + c = 0\\).\n\nTry factoring. <img src=x onerror=alert(1)>');
+    assert.ok($('#study-chat-messages .katex'));
+    assert.ok($('#study-chat-messages strong'));
+    assert.equal($('#study-chat-messages img'),null);
     assert.equal($('#plan-start').value,'2026-10-16');
     assert.equal($('#plan-start').min,'2026-10-16');
     assert.match($('#dashboard-assessments').textContent,/Overdue exam/);
@@ -45,6 +55,7 @@ test('UC-03/04/05/07/11/12/14: student workflow through the complete document an
     $('#activity-subject').value='s';$('#activity-subject').dispatchEvent(new w.Event('change'));
     assert.ok([...$('#activity-assessment').options].some(o=>o.value==='a'));
     assert.match($('#outline-file').accept,/\.txt/);
+    assert.equal($('#activity-description').required,false);assert.equal($('#session-description').required,false);
 
     const old={id:'old',version:1,startDate:'2026-10-12',endDate:'2026-10-18',items:[],explanation:'getIncompleteAssessments SECRET DIAGNOSTIC',
       availability:{dailyAvailabilityMinutes:{'2026-10-12':120,'2026-10-14':120},availabilitySlots:{'2026-10-12':[{start:'18:00',end:'20:00'}],'2026-10-14':[{start:'18:00',end:'20:00'}]}}};
@@ -64,6 +75,12 @@ test('UC-03/04/05/07/11/12/14: student workflow through the complete document an
     assert.equal(s.availabilityMinutes['2026-10-19'],120);assert.equal($('#generate-chat-plan').disabled,false);
     $('#slot-start').value='19:00';$('#availability-slot-form').dispatchEvent(new w.Event('submit',{cancelable:true}));
     assert.match($('#chat-feedback').textContent,/overlaps/);assert.equal(s.availabilityMinutes['2026-10-19'],120);
+    $('#availability-summary [data-remove-slot]').click();assert.equal(s.availabilityMinutes['2026-10-19'],0);
+    assert.equal($('#generate-chat-plan').disabled,true);
+    $('#plan-minutes').value='1440';$('#plan-form').dispatchEvent(new w.Event('submit',{cancelable:true}));
+    assert.equal(s.availabilityMinutes['2026-10-16'],1169);
+    assert.equal($('#generate-chat-plan').disabled,false);
+    assert.match($('#chat-feedback').textContent,/Review the dates/);
     respond=()=>reply({message:'Upstream HTTP 503. The provider is temporarily unavailable.'},503);
     await a.sendAvailability('Monday evenings',$('#availability-chat-form button'));
     assert.match($('#chat-feedback').textContent,/temporarily busy/);assert.doesNotMatch($('#chat-feedback').textContent,/HTTP|503/);
@@ -90,17 +107,20 @@ test('UC-03/04/05/07/11/12/14: student workflow through the complete document an
     respond=savedRespond;await a.loadCalendar();
     if (process.env.UI_PREVIEW_DIR) {
       const output=path.resolve(process.env.UI_PREVIEW_DIR);fs.mkdirSync(output,{recursive:true});
-      for (const view of ['dashboard','plan','calendar','profile','activity']) {
+      for (const view of ['dashboard','plan','calendar','profile','activity','assistant']) {
         const clone=w.document.documentElement.cloneNode(true);
         clone.querySelector('body').classList.remove('auth-required');clone.querySelector('#auth-shell').hidden=true;
         clone.querySelectorAll('.view').forEach(node=>node.classList.toggle('active',node.id===view));
         clone.querySelectorAll('script').forEach(node=>node.remove());
+        clone.querySelector('#account-avatar-image').hidden=false;clone.querySelector('#account-avatar-image').src='assets/study-leftovers-logo.png';clone.querySelector('#account-avatar-initials').hidden=true;
+        if(view==='assistant') {clone.querySelector('#assistant-drawer').classList.add('open');clone.querySelector('#assistant-drawer').setAttribute('aria-hidden','false');}
         clone.querySelectorAll('dialog').forEach(node=>node.removeAttribute('open'));
         clone.querySelector('#page-title').textContent=`Study Leftovers · ${view} (test fixture)`;
         fs.writeFileSync(path.join(output,view+'.html'),'<!DOCTYPE html>\n'+clone.outerHTML);
       }
       fs.copyFileSync(path.join(root,'styles.css'),path.join(output,'styles.css'));
       fs.cpSync(path.join(root,'assets'),path.join(output,'assets'),{recursive:true});
+      fs.cpSync(path.join(root,'vendor'),path.join(output,'vendor'),{recursive:true});
     }
     await a.signOut(false);
     assert.equal(s.historyPlan,null);assert.equal(s.completedCalendar.length,0);

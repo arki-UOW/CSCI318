@@ -480,6 +480,15 @@ def main():
         check('other account cannot edit recorded session', api(18083, 'study-sessions/' + linked['id'], other_token, linked_body, 'PATCH')[0], 404)
         check('remove recorded session', api(18083, 'study-sessions/' + linked['id'], learner_token, method='DELETE')[0], 204)
         check('removed session disappears from history', api(18083, 'study-sessions', learner_token)[1], [])
+        no_notes = {key: value for key, value in linked_body.items() if key != 'description'}
+        status, optional_session = api(18083, 'study-sessions', learner_token, no_notes)
+        check('session notes are optional per UC-04', status, 201)
+        check('omitted notes have readable history label', optional_session['description'], 'Study session')
+        status, optional_edited = api(18083, 'study-sessions/' + optional_session['id'], learner_token, {**no_notes, 'description': '  '}, 'PATCH')
+        check('session notes can be cleared', status, 200)
+        check('cleared notes have readable history label', optional_edited['description'], 'Study session')
+        api(18083, 'study-sessions/' + optional_session['id'], learner_token, method='DELETE')
+
         check('completed calendar history is available independent of visible month', created['id'] in [e['id'] for e in api(18084, 'calendar/completed', token)[1]], True)
         check('completed calendar history is account isolated', api(18084, 'calendar/completed', learner_token)[1], [])
         txt_boundary = 'TextOutlineBoundary'
