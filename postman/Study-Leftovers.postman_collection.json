@@ -103,8 +103,9 @@
           "pm.collectionVariables.set('today', local(now));",
           "pm.collectionVariables.set('dueDate', local(due));",
           "pm.collectionVariables.set('weekStart', local(monday));",
-          "const availability = {}; for (let day=0; day<7; day++) { const date=new Date(monday); date.setDate(date.getDate()+day); availability[local(date)] = day < 5 ? 90 : 120; }",
-          "pm.collectionVariables.set('planBody', JSON.stringify({startDate: local(monday), dailyAvailabilityMinutes: availability}));"
+          "const start = new Date(now); start.setDate(start.getDate() + 1); pm.collectionVariables.set('planStart', local(start));",
+          "const availability = {}; for (let day=0; day<7; day++) { const date=new Date(start); date.setDate(date.getDate()+day); availability[local(date)] = (date.getDay() % 6 === 0) ? 120 : 90; }",
+          "pm.collectionVariables.set('planBody', JSON.stringify({startDate: local(start), dailyAvailabilityMinutes: availability}));"
         ]
       }
     }
@@ -648,7 +649,7 @@
         "url": "{{planningBase}}/plans",
         "body": {
           "mode": "raw",
-          "raw": "{\"startDate\":\"{{weekStart}}\",\"dailyAvailabilityMinutes\":{\"{{weekStart}}\":1441}}"
+          "raw": "{\"startDate\":\"{{planStart}}\",\"dailyAvailabilityMinutes\":{\"{{planStart}}\":1441}}"
         }
       },
       "event": [
