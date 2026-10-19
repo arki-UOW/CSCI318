@@ -1,5 +1,74 @@
 # Study Leftovers
 
+## Group 13 submission: how to run
+
+Follow these steps after extracting the Group 13 source-code ZIP.
+
+**Recommended: run locally with Docker Desktop.** This source-code submission contains no prebuilt JARs and no private API keys. Docker builds the five backend services from source and starts Kafka and the frontend. You do not need to install Java, Maven or Kafka separately for this route.
+
+### 1. Extract the source and start Docker
+
+- Extract `Group_13_source_code.zip` completely. Run the application from the extracted `Group_13_source_code` folder, not from inside the ZIP.
+- Install and start Docker Desktop with Linux containers enabled. Wait until Docker is running.
+- Internet access is required for the first build to download images and dependencies, and for live AI requests. Allow several minutes for the initial build.
+- Ports `3000`, `8081`–`8085` and `9092` must be available. Stop another copy of this application before starting this one.
+
+### 2. Configure AI privately (required for AI features)
+
+Open PowerShell in the extracted folder. If `.env` does not already exist, create it:
+
+```powershell
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+notepad .env
+```
+
+In `.env`, set `AI_PROVIDER=gemini`, enter your own key after `GEMINI_API_KEY=`, and set `GEMINI_MODEL` to a model available to that key/project. Save the file. Alternatively, configure the documented OpenAI provider.
+
+**`.env.example` is the safe, included template; its API-key fields are blank. `.env` is your private local configuration and must not be submitted, committed or shared. Keep `.env.example` in the source package.** Do not overwrite an existing `.env` when upgrading.
+
+The template currently names `gemini-3.6-flash`. That default is not a guarantee of provider availability; it previously returned HTTP 503 during team testing. Use a model your project can access, with sufficient quota. To check a configured Gemini key/model without uploading a document:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-gemini.ps1
+```
+
+This diagnostic checks one small request only. Confirm a real outline import and plan generation separately. Without a key, the app still supports accounts, manual subjects/assessments, study activity, calendar and streaming projections; AI outline analysis, conversational availability, agentic planning and the study assistant require a configured provider.
+
+### 3. Start and use the application
+
+On Windows, double-click **`Start-Study-Leftovers.cmd`**. It builds and starts the application, checks service readiness and opens the browser. If you skipped configuration, it creates a blank-key `.env` from the template.
+
+Alternatively, from the extracted folder run:
+
+```powershell
+docker compose up -d --build
+```
+
+On macOS/Linux, use the same Docker Compose command after copying `.env.example` to `.env` and configuring it as above. The `.cmd` launcher is Windows-only.
+
+Open **http://localhost:3000**, create an account and sign in. There are no preloaded personal accounts or databases. For a quick demonstration, enter a subject and future assessment manually, record study activity, and check the calendar/dashboard. With AI configured, import an outline, review and confirm its extracted details, add future availability, and generate a plan.
+
+### 4. Stop, restart or troubleshoot
+
+- Stop on Windows with `Stop-Study-Leftovers.cmd`, or run `docker compose down`. Docker volumes retain saved data.
+- After changing `.env`, run `docker compose up -d --build --force-recreate`; refreshing the browser does not apply backend configuration changes.
+- If startup fails, check `docker compose ps` and `docker compose logs --tail=100`. Avoid sharing private configuration or unredacted logs.
+- Do not use `docker compose down -v` for an ordinary stop: it deletes this deployment's saved data.
+
+### 5. Record completed work or schedule future work
+
+- **Record activity > Record completed study:** choose today or an earlier date for work already done. Future dates are intentionally unavailable here, so unfinished work cannot inflate progress.
+- **Record activity > Schedule a session:** opens the calendar form for today/future times. Choose the subject and optional assessment, check the start/end, and save. The calendar opens at that date. Mark the session complete after doing the work to count it toward progress; do not record it again as separate activity.
+- Planning starts today or later and covers seven days. Overdue assessments stay visible for correction or completion; normal planning respects assessment deadlines.
+
+**Postman demonstration:** import `postman/Study-Leftovers.postman_collection.json` and run requests in the supplied order. The collection `timezone` must match the test account (default `Australia/Sydney`); it need not match the computer timezone. Plans start tomorrow in that timezone. The 1441-minute negative test checks both HTTP 400 and the capacity validation reason. AI requests require a working provider.
+
+**Verification evidence:** see `docs/testing/activity-scheduling-verification-2026-10-19.md` for the checks performed and their limits. A successful startup or small provider diagnostic alone does not verify every AI workflow.
+
+Running without Docker is also supported, but requires JDK 21, Maven 3.9+, Kafka, Tesseract for image OCR, a static frontend server and five separately started services. See **Local development** below. Docker is the recommended marking setup.
+
+---
+
 Study Leftovers is a personal academic workspace that turns subject-outline documents into reviewable data, combines deadlines and availability into a practical plan, and carries that plan into editable weekly and monthly calendars.
 
 ## What works

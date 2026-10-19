@@ -95,16 +95,17 @@
         "type": "text/javascript",
         "exec": [
           "if (pm.info.requestName === 'Register and remember token') { pm.collectionVariables.set('username', `postman_${Date.now()}`); pm.collectionVariables.set('token', ''); ['workloadPoll','progressPoll','completePoll'].forEach(key => pm.collectionVariables.set(key, 0)); }",
-          "const now = new Date();",
-          "const local = value => `${value.getFullYear()}-${String(value.getMonth()+1).padStart(2,'0')}-${String(value.getDate()).padStart(2,'0')}`;",
-          "const due = new Date(now); due.setDate(due.getDate() + 21);",
-          "const monday = new Date(now); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));",
-          "const changedDue = new Date(now); changedDue.setDate(changedDue.getDate() + 7); pm.collectionVariables.set('changedDueDate', local(changedDue));",
+          "const dateParts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {timeZone: pm.collectionVariables.get('timezone') || 'UTC', year:'numeric', month:'2-digit', day:'2-digit'}).formatToParts(new Date()).map(part => [part.type, part.value]));",
+          "const now = new Date(`${dateParts.year}-${dateParts.month}-${dateParts.day}T12:00:00Z`);",
+          "const local = value => `${value.getUTCFullYear()}-${String(value.getUTCMonth()+1).padStart(2,'0')}-${String(value.getUTCDate()).padStart(2,'0')}`;",
+          "const due = new Date(now); due.setUTCDate(due.getUTCDate() + 21);",
+          "const monday = new Date(now); monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));",
+          "const changedDue = new Date(now); changedDue.setUTCDate(changedDue.getUTCDate() + 7); pm.collectionVariables.set('changedDueDate', local(changedDue));",
           "pm.collectionVariables.set('today', local(now));",
           "pm.collectionVariables.set('dueDate', local(due));",
           "pm.collectionVariables.set('weekStart', local(monday));",
-          "const start = new Date(now); start.setDate(start.getDate() + 1); pm.collectionVariables.set('planStart', local(start));",
-          "const availability = {}; for (let day=0; day<7; day++) { const date=new Date(start); date.setDate(date.getDate()+day); availability[local(date)] = (date.getDay() % 6 === 0) ? 120 : 90; }",
+          "const start = new Date(now); start.setUTCDate(start.getUTCDate() + 1); pm.collectionVariables.set('planStart', local(start));",
+          "const availability = {}; for (let day=0; day<7; day++) { const date=new Date(start); date.setUTCDate(date.getUTCDate()+day); availability[local(date)] = (date.getUTCDay() % 6 === 0) ? 120 : 90; }",
           "pm.collectionVariables.set('planBody', JSON.stringify({startDate: local(start), dailyAvailabilityMinutes: availability}));"
         ]
       }
@@ -658,7 +659,7 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('invalid capacity rejected',()=>pm.response.to.have.status(400));"
+              "pm.test('invalid capacity rejected for exceeding 1440 minutes', () => { pm.response.to.have.status(400); const error = pm.response.json(); pm.expect(Object.entries(error.validationErrors || {}).some(([field, message]) => field.startsWith('dailyAvailabilityMinutes') && String(message).includes('1440'))).to.eql(true); });"
             ]
           }
         }
