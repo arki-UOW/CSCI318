@@ -70,7 +70,7 @@ function show(view) {
   }[view];
   if (pageTitle) $('#page-title').textContent = pageTitle;
   else updateLiveClock();
-  if (view === 'activity') $('#activity-date').max = accountToday();
+  if (view === 'activity') updateActivityAction();
   const loading = view === 'calendar' || view === 'week' ? loadCalendar() : undefined;
   window.scrollTo({ top: 0, behavior: 'smooth' });
   return loading;
@@ -322,7 +322,7 @@ function populateAccount() {
   $('#plan-start').value = accountToday();
   $('#plan-start').min = accountToday();
   $('#activity-date').value = accountToday();
-  $('#activity-date').max = accountToday();
+  updateActivityAction();
   const accountDate = new Date(`${accountToday()}T12:00:00`);
   state.calendarMonth = new Date(accountDate.getFullYear(), accountDate.getMonth(), 1);
   state.calendarWeek = mondayFor(accountDate);
@@ -1223,9 +1223,19 @@ $('#delete-session').addEventListener('click', async event => {
   finally { setBusy(button, false); }
 });
 
+function updateActivityAction() {
+  $('#activity-form button.primary').textContent = $('#activity-date').value > accountToday()
+    ? 'Schedule session' : 'Record session';
+}
+$('#activity-date').addEventListener('change', updateActivityAction);
+
 $('#activity-form').addEventListener('submit', async event => {
   event.preventDefault();
   const form = event.currentTarget;
+  if ($('#activity-date').value > accountToday()) {
+    openActivitySchedule();
+    return;
+  }
   const button = event.submitter || form.querySelector('button');
   setBusy(button, true, 'Recording');
   feedback('activity-feedback', 'Recording your study session…', 'info');
@@ -1244,6 +1254,7 @@ $('#activity-form').addEventListener('submit', async event => {
     feedback('activity-feedback', 'Session saved in your activity history and calendar. Progress updates automatically.', 'success');
     form.reset();
     $('#activity-date').value = accountToday();
+    updateActivityAction();
     await load();
   } catch (error) {
     if (error.staleSession) return;
@@ -1649,8 +1660,9 @@ $('#calendar-start').addEventListener('change', () => {
   input.dataset.previousStart = input.value;
 });
 
-$('#schedule-study-session').addEventListener('click', () => {
-  openCalendarDialog();
+function openActivitySchedule() {
+  const selectedDate = $('#activity-date').value;
+  openCalendarDialog(null, selectedDate >= accountToday() ? selectedDate : accountToday());
   $('#calendar-subject').value = $('#activity-subject').value;
   updateCalendarAssessments($('#activity-assessment').value);
   $('#calendar-title').value = ($('#activity-description').value.trim()
@@ -1660,7 +1672,8 @@ $('#schedule-study-session').addEventListener('click', () => {
   if (Number.isInteger(minutes) && minutes > 0 && minutes <= 1440)
     $('#calendar-end').value = StudentWorkflow.addMinutes($('#calendar-start').value, minutes);
   $('#calendar-dialog-title').textContent = 'Schedule a study session';
-});
+}
+$('#schedule-study-session').addEventListener('click', openActivitySchedule);
 
 function openCalendarDialog(item = null, dateValue = null) {
   const window = StudentWorkflow.nextStudyWindow(StudentWorkflow.now(accountTimezone()), dateValue);

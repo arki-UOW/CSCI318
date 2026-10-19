@@ -28,3 +28,9 @@ The frontend tests include account/browser dates on opposite sides of midnight, 
 The HTTP fixture uses controlled model responses and does not establish live Gemini/OpenAI availability or Kafka delivery. The live browser check covers the new scheduling path, not a fresh execution of every use case. No live AI request was needed for this change. Existing historical verification records have not been rewritten. These results support the affected workflows; they are not a guarantee that software or an external provider can never fail.
 
 The submission README documents environment creation, Docker startup, the local browser URL, shutdown without data deletion, and the distinction between completed and scheduled study. Private `.env` files and generated build outputs must remain outside the submission ZIP.
+
+## Follow-up: future dates directly in the activity form
+
+Later on 19 October, the activity form was updated at the user's request to accept future dates directly. The heading is now **Record or schedule study**, and selecting a future date changes the submit action to **Schedule session**. Submitting opens the calendar form with the selected date, subject, assessment and duration; it does not send a completed-activity request. Today/past dates still record completed work, and the separate scheduling button remains available for later today. The earlier UI restriction described above records the previous verification state.
+
+All 44 frontend regression tests were rerun and passed after this follow-up, including future-date selection from the activity form, preservation of the date and assessment, no completed-activity POST, and switching the button back for today. Backend production code is unchanged; the Java and HTTP results above belong to the earlier run and were not rerun for this frontend-only follow-up.

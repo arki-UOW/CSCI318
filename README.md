@@ -57,7 +57,7 @@ Open **http://localhost:3000**, create an account and sign in. There are no prel
 
 ### 5. Record completed work or schedule future work
 
-- **Record activity > Record completed study:** choose today or an earlier date for work already done. Future dates are intentionally unavailable here, so unfinished work cannot inflate progress.
+- **Record activity > Record or schedule study:** select any study date. Today/past dates record completed work. Selecting a future date changes the submit button to **Schedule session** and opens the calendar form with that date, subject, assessment and duration ready to confirm. Future study does not count as completed progress.
 - **Record activity > Schedule a session:** opens the calendar form for today/future times. Choose the subject and optional assessment, check the start/end, and save. The calendar opens at that date. Mark the session complete after doing the work to count it toward progress; do not record it again as separate activity.
 - Planning starts today or later and covers seven days. Overdue assessments stay visible for correction or completion; normal planning respects assessment deadlines.
 

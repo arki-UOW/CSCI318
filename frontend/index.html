@@ -244,13 +244,13 @@
 
     <section id="activity" class="view">
       <p class="eyebrow">STUDY ACTIVITY</p>
-      <div class="panel-head"><h2>Record completed study</h2><button id="schedule-study-session" type="button" class="secondary">Schedule a session</button></div>
-      <p class="lede" id="activity-date-help">Log work you have already finished, today or on an earlier date. To plan study for today or a future date, choose Schedule a session. Scheduled work counts toward progress only when you mark it complete.</p>
+      <div class="panel-head"><h2>Record or schedule study</h2><button id="schedule-study-session" type="button" class="secondary">Schedule a session</button></div>
+      <p class="lede" id="activity-date-help">Choose your study date below. A future date schedules a session: select Schedule session, then confirm its time. Today or earlier records completed work. To schedule later today, use Schedule a session. Scheduled study counts toward progress only after completion.</p>
       <form id="activity-form" class="form">
         <label>Subject<select id="activity-subject" required></select></label><label>Assessment (optional)<select id="activity-assessment"><option value="">General subject study</option></select></label>
-        <label>Date completed<input id="activity-date" type="date" aria-describedby="activity-date-help" required></label>
+        <label>Study date<input id="activity-date" type="date" aria-describedby="activity-date-help" required></label>
         <label>Minutes<input id="activity-minutes" type="number" min="1" max="1440" value="45" required></label>
-        <label class="grow">What did you work on? (optional)<input id="activity-description" maxlength="2000" placeholder="e.g. Drafted report introduction"></label>
+        <label class="grow">Study notes (optional)<input id="activity-description" maxlength="2000" placeholder="e.g. Drafted report introduction"></label>
         <button class="primary">Record session</button>
       </form>
       <div id="activity-feedback" class="feedback" aria-live="polite"></div>
@@ -363,7 +363,7 @@
     <div class="panel-head"><h2>Edit recorded session</h2><button id="close-session-dialog" type="button" class="icon-button" aria-label="Close">×</button></div>
     <input id="session-id" type="hidden"><p id="session-subject-label"></p>
     <div class="dialog-grid"><label>Date<input id="session-date" type="date" required></label><label>Minutes<input id="session-minutes" type="number" min="1" max="1440" required></label></div>
-    <label>What did you work on? (optional)<textarea id="session-description" maxlength="2000"></textarea></label>
+    <label>Study notes (optional)<textarea id="session-description" maxlength="2000"></textarea></label>
     <div id="session-feedback" class="feedback" aria-live="polite"></div><div class="dialog-actions"><button id="delete-session" type="button" class="secondary danger-button">Remove session</button><button class="primary">Save changes</button></div>
   </form></dialog>
   <script src="student-workflow.js"></script>

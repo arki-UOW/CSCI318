@@ -45,8 +45,8 @@ test('completed activity stays historical; scheduling creates a future calendar 
       subjects:[{id:'s',code:'CSCI318',name:'Software Engineering'}],
       assessments:[{id:'a',subjectId:'s',title:'Assignment',dueDate:'2026-12-20',status:'INCOMPLETE'}]});
     a.populateAccount(); a.render(); a.show('activity');
-    assert.equal($('#activity-date').max,'2026-10-19');
-    $('#activity-date').value='2026-10-20'; assert.equal($('#activity-date').validity.rangeOverflow,true);
+    assert.equal($('#activity-date').max,'');
+    $('#activity-date').value='2026-10-20'; assert.equal($('#activity-date').checkValidity(),true);
     $('#activity-date').value='2026-10-18'; assert.equal($('#activity-date').checkValidity(),true);
     $('#activity-subject').value='s'; $('#activity-subject').dispatchEvent(new w.Event('change'));
     $('#activity-assessment').value='a'; $('#activity-description').value='Practice questions';
@@ -56,6 +56,19 @@ test('completed activity stays historical; scheduling creates a future calendar 
     assert.equal($('#calendar-start').min,'2026-10-19T00:31');
     assert.equal($('#calendar-end').value,'2026-10-19T18:45');
     assert.equal($('#calendar-assessment').value,'a');
+    $('#calendar-dialog').close();
+    $('#activity-date').value='2026-10-20';
+    $('#activity-date').dispatchEvent(new w.Event('change'));
+    assert.equal($('#activity-form button.primary').textContent, 'Schedule session');
+    $('#activity-form').dispatchEvent(new w.Event('submit',{cancelable:true}));
+    assert.equal($('#calendar-dialog').open,true);
+    assert.equal($('#calendar-start').value,'2026-10-20T18:00');
+    assert.equal($('#calendar-end').value,'2026-10-20T18:45');
+    assert.equal($('#calendar-assessment').value,'a');
+    assert.equal(posted.length,0, 'Selecting a future study date must not record completed work');
+    $('#activity-date').value='2026-10-19';
+    $('#activity-date').dispatchEvent(new w.Event('change'));
+    assert.equal($('#activity-form button.primary').textContent, 'Record session');
     $('#calendar-start').value='2026-10-18T18:00'; $('#calendar-start').dispatchEvent(new w.Event('change'));
     assert.equal($('#calendar-start').validity.rangeUnderflow,true);
     $('#calendar-form').dispatchEvent(new w.Event('submit',{cancelable:true}));
