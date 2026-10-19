@@ -12,6 +12,22 @@ const StudentWorkflow = (() => {
     value.setUTCDate(value.getUTCDate() + days);
     return value.toISOString().slice(0, 10);
   }
+  // API calendar values are civil LocalDateTime/LocalTime values, not browser instants.
+  function minutesBetween(start, end) {
+    return Math.trunc((Date.parse(`${end}Z`) - Date.parse(`${start}Z`)) / 60000);
+  }
+  function slotMinutes(slot) {
+    return minutesBetween(`2000-01-01T${slot.start}`, `2000-01-01T${slot.end}`);
+  }
+  function addMinutes(value, minutes) {
+    return new Date(Date.parse(`${value}Z`) + minutes * 60000).toISOString().slice(0, 16);
+  }
+  function nextStudyWindow(currentTime, requestedDate, minutes = 60) {
+    const earliest = addMinutes(currentTime.slice(0, 16), 1);
+    const preferred = `${requestedDate || currentTime.slice(0, 10)}T18:00`;
+    const start = preferred > earliest ? preferred : earliest;
+    return {start, end: addMinutes(start, minutes), earliest};
+  }
   function calendar(entries = [], assessments = [], sessions = []) {
     return [...entries,
       ...assessments.filter(item => item.dueDate).map(item => ({id: `deadline:${item.id}`,
@@ -33,9 +49,7 @@ const StudentWorkflow = (() => {
       if (!old) continue;
       if (availability.availabilitySlots != null) {
         slots[date] = (availability.availabilitySlots[old] || []).filter(slot => `${date}T${slot.start.length === 5 ? slot.start + ':00' : slot.start}` > currentTime);
-        minutes[date] = slots[date].reduce((sum, slot) => sum +
-          (Number(slot.end.slice(0, 2)) * 60 + Number(slot.end.slice(3, 5))) -
-          (Number(slot.start.slice(0, 2)) * 60 + Number(slot.start.slice(3, 5))), 0);
+        minutes[date] = slots[date].reduce((sum, slot) => sum + slotMinutes(slot), 0);
       } else {
         const left = date === currentTime.slice(0, 10)
           ? Math.max(0, 1440 - Number(currentTime.slice(11, 13)) * 60 - Number(currentTime.slice(14, 16)) - 1) : 1440;
@@ -44,6 +58,6 @@ const StudentWorkflow = (() => {
     }
     return {minutes, slots: availability.availabilitySlots == null ? null : slots};
   }
-  return {now, add, calendar, reuse};
+  return {now, add, calendar, reuse, minutesBetween, slotMinutes, addMinutes, nextStudyWindow};
 })();
 if (typeof module !== 'undefined') module.exports = StudentWorkflow;
