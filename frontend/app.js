@@ -70,8 +70,10 @@ function show(view) {
   }[view];
   if (pageTitle) $('#page-title').textContent = pageTitle;
   else updateLiveClock();
-  if (view === 'calendar' || view === 'week') loadCalendar();
+  if (view === 'activity') updateActivityAction();
+  const loading = view === 'calendar' || view === 'week' ? loadCalendar() : undefined;
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  return loading;
 }
 
 $$('[data-view]').forEach(button => {
@@ -320,7 +322,7 @@ function populateAccount() {
   $('#plan-start').value = accountToday();
   $('#plan-start').min = accountToday();
   $('#activity-date').value = accountToday();
-  $('#activity-date').max = accountToday();
+  updateActivityAction();
   const accountDate = new Date(`${accountToday()}T12:00:00`);
   state.calendarMonth = new Date(accountDate.getFullYear(), accountDate.getMonth(), 1);
   state.calendarWeek = mondayFor(accountDate);
@@ -626,7 +628,7 @@ function planMarkup(plan, dashboard = false, snapshot = false) {
   if (!plan) return '<p>No plan yet. Add your assessments and availability to get started.</p>';
   const blocks = !snapshot && plan.id === state.plan?.id ? calendarItems().filter(item => item.planId === plan.id) : [];
   const planned = (!snapshot && state.calendarPlanId === plan.id) || blocks.length ? blocks.map(item => ({...item, calendarId: item.id, date: item.startAt.slice(0, 10),
-    allocatedMinutes: Math.round((new Date(item.endAt) - new Date(item.startAt))/60000)})) : plan.items || [];
+    allocatedMinutes: StudentWorkflow.minutesBetween(item.startAt, item.endAt)})) : plan.items || [];
   const items = planned.filter(item => !dashboard || (item.date >= accountToday() && item.status !== 'COMPLETED'
     && (!item.endAt || item.endAt > StudentWorkflow.now(accountTimezone()))));
   if (!items.length) return '<p>No upcoming study blocks in this plan. Review your assessments and availability to plan your next seven days.</p>';
@@ -1172,7 +1174,7 @@ $('#activity-subject').addEventListener('change', updateActivityAssessments);
 function renderSessions() {
   const completed = calendarItems().filter(item => !item.source && item.status === 'COMPLETED' && item.subjectId && item.type !== 'TASK')
     .map(item => ({id: item.id, calendar: true, subjectId: item.subjectId, description: item.title,
-      studyDate: item.completedAt ? StudentWorkflow.now(accountTimezone(), new Date(item.completedAt)).slice(0, 10) : item.startAt.slice(0, 10), durationMinutes: Math.round((new Date(item.endAt) - new Date(item.startAt)) / 60000)}));
+      studyDate: item.completedAt ? StudentWorkflow.now(accountTimezone(), new Date(item.completedAt)).slice(0, 10) : item.startAt.slice(0, 10), durationMinutes: StudentWorkflow.minutesBetween(item.startAt, item.endAt)}));
   const sessions = [...state.sessions, ...completed].sort((a, b) => b.studyDate.localeCompare(a.studyDate)
     || (b.recordedAt || '').localeCompare(a.recordedAt || ''));
   for (const [selector, limit] of [['#session-history', 10], ['#dashboard-sessions', 5], ['#activity-history', Infinity]]) {
@@ -1221,9 +1223,19 @@ $('#delete-session').addEventListener('click', async event => {
   finally { setBusy(button, false); }
 });
 
+function updateActivityAction() {
+  $('#activity-form button.primary').textContent = $('#activity-date').value > accountToday()
+    ? 'Schedule session' : 'Record session';
+}
+$('#activity-date').addEventListener('change', updateActivityAction);
+
 $('#activity-form').addEventListener('submit', async event => {
   event.preventDefault();
   const form = event.currentTarget;
+  if ($('#activity-date').value > accountToday()) {
+    openActivitySchedule();
+    return;
+  }
   const button = event.submitter || form.querySelector('button');
   setBusy(button, true, 'Recording');
   feedback('activity-feedback', 'Recording your study session…', 'info');
@@ -1242,6 +1254,7 @@ $('#activity-form').addEventListener('submit', async event => {
     feedback('activity-feedback', 'Session saved in your activity history and calendar. Progress updates automatically.', 'success');
     form.reset();
     $('#activity-date').value = accountToday();
+    updateActivityAction();
     await load();
   } catch (error) {
     if (error.staleSession) return;
@@ -1418,7 +1431,7 @@ $('#availability-summary').addEventListener('click', event => {
   if (!button || state.availabilityPending || state.planPending) return;
   const date = button.dataset.removeSlot;
   state.availability[date].splice(Number(button.dataset.slotIndex), 1);
-  state.availabilityMinutes[date] = state.availability[date].reduce((total, slot) => total + (Number(slot.end.slice(0,2))*60+Number(slot.end.slice(3,5)))-(Number(slot.start.slice(0,2))*60+Number(slot.start.slice(3,5))),0);
+  state.availabilityMinutes[date] = state.availability[date].reduce((total, slot) => total + StudentWorkflow.slotMinutes(slot), 0);
   state.availabilityReady = Object.values(state.availabilityMinutes).some(value=>value>0);
   renderAvailability();feedback('chat-feedback', 'Study time removed. Review the remaining times.', 'info');
 });
@@ -1453,7 +1466,7 @@ $('#availability-slot-form').addEventListener('submit', event => {
   state.availabilityPending = false;
   if (state.availability === null) { state.availability = {}; state.availabilityMinutes = {}; }
   state.availability[date] = [...existing, {start, end}].sort((a,b) => a.start.localeCompare(b.start));
-  state.availabilityMinutes[date] = state.availability[date].reduce((sum, slot) => sum + (new Date(`${date}T${slot.end}`)-new Date(`${date}T${slot.start}`))/60000, 0);
+  state.availabilityMinutes[date] = state.availability[date].reduce((sum, slot) => sum + StudentWorkflow.slotMinutes(slot), 0);
   state.availabilityReady = true;
   setBusy($('#availability-chat-form button'), false);
   renderAvailability();
@@ -1546,12 +1559,12 @@ function monthRange() {
 }
 
 function formatDateTime(value) {
-  return new Date(value).toLocaleString('en-AU', { weekday: 'short', day: 'numeric', month: 'short',
+  return new Date(`${value}Z`).toLocaleString('en-AU', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short',
     hour: 'numeric', minute: '2-digit' });
 }
 
 function formatTime(value) {
-  return new Date(value).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' });
+  return new Date(`${value}Z`).toLocaleTimeString('en-AU', { timeZone: 'UTC', hour: 'numeric', minute: '2-digit' });
 }
 
 async function loadCalendar(showErrors = true) {
@@ -1602,7 +1615,7 @@ function calendarEvent(item, compact = false, date = null) {
 function renderCalendar() {
   const range = monthRange();
   $('#month-title').textContent = state.calendarMonth.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
-  const todayValue = localDate(new Date());
+  const todayValue = accountToday();
   $('#month-grid').innerHTML = Array.from({ length: 42 }, (_, index) => {
     const date = addDays(range.from, index);
     const dateValue = localDate(date);
@@ -1625,32 +1638,64 @@ function renderWeek() {
     const date = addDays(start, index);
     const dateValue = localDate(date);
     const entries = entriesForDate(dateValue);
-    return `<article class="week-day ${dateValue === localDate(new Date()) ? 'today' : ''}"><button class="week-day-head" data-new-calendar-date="${dateValue}"><span>${date.toLocaleDateString('en-AU', { weekday: 'short' })}</span><strong>${date.getDate()}</strong></button><div class="week-events">${entries.length ? entries.map(item => calendarEvent(item, false, dateValue)).join('') : '<small>Free</small>'}</div></article>`;
+    return `<article class="week-day ${dateValue === accountToday() ? 'today' : ''}"><button class="week-day-head" data-new-calendar-date="${dateValue}"><span>${date.toLocaleDateString('en-AU', { weekday: 'short' })}</span><strong>${date.getDate()}</strong></button><div class="week-events">${entries.length ? entries.map(item => calendarEvent(item, false, dateValue)).join('') : '<small>Free</small>'}</div></article>`;
   }).join('');
   bindCalendarItems();
 }
 
-function dateTimeInput(date) {
-  const offset = date.getTimezoneOffset() * 60000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+function updateCalendarAssessments(selected = '') {
+  $('#calendar-assessment').innerHTML = '<option value="">General subject study</option>' + state.assessments
+    .filter(item => item.subjectId === $('#calendar-subject').value)
+    .map(item => `<option value="${esc(item.id)}">${esc(item.title)}</option>`).join('');
+  $('#calendar-assessment').value = selected;
 }
+$('#calendar-subject').addEventListener('change', () => updateCalendarAssessments());
+$('#calendar-start').addEventListener('change', () => {
+  const input = $('#calendar-start');
+  if (!input.value) return;
+  const previousMinutes = StudentWorkflow.minutesBetween(input.dataset.previousStart, $('#calendar-end').value);
+  const minutes = previousMinutes > 0 && previousMinutes <= 1440 ? previousMinutes : 60;
+  $('#calendar-end').value = StudentWorkflow.addMinutes(input.value, minutes);
+  $('#calendar-end').min = StudentWorkflow.addMinutes(input.value, 1);
+  input.dataset.previousStart = input.value;
+});
+
+function openActivitySchedule() {
+  const selectedDate = $('#activity-date').value;
+  openCalendarDialog(null, selectedDate >= accountToday() ? selectedDate : accountToday());
+  $('#calendar-subject').value = $('#activity-subject').value;
+  updateCalendarAssessments($('#activity-assessment').value);
+  $('#calendar-title').value = ($('#activity-description').value.trim()
+    || state.assessments.find(item => item.id === $('#activity-assessment').value)?.title || 'Study session').slice(0, 160);
+  $('#calendar-description').value = $('#activity-description').value.trim();
+  const minutes = Number($('#activity-minutes').value);
+  if (Number.isInteger(minutes) && minutes > 0 && minutes <= 1440)
+    $('#calendar-end').value = StudentWorkflow.addMinutes($('#calendar-start').value, minutes);
+  $('#calendar-dialog-title').textContent = 'Schedule a study session';
+}
+$('#schedule-study-session').addEventListener('click', openActivitySchedule);
 
 function openCalendarDialog(item = null, dateValue = null) {
-  const start = item ? new Date(item.startAt) : new Date(`${dateValue || localDate(new Date())}T18:00:00`);
-  const end = item ? new Date(item.endAt) : new Date(start.getTime() + 60 * 60000);
+  const window = StudentWorkflow.nextStudyWindow(StudentWorkflow.now(accountTimezone()), dateValue);
+  const start = item ? item.startAt.slice(0, 16) : window.start;
+  const end = item ? item.endAt.slice(0, 16) : window.end;
   $('#calendar-id').value = item?.id || '';
   $('#calendar-title').value = item?.title || '';
   $('#calendar-description').value = item?.description || '';
   $('#calendar-type').value = item?.type || 'STUDY_SESSION';
   $('#calendar-subject').value = item?.subjectId || '';
-  $('#calendar-start').value = dateTimeInput(start);
-  $('#calendar-end').value = dateTimeInput(end);
+  updateCalendarAssessments(item?.assessmentId || '');
+  $('#calendar-start').value = start;
+  $('#calendar-start').dataset.previousStart = start;
+  $('#calendar-start').min = item ? '' : window.earliest;
+  $('#calendar-end').value = end;
+  $('#calendar-end').min = StudentWorkflow.addMinutes(start, 1);
   $('#calendar-spaced').checked = item?.spacedRepetition ?? true;
   $('#calendar-dialog-title').textContent = item ? 'Edit calendar item' : 'New study item';
   $('#delete-calendar-entry').hidden = !item;
   $('#complete-calendar-entry').hidden = !item || item.status === 'COMPLETED';
   const completed = item?.status === 'COMPLETED';
-  ['#calendar-title', '#calendar-description', '#calendar-type', '#calendar-subject', '#calendar-start', '#calendar-end', '#calendar-spaced']
+  ['#calendar-title', '#calendar-description', '#calendar-type', '#calendar-subject', '#calendar-assessment', '#calendar-start', '#calendar-end', '#calendar-spaced']
     .forEach(selector => { $(selector).disabled = completed; });
   $('#calendar-form button.primary').hidden = completed;
   $('#calendar-dialog-title').textContent = completed ? 'Completed calendar item' : item ? 'Edit calendar item' : 'New study item';
@@ -1680,33 +1725,47 @@ function bindCalendarItems() {
 
 $('#month-prev').addEventListener('click', () => { state.calendarMonth.setMonth(state.calendarMonth.getMonth() - 1); loadCalendar(); });
 $('#month-next').addEventListener('click', () => { state.calendarMonth.setMonth(state.calendarMonth.getMonth() + 1); loadCalendar(); });
-$('#month-today').addEventListener('click', () => { state.calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1); loadCalendar(); });
+$('#month-today').addEventListener('click', () => { const today = new Date(`${accountToday()}T12:00:00`); state.calendarMonth = new Date(today.getFullYear(), today.getMonth(), 1); loadCalendar(); });
 $('#new-calendar-entry').addEventListener('click', () => openCalendarDialog());
 $('#week-new-entry').addEventListener('click', () => openCalendarDialog(null, localDate(state.calendarWeek)));
 $('#week-prev').addEventListener('click', () => { state.calendarWeek = addDays(state.calendarWeek, -7); loadCalendar(); });
 $('#week-next').addEventListener('click', () => { state.calendarWeek = addDays(state.calendarWeek, 7); loadCalendar(); });
-$('#week-today').addEventListener('click', () => { state.calendarWeek = mondayFor(new Date()); loadCalendar(); });
+$('#week-today').addEventListener('click', () => { state.calendarWeek = mondayFor(new Date(`${accountToday()}T12:00:00`)); loadCalendar(); });
 $('#close-calendar-dialog').addEventListener('click', () => $('#calendar-dialog').close());
 $('#cancel-calendar-dialog').addEventListener('click', () => $('#calendar-dialog').close());
 
 $('#calendar-form').addEventListener('submit', async event => {
   const epoch = state.sessionEpoch;
   event.preventDefault();
-  const button = event.submitter;
+  const button = event.submitter || event.currentTarget.querySelector('button.primary');
   const id = $('#calendar-id').value;
+  const startAt = $('#calendar-start').value, endAt = $('#calendar-end').value;
+  if (!id && `${startAt}:00` <= StudentWorkflow.now(accountTimezone())) {
+    feedback('calendar-dialog-feedback', 'Choose today or a future date and a time that has not passed.', 'error');
+    return;
+  }
+  const duration = StudentWorkflow.minutesBetween(startAt, endAt);
+  if (!Number.isFinite(duration) || duration <= 0 || duration > 1440) {
+    feedback('calendar-dialog-feedback', 'Choose an end after the start, with a duration of at most 24 hours.', 'error');
+    return;
+  }
   setBusy(button, true, 'Saving');
   try {
     await request(`${API.planning}/calendar${id ? `/${id}` : ''}`, {
       method: id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: $('#calendar-title').value.trim(), description: $('#calendar-description').value.trim(),
-        type: $('#calendar-type').value, subjectId: $('#calendar-subject').value || null, assessmentId: calendarItems().find(item => item.id === id)?.assessmentId || null,
+        type: $('#calendar-type').value, subjectId: $('#calendar-subject').value || null, assessmentId: $('#calendar-assessment').value || null,
         startAt: $('#calendar-start').value, endAt: $('#calendar-end').value,
         spacedRepetition: $('#calendar-spaced').checked })
     });
     $('#calendar-dialog').close();
-    await loadCalendar(false);
+    const visibleDate = new Date(`${startAt.slice(0, 10)}T12:00:00`);
+    state.calendarMonth = new Date(visibleDate.getFullYear(), visibleDate.getMonth(), 1);
+    state.calendarWeek = mondayFor(visibleDate);
+    if (state.currentView === 'activity') await show('calendar');
+    else await loadCalendar(false);
     if (state.sessionEpoch !== epoch) return;
-    feedback(state.currentView === 'week' ? 'week-feedback' : 'calendar-feedback', id ? 'Calendar item updated.' : 'Calendar item created.', 'success');
+    feedback(state.currentView === 'week' ? 'week-feedback' : 'calendar-feedback', id ? 'Calendar item updated.' : 'Calendar item scheduled. Study sessions count toward progress when marked complete.', 'success');
   } catch (error) {
     if (error.staleSession) return; feedback('calendar-dialog-feedback', error.message, 'error'); }
   finally { setBusy(button, false); }

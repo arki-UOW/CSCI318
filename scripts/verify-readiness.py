@@ -204,6 +204,7 @@ def main():
         session = {'subjectId': sid, 'studyDate': TODAY.isoformat(), 'durationMinutes': 30, 'description': 'x' * 2000}
         status, study = api(18083, 'study-sessions', token, session)
         check('2000-character study notes persist', (status, len(study.get('description', ''))), (201, 2000))
+        check('future study cannot be recorded as completed activity', api(18083, 'study-sessions', token, {**session, 'studyDate': (TODAY + dt.timedelta(days=1)).isoformat()})[0], 400)
         for name, patch in [('null date', {'studyDate': None}), ('missing subject', {'subjectId': None}), ('zero minutes', {'durationMinutes': 0}), ('oversized notes', {'description': 'x' * 2001})]:
             status, error = api(18083, 'study-sessions', token, {**session, **patch})
             check('study input: ' + name, status, 400)
@@ -387,6 +388,8 @@ def main():
         check('fractional subject credit points rejected', api(18081, 'subjects', edge_token, {**edge_subject_body, 'code': 'FRACTION', 'creditPoints': 6.5})[0], 400)
         check('fractional subject target rejected', api(18081, 'subjects/' + edge_subject['id'] + '/study-target', edge_token, {'minutes': -0.5}, 'PATCH')[0], 400)
         check('fractional planning map capacity rejected', api(18084, 'planning/plans', edge_token, {'startDate': START.isoformat(), 'dailyAvailabilityMinutes': {START.isoformat(): 60.5}})[0], 400)
+        status, excessive = api(18084, 'planning/plans', edge_token, {'startDate': START.isoformat(), 'dailyAvailabilityMinutes': {START.isoformat(): 1441}})
+        check('excessive capacity fails specifically at minute validation', (status, any(field.startswith('dailyAvailabilityMinutes') and '1440' in message for field, message in excessive.get('validationErrors', {}).items())), (400, True))
         check('invalid capacity creates no plan', api(18084, 'planning/plans', edge_token)[1], [])
         zero_candidate = {'title': 'Imported zero', 'estimatedHours': 0, 'weighting': 12.5}
         status, imported_zero = api(18082, 'assessments/import', edge_token, {'subjectId': edge_subject['id'], 'assessments': [zero_candidate]})
